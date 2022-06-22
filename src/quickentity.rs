@@ -18,14 +18,16 @@ pub fn apply_patch<'a>(entity: &mut Value, patch: &Value) {
 pub fn generate_patch<'a>(original: &Value, modified: &Value) -> Value {
     let mut rfcpatch = json!(diff(&original, &modified));
 
-    if let Some(pos) = rfcpatch
+    if let Some(pos) =
+        rfcpatch
             .as_array_mut()
             .unwrap()
             .iter()
             .position(|value| match value.get("path") {
                 Some(path) => path == "/quickEntityVersion",
                 _ => false,
-            }) {
+            })
+    {
         rfcpatch.as_array_mut().unwrap().remove(pos);
     }
 
