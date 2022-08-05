@@ -1,10 +1,12 @@
 mod qn_structs;
+mod quickentity;
+mod rpkg_structs;
 mod rt_structs;
 
 use qn_structs::Entity;
-use rt_structs::{PropertyID, RTBlueprint, RTTemplate, STemplateFactorySubEntity};
+use rt_structs::{RTBlueprint, RTFactory};
 
-use serde_json::{from_slice, to_string, Value};
+use serde_json::{from_slice, Value};
 use std::{fs, io::Read};
 
 fn read_as_json(path: &String) -> Value {
@@ -31,7 +33,7 @@ fn read_as_entity(path: &String) -> Entity {
     .expect("Failed to open file as JSON")
 }
 
-fn read_as_rttemplate(path: &String) -> RTTemplate {
+fn read_as_rttemplate(path: &String) -> RTFactory {
     from_slice(&{
         let mut vec = Vec::new();
         fs::File::open(path)

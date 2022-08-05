@@ -245,7 +245,6 @@ pub struct PropertyOverride {
 }
 
 /// A full reference.
-#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FullRef {
     /// The entity to reference's ID.
@@ -258,6 +257,7 @@ pub struct FullRef {
 
     /// The sub-entity to reference that is exposed by the referenced entity.
     #[serde(rename = "exposedEntity")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exposed_entity: Option<String>,
 }
 
@@ -266,5 +266,5 @@ pub struct FullRef {
 #[serde(untagged)]
 pub enum Ref {
     FullRef(FullRef),
-    ShortRef(String),
+    ShortRef(Option<String>),
 }

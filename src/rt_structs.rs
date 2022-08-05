@@ -45,7 +45,7 @@ pub struct STemplateFactorySubEntity {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RTTemplate {
+pub struct RTFactory {
     pub sub_type: i32,
     pub blueprint_index_in_resource_header: i32,
     pub root_entity_index: i32,
