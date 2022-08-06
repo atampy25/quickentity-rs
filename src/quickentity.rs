@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use json_patch::{diff, from_value, patch as apply_rfc_patch};
 use serde_json::{json, Value};
 
@@ -80,14 +82,14 @@ fn convert_rt_reference_to_qn(
                                 as usize,
                         )
                         .expect("Expected an external scene to be in the TEMP meta")
-                        .hash.clone(),
+                        .hash.to_owned(),
                 ),
                 _ => panic!("Uhh this external scene is not valid at all"),
             },
             exposed_entity: if reference.exposed_entity == "" {
                 None
             } else {
-                Some(reference.exposed_entity.clone())
+                Some(reference.exposed_entity.to_owned())
             },
         })
     } else {
@@ -106,16 +108,62 @@ fn convert_rt_reference_to_qn(
     }
 }
 
-// fn convert_qn_reference_to_rt(reference, TEMP, TEMPmeta, findEntityCache) {
-// return reference && Object.prototype.hasOwnProperty.call(reference, 'ref') ? {
-// 	"entityID": reference.externalScene ? new LosslessJSON.LosslessNumber(new Decimal("0x" + reference.ref).toFixed()) : new LosslessJSON.LosslessNumber("18446744073709551615"),
-// 	"externalSceneIndex": reference.externalScene ? TEMP.externalSceneTypeIndicesInResourceHeader.findIndex(a => TEMPmeta.hash_reference_data[a].hash == reference.externalScene) : new LosslessJSON.LosslessNumber("-1"),
-// 	"entityIndex": reference.externalScene ? new LosslessJSON.LosslessNumber("-2") : findEntity(findEntityCache, reference.ref),
-// 	"exposedEntity": reference.exposedEntity || ""
-// } : {
-// 	"entityID": new LosslessJSON.LosslessNumber("18446744073709551615"),
-// 	"externalSceneIndex": -1,
-// 	"entityIndex": findEntity(findEntityCache, reference),
-// 	"exposedEntity": ""
-// }
-// }
+fn convert_qn_reference_to_rt(
+    reference: Ref,
+    factory: &RTFactory,
+    factory_meta: &ResourceMeta,
+    entity_id_to_index_mapping: HashMap<String, u32>,
+) -> SEntityTemplateReference {
+    match reference {
+        Ref::ShortRef(None) => SEntityTemplateReference {
+            entity_id: 18446744073709551615,
+            external_scene_index: -1,
+            entity_index: -1,
+            exposed_entity: "".to_string(),
+        },
+        Ref::ShortRef(Some(ent)) => SEntityTemplateReference {
+            entity_id: 18446744073709551615,
+            external_scene_index: -1,
+            entity_index: entity_id_to_index_mapping
+                .get(&ent)
+                .expect("Short ref referred to a nonexistent entity ID")
+                .to_owned() as i32,
+            exposed_entity: "".to_string(),
+        },
+        Ref::FullRef(fullref) => SEntityTemplateReference {
+            entity_id: match &fullref.external_scene {
+                None => 18446744073709551615,
+                Some(_) => u64::from_str_radix(fullref.entity_ref.as_str(), 16)
+                    .expect("Full ref had invalid hex ref"),
+            },
+            external_scene_index: match &fullref.external_scene {
+                None => -1,
+                Some(extscene) => factory
+                    .external_scene_type_indices_in_resource_header
+                    .iter()
+                    .position(|x| {
+                        factory_meta.hash_reference_data.get(*x as usize).expect(
+                            "TEMP referenced external scene not found in meta in externalScenes",
+                        ).hash == *extscene
+                    })
+                    .expect(
+                        "TEMP referenced external scene not found in externalScenes in sub-entity",
+                    )
+                    .try_into()
+                    .unwrap(),
+            },
+            entity_index: match &fullref.external_scene {
+                None => entity_id_to_index_mapping
+                    .get(&fullref.entity_ref)
+                    .expect("Full ref referred to a nonexistent entity ID")
+                    .to_owned() as i32,
+                Some(_) => -2,
+            },
+            exposed_entity: if let Some(exposedent) = fullref.exposed_entity {
+                exposedent
+            } else {
+                "".to_string()
+            },
+        },
+    }
+}
