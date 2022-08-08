@@ -84,7 +84,7 @@ pub struct SEntityTemplatePinConnection {
 
     pub from_pin_name: String,
     pub to_pin_name: String,
-    pub constant_pin_value: serde_json::Value,
+    pub constant_pin_value: SEntityTemplatePropertyValue,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -126,7 +126,7 @@ pub struct SExternalEntityTemplatePinConnection {
     pub to_entity: SEntityTemplateReference,
     pub from_pin_name: String,
     pub to_pin_name: String,
-    pub constant_pin_value: serde_json::Value,
+    pub constant_pin_value: SEntityTemplatePropertyValue,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -134,7 +134,16 @@ pub struct SEntityTemplateProperty {
     #[serde(rename = "nPropertyID")]
     pub n_property_id: PropertyID,
 
-    pub value: serde_json::Value,
+    pub value: SEntityTemplatePropertyValue,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SEntityTemplatePropertyValue {
+    #[serde(rename = "$type")]
+    pub property_type: String,
+
+    #[serde(rename = "$val")]
+    pub property_value: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

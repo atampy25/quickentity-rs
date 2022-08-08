@@ -1,18 +1,24 @@
 use std::collections::HashMap;
 
-use json_patch::{diff, from_value, patch as apply_rfc_patch};
-use serde_json::{json, Value};
+use json_patch::{diff, from_value as json_patch_from_value, patch as apply_rfc_patch};
+use serde_json::{from_value, json, to_value, Map, Value};
 
 use crate::{
     qn_structs::{FullRef, Ref},
     rpkg_structs::ResourceMeta,
-    rt_structs::{RTBlueprint, RTFactory, SEntityTemplateReference},
+    rt_structs::{
+        RTBlueprint, RTFactory, SEntityTemplateProperty, SEntityTemplatePropertyValue,
+        SEntityTemplateReference,
+    },
+    util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue},
 };
+
+const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 
 pub fn apply_patch<'a>(entity: &mut Value, patch: &Value) {
     apply_rfc_patch(
         entity,
-        &from_value(
+        &json_patch_from_value(
             patch
                 .get("patch")
                 .expect("Failed to get patch from file")
@@ -159,11 +165,124 @@ fn convert_qn_reference_to_rt(
                     .to_owned() as i32,
                 Some(_) => -2,
             },
-            exposed_entity: if let Some(exposedent) = fullref.exposed_entity {
-                exposedent
-            } else {
-                "".to_string()
-            },
+            exposed_entity: fullref.exposed_entity.unwrap_or("".to_string()),
         },
+    }
+}
+
+fn convert_rt_property_value_to_qn(
+    property: &SEntityTemplatePropertyValue,
+    factory: &RTFactory,
+    factory_meta: &ResourceMeta,
+    blueprint: &RTBlueprint,
+) -> Value {
+    match property.property_type.as_str() {
+        "SEntityTemplateReference" => to_value(convert_rt_reference_to_qn(
+            &from_value::<SEntityTemplateReference>(property.property_value.to_owned())
+                .expect("Converting RT ref to QN in property value returned error in parsing"),
+            factory,
+            blueprint,
+            factory_meta,
+        ))
+        .expect("Converting RT ref to QN in property value returned error in serialisation"),
+
+        "ZRuntimeResourceID" => {
+            match from_value::<ZRuntimeResourceIDPropertyValue>(property.property_value.to_owned())
+                .expect("ZRuntimeResourceID did not have a valid format")
+            {
+                ZRuntimeResourceIDPropertyValue {
+                    m_IDHigh: 4294967295,
+                    m_IDLow: 4294967295,
+                } => Value::Null,
+
+                ZRuntimeResourceIDPropertyValue {
+                    m_IDHigh: _id_high, // We ignore the id_high as no resource in the game has that many depends
+                    m_IDLow: id_low,
+                } => {
+                    let depend_data = factory_meta
+                        .hash_reference_data
+                        .get(id_low as usize)
+                        .expect("ZRuntimeResourceID m_IDLow referred to non-existent dependency");
+
+                    if depend_data.flag != "1F" {
+                        json!({
+                            "resource": depend_data.hash,
+                            "flag": depend_data.flag
+                        })
+                    } else {
+                        to_value(depend_data.hash.to_owned()).expect("Hash of ZRuntimeResourceID depend was not a valid JSON value (should have been string)")
+                    }
+                }
+            }
+        }
+
+        "SMatrix43" => {
+            let matrix = from_value::<SMatrix43PropertyValue>(property.property_value.to_owned())
+                .expect("SMatrix43 did not have a valid format");
+
+            json!({
+                "rotation": {
+                    "x": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.YAxis.z).atan2(matrix.ZAxis.z) } else { (matrix.ZAxis.y).atan2(matrix.YAxis.y) }) * RAD2DEG,
+                    "y": matrix.XAxis.z.clamp(-1.0, 1.0).asin() * RAD2DEG,
+                    "z": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.XAxis.y).atan2(matrix.XAxis.x) } else { 0.0 }) * RAD2DEG
+                },
+                "position": matrix.Trans
+            })
+        }
+
+        "ZGuid" => {
+            let guid = from_value::<ZGuidPropertyValue>(property.property_value.to_owned())
+                .expect("ZGuid did not have a valid format");
+
+            let mut val = String::from("");
+            val.push_str(&format!("{:0>8x}", guid._a)); // this is insane and I have no idea why it is like this
+            val.push_str("-");
+            val.push_str(&format!("{:0>4x}", guid._b));
+            val.push_str("-");
+            val.push_str(&format!("{:0>4x}", guid._c));
+            val.push_str("-");
+            val.push_str(&format!("{:0>2x}", guid._d));
+            val.push_str(&format!("{:0>2x}", guid._e));
+            val.push_str("-");
+            val.push_str(&format!("{:0>2x}", guid._f));
+            val.push_str(&format!("{:0>2x}", guid._g));
+            val.push_str(&format!("{:0>2x}", guid._h));
+            val.push_str(&format!("{:0>2x}", guid._i));
+            val.push_str(&format!("{:0>2x}", guid._j));
+            val.push_str(&format!("{:0>2x}", guid._k));
+
+            to_value(val).unwrap()
+        }
+
+        "SColorRGB" => {
+            let map = property
+                .property_value
+                .as_object()
+                .expect("SColorRGB was not an object");
+
+            let mut val = String::from("#"); // TODO: pending QN poll: colour string formatting
+            val.push_str(&format!("{:0>2x}", map.get("r").unwrap().as_u64().unwrap()));
+            val.push_str(&format!("{:0>2x}", map.get("g").unwrap().as_u64().unwrap()));
+            val.push_str(&format!("{:0>2x}", map.get("b").unwrap().as_u64().unwrap()));
+
+            to_value(val).unwrap()
+        }
+
+        "SColorRGBA" => {
+            let map = property
+                .property_value
+                .as_object()
+                .expect("SColorRGBA was not an object");
+
+            let mut val = String::from("#"); // TODO: pending QN poll: colour string formatting
+            val.push_str(&format!("{:0>2x}", map.get("r").unwrap().as_u64().unwrap()));
+            val.push_str(&format!("{:0>2x}", map.get("g").unwrap().as_u64().unwrap()));
+            val.push_str(&format!("{:0>2x}", map.get("b").unwrap().as_u64().unwrap()));
+            val.push_str(&format!("{:0>2x}", map.get("a").unwrap().as_u64().unwrap()));
+
+            to_value(val).unwrap()
+        }
+
+        _ => property.property_value.clone(),
     }
 }

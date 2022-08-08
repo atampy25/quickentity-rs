@@ -2,6 +2,7 @@ mod qn_structs;
 mod quickentity;
 mod rpkg_structs;
 mod rt_structs;
+mod util_structs;
 
 use qn_structs::Entity;
 use rt_structs::{RTBlueprint, RTFactory};
