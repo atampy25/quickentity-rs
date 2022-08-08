@@ -4,7 +4,7 @@ use json_patch::{diff, from_value as json_patch_from_value, patch as apply_rfc_p
 use serde_json::{from_value, json, to_value, Map, Value};
 
 use crate::{
-    qn_structs::{FullRef, Ref},
+    qn_structs::{FullRef, Property, Ref},
     rpkg_structs::ResourceMeta,
     rt_structs::{
         RTBlueprint, RTFactory, SEntityTemplateProperty, SEntityTemplatePropertyValue,
@@ -260,7 +260,7 @@ fn convert_rt_property_value_to_qn(
                 .as_object()
                 .expect("SColorRGB was not an object");
 
-            let mut val = String::from("#"); // TODO: pending QN poll: colour string formatting
+            let mut val = String::from("#"); // TODO: pending QN poll bb5874 SColor string formatting
             val.push_str(&format!("{:0>2x}", map.get("r").unwrap().as_u64().unwrap()));
             val.push_str(&format!("{:0>2x}", map.get("g").unwrap().as_u64().unwrap()));
             val.push_str(&format!("{:0>2x}", map.get("b").unwrap().as_u64().unwrap()));
@@ -274,7 +274,7 @@ fn convert_rt_property_value_to_qn(
                 .as_object()
                 .expect("SColorRGBA was not an object");
 
-            let mut val = String::from("#"); // TODO: pending QN poll: colour string formatting
+            let mut val = String::from("#"); // TODO: pending QN poll bb5874 SColor string formatting
             val.push_str(&format!("{:0>2x}", map.get("r").unwrap().as_u64().unwrap()));
             val.push_str(&format!("{:0>2x}", map.get("g").unwrap().as_u64().unwrap()));
             val.push_str(&format!("{:0>2x}", map.get("b").unwrap().as_u64().unwrap()));
@@ -284,5 +284,40 @@ fn convert_rt_property_value_to_qn(
         }
 
         _ => property.property_value.clone(),
+    }
+}
+
+fn convert_rt_property_to_qn(
+    property: &SEntityTemplateProperty,
+    post_init: bool,
+    factory: &RTFactory,
+    factory_meta: &ResourceMeta,
+    blueprint: &RTBlueprint,
+) -> Property {
+    Property {
+        property_type: property.value.property_type.to_owned(),
+        value: if property.value.property_value.is_array() {
+            to_value(
+                property
+                    .value
+                    .property_value
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| {
+                        convert_rt_property_value_to_qn(
+                            &from_value(x.to_owned()).expect("RT property value was not valid"),
+                            factory,
+                            factory_meta,
+                            blueprint,
+                        )
+                    })
+                    .collect::<Vec<Value>>(),
+            )
+            .unwrap()
+        } else {
+            convert_rt_property_value_to_qn(&property.value, factory, factory_meta, blueprint)
+        },
+        post_init: if post_init { Some(true) } else { None },
     }
 }

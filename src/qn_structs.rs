@@ -65,11 +65,11 @@ pub struct SubEntity {
 
     /// The template of the entity.
     #[serde(rename = "template")]
-    pub template: String,
+    pub template: String, // TODO: yet-to-run QN poll 68ab18 Factory naming convention
 
     /// The template's flag.
     #[serde(rename = "templateFlag")]
-    pub template_flag: Option<String>,
+    pub template_flag: Option<String>, // TODO: yet-to-run QN poll 68ab18 Factory naming convention
 
     /// The blueprint of the entity.
     #[serde(rename = "blueprint")]
