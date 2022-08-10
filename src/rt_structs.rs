@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct STemplateBlueprintSubEntity {
     pub logical_parent: SEntityTemplateReference,
@@ -18,10 +18,10 @@ pub struct STemplateBlueprintSubEntity {
     pub entity_subsets: Vec<(String, SEntityTemplateEntitySubset)>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RTBlueprint {
-    pub sub_type: i32,
+    pub sub_type: i8,
     pub root_entity_index: i32,
     pub sub_entities: Vec<STemplateBlueprintSubEntity>,
     pub external_scene_type_indices_in_resource_header: Vec<i32>,
@@ -33,7 +33,7 @@ pub struct RTBlueprint {
     pub pin_connection_override_deletes: Vec<SExternalEntityTemplatePinConnection>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct STemplateFactorySubEntity {
     pub logical_parent: SEntityTemplateReference,
@@ -43,7 +43,7 @@ pub struct STemplateFactorySubEntity {
     pub platform_specific_property_values: Vec<SEntityTemplatePlatformSpecificProperty>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RTFactory {
     pub sub_type: i32,
@@ -54,7 +54,7 @@ pub struct RTFactory {
     pub external_scene_type_indices_in_resource_header: Vec<i32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplateReference {
     #[serde(rename = "entityID")]
@@ -65,7 +65,7 @@ pub struct SEntityTemplateReference {
     pub exposed_entity: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplateExposedEntity {
     pub s_name: String,
@@ -73,7 +73,7 @@ pub struct SEntityTemplateExposedEntity {
     pub a_targets: Vec<SEntityTemplateReference>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplatePinConnection {
     #[serde(rename = "fromID")]
@@ -87,7 +87,7 @@ pub struct SEntityTemplatePinConnection {
     pub constant_pin_value: SEntityTemplatePropertyValue,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplatePlatformSpecificProperty {
     pub property_value: SEntityTemplateProperty,
@@ -95,7 +95,7 @@ pub struct SEntityTemplatePlatformSpecificProperty {
     pub post_init: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplatePropertyAlias {
     pub s_alias_name: String,
@@ -106,20 +106,20 @@ pub struct SEntityTemplatePropertyAlias {
     pub s_property_name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplatePropertyOverride {
     pub property_owner: SEntityTemplateReference,
     pub property_value: SEntityTemplateProperty,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplateEntitySubset {
     pub entities: Vec<i32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SExternalEntityTemplatePinConnection {
     pub from_entity: SEntityTemplateReference,
@@ -129,7 +129,7 @@ pub struct SExternalEntityTemplatePinConnection {
     pub constant_pin_value: SEntityTemplatePropertyValue,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SEntityTemplateProperty {
     #[serde(rename = "nPropertyID")]
     pub n_property_id: PropertyID,
@@ -137,7 +137,7 @@ pub struct SEntityTemplateProperty {
     pub value: SEntityTemplatePropertyValue,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SEntityTemplatePropertyValue {
     #[serde(rename = "$type")]
     pub property_type: String,
@@ -146,7 +146,7 @@ pub struct SEntityTemplatePropertyValue {
     pub property_value: serde_json::Value,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum PropertyID {
     Int(u64),

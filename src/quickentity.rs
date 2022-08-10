@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use json_patch::{diff, from_value as json_patch_from_value, patch as apply_rfc_patch};
-use serde_json::{from_value, json, to_value, Map, Value};
+use serde_json::{from_value, json, to_value, Value};
 
 use crate::{
-    qn_structs::{FullRef, Property, Ref},
+    qn_structs::{Entity, FullRef, Property, Ref},
     rpkg_structs::ResourceMeta,
     rt_structs::{
         RTBlueprint, RTFactory, SEntityTemplateProperty, SEntityTemplatePropertyValue,
@@ -14,6 +14,12 @@ use crate::{
 };
 
 const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
+
+enum Game {
+    HM1,
+    HM2,
+    HM3,
+}
 
 pub fn apply_patch<'a>(entity: &mut Value, patch: &Value) {
     apply_rfc_patch(
@@ -306,7 +312,7 @@ fn convert_rt_property_to_qn(
                     .iter()
                     .map(|x| {
                         convert_rt_property_value_to_qn(
-                            &from_value(x.to_owned()).expect("RT property value was not valid"),
+                            &from_value(x.to_owned()).expect("RT property value was invalid"),
                             factory,
                             factory_meta,
                             blueprint,
@@ -320,4 +326,44 @@ fn convert_rt_property_to_qn(
         },
         post_init: if post_init { Some(true) } else { None },
     }
+}
+
+fn convert_to_qn(
+    factory: &RTFactory,
+    factory_meta: &ResourceMeta,
+    blueprint: &RTBlueprint,
+    blueprint_meta: &ResourceMeta,
+    game: Game,
+) -> Entity {
+    if {
+        let mut unique = blueprint.sub_entities.clone();
+        unique.dedup_by_key(|x| x.entity_id);
+
+        unique.len() != blueprint.sub_entities.len()
+    } {
+        panic!("Cannot convert entity with duplicate IDs");
+    }
+
+    let entity = Entity {
+        temp_hash: factory_meta.hash_value.to_owned(),
+        tblu_hash: blueprint_meta.hash_value.to_owned(),
+        root_entity: format!(
+            "{:x}",
+            blueprint
+                .sub_entities
+                .get(blueprint.root_entity_index as usize)
+                .expect("Root entity index referred to nonexistent entity")
+                .entity_id
+        ),
+        entities: HashMap::new(),
+        external_scenes: vec![],
+        override_deletes: vec![],
+        pin_connection_override_deletes: vec![],
+        pin_connection_overrides: vec![],
+        property_overrides: vec![],
+        sub_type: blueprint.sub_type,
+        quick_entity_version: 2.2,
+    };
+
+    entity
 }

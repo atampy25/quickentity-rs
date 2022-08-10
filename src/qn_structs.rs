@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity {
     /// The hash of the TEMP file of this entity.
     #[serde(rename = "tempHash")]
@@ -53,7 +53,7 @@ pub struct Entity {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SubEntity {
     /// The "logical" parent of the entity.
     #[serde(rename = "parent")]
@@ -116,14 +116,14 @@ pub struct SubEntity {
     pub subsets: Option<HashMap<String, Vec<String>>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum RefMaybeConstantValue {
     RefWithConstantValue(RefWithConstantValue),
     Ref(Ref),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RefWithConstantValue {
     /// The entity to reference's ID.
     #[serde(rename = "ref")]
@@ -135,7 +135,7 @@ pub struct RefWithConstantValue {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Property {
     /// The type of the property.
     #[serde(rename = "type")]
@@ -150,7 +150,7 @@ pub struct Property {
     pub post_init: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConstantValue {
     /// The type of the simple property.
     #[serde(rename = "type")]
@@ -161,7 +161,7 @@ pub struct ConstantValue {
     pub value: serde_json::Value,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ExposedEntity {
     /// Whether there are multiple target entities.
     #[serde(rename = "isArray")]
@@ -172,7 +172,7 @@ pub struct ExposedEntity {
     pub targets: Vec<Ref>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PropertyAlias {
     /// The other entity's property that should be accessed from this entity.
     #[serde(rename = "originalProperty")]
@@ -183,7 +183,7 @@ pub struct PropertyAlias {
     pub original_entity: Vec<Ref>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PinConnectionOverride {
     /// The entity that will trigger the input on the other entity.
     #[serde(rename = "fromEntity")]
@@ -207,7 +207,7 @@ pub struct PinConnectionOverride {
     pub value: ConstantValue,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PinConnectionOverrideDelete {
     /// The entity that triggers the input on the other entity.
     #[serde(rename = "fromEntity")]
@@ -233,7 +233,7 @@ pub struct PinConnectionOverrideDelete {
 }
 
 /// A set of overrides for entity properties.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PropertyOverride {
     /// An array of references to the entities to override the properties of.
     #[serde(rename = "entities")]
@@ -245,7 +245,7 @@ pub struct PropertyOverride {
 }
 
 /// A full reference.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FullRef {
     /// The entity to reference's ID.
     #[serde(rename = "ref")]
@@ -262,7 +262,7 @@ pub struct FullRef {
 }
 
 /// A reference to an entity.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Ref {
     FullRef(FullRef),

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ResourceMeta {
     pub hash_offset: i32,
     pub hash_reference_data: Vec<ResourceDependency>,
@@ -14,7 +14,7 @@ pub struct ResourceMeta {
     pub hash_value: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ResourceDependency {
     pub hash: String,
     pub flag: String,
