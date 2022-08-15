@@ -1,13 +1,18 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use json_patch::{diff, from_value as json_patch_from_value, patch as apply_rfc_patch};
+use rayon::prelude::*;
 use serde_json::{from_value, json, to_value, Value};
 
 use crate::{
-    qn_structs::{Entity, FullRef, Property, Ref},
+    qn_structs::{
+        ConstantValue, Entity, ExposedEntity, FullRef, Property, PropertyAlias, Ref,
+        RefMaybeConstantValue, RefWithConstantValue, SubEntity, SubType,
+    },
     rpkg_structs::ResourceMeta,
     rt_structs::{
-        RTBlueprint, RTFactory, SEntityTemplateProperty, SEntityTemplatePropertyValue,
+        PropertyID, RTBlueprint, RTFactory, SEntityTemplateProperty, SEntityTemplatePropertyValue,
         SEntityTemplateReference,
     },
     util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue},
@@ -15,7 +20,7 @@ use crate::{
 
 const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 
-enum Game {
+pub enum Game {
     HM1,
     HM2,
     HM3,
@@ -124,7 +129,7 @@ fn convert_qn_reference_to_rt(
     reference: Ref,
     factory: &RTFactory,
     factory_meta: &ResourceMeta,
-    entity_id_to_index_mapping: HashMap<String, u32>,
+    entity_id_to_index_mapping: &HashMap<String, u32>,
 ) -> SEntityTemplateReference {
     match reference {
         Ref::ShortRef(None) => SEntityTemplateReference {
@@ -266,10 +271,34 @@ fn convert_rt_property_value_to_qn(
                 .as_object()
                 .expect("SColorRGB was not an object");
 
-            let mut val = String::from("#"); // TODO: pending QN poll bb5874 SColor string formatting
-            val.push_str(&format!("{:0>2x}", map.get("r").unwrap().as_u64().unwrap()));
-            val.push_str(&format!("{:0>2x}", map.get("g").unwrap().as_u64().unwrap()));
-            val.push_str(&format!("{:0>2x}", map.get("b").unwrap().as_u64().unwrap()));
+            let mut val = String::from("#");
+            val.push_str(&format!(
+                "{:0>2x}",
+                (map.get("r")
+                    .expect("Colour did not have required key")
+                    .as_f64()
+                    .unwrap()
+                    * 255.0)
+                    .round() as u8
+            ));
+            val.push_str(&format!(
+                "{:0>2x}",
+                (map.get("g")
+                    .expect("Colour did not have required key")
+                    .as_f64()
+                    .unwrap()
+                    * 255.0)
+                    .round() as u8
+            ));
+            val.push_str(&format!(
+                "{:0>2x}",
+                (map.get("b")
+                    .expect("Colour did not have required key")
+                    .as_f64()
+                    .unwrap()
+                    * 255.0)
+                    .round() as u8
+            ));
 
             to_value(val).unwrap()
         }
@@ -280,16 +309,48 @@ fn convert_rt_property_value_to_qn(
                 .as_object()
                 .expect("SColorRGBA was not an object");
 
-            let mut val = String::from("#"); // TODO: pending QN poll bb5874 SColor string formatting
-            val.push_str(&format!("{:0>2x}", map.get("r").unwrap().as_u64().unwrap()));
-            val.push_str(&format!("{:0>2x}", map.get("g").unwrap().as_u64().unwrap()));
-            val.push_str(&format!("{:0>2x}", map.get("b").unwrap().as_u64().unwrap()));
-            val.push_str(&format!("{:0>2x}", map.get("a").unwrap().as_u64().unwrap()));
+            let mut val = String::from("#");
+            val.push_str(&format!(
+                "{:0>2x}",
+                (map.get("r")
+                    .expect("Colour did not have required key")
+                    .as_f64()
+                    .unwrap()
+                    * 255.0)
+                    .round() as u8
+            ));
+            val.push_str(&format!(
+                "{:0>2x}",
+                (map.get("g")
+                    .expect("Colour did not have required key")
+                    .as_f64()
+                    .unwrap()
+                    * 255.0)
+                    .round() as u8
+            ));
+            val.push_str(&format!(
+                "{:0>2x}",
+                (map.get("b")
+                    .expect("Colour did not have required key")
+                    .as_f64()
+                    .unwrap()
+                    * 255.0)
+                    .round() as u8
+            ));
+            val.push_str(&format!(
+                "{:0>2x}",
+                (map.get("a")
+                    .expect("Colour did not have required key")
+                    .as_f64()
+                    .unwrap()
+                    * 255.0)
+                    .round() as u8
+            ));
 
             to_value(val).unwrap()
         }
 
-        _ => property.property_value.clone(),
+        _ => property.property_value.to_owned(),
     }
 }
 
@@ -311,8 +372,18 @@ fn convert_rt_property_to_qn(
                     .unwrap()
                     .iter()
                     .map(|x| {
+                        let mut y = property.value.property_type.chars();
+                        y.nth(6); // discard TArray<
+                        y.next_back(); // discard closing >
+
                         convert_rt_property_value_to_qn(
-                            &from_value(x.to_owned()).expect("RT property value was invalid"),
+                            &from_value({
+                                json!({
+                                    "$type": y.collect::<String>(), // mock a single value for each array element
+                                    "$val": x
+                                })
+                            })
+                            .expect("RT property array value was invalid"),
                             factory,
                             factory_meta,
                             blueprint,
@@ -328,7 +399,7 @@ fn convert_rt_property_to_qn(
     }
 }
 
-fn convert_to_qn(
+pub fn convert_to_qn(
     factory: &RTFactory,
     factory_meta: &ResourceMeta,
     blueprint: &RTBlueprint,
@@ -344,7 +415,7 @@ fn convert_to_qn(
         panic!("Cannot convert entity with duplicate IDs");
     }
 
-    let entity = Entity {
+    let mut entity = Entity {
         temp_hash: factory_meta.hash_value.to_owned(),
         tblu_hash: blueprint_meta.hash_value.to_owned(),
         root_entity: format!(
@@ -361,9 +432,437 @@ fn convert_to_qn(
         pin_connection_override_deletes: vec![],
         pin_connection_overrides: vec![],
         property_overrides: vec![],
-        sub_type: blueprint.sub_type,
+        sub_type: match blueprint.sub_type {
+            2 => SubType::Brick,
+            1 => SubType::Scene,
+            0 => SubType::Template,
+            _ => panic!("Invalid subtype"),
+        },
         quick_entity_version: 2.2,
     };
+
+    // External scenes
+    for scene_index in &factory.external_scene_type_indices_in_resource_header {
+        entity.external_scenes.push(
+            factory_meta
+                .hash_reference_data
+                .get(*scene_index as usize)
+                .unwrap()
+                .hash
+                .to_owned(),
+        );
+    }
+
+    entity.entities = factory
+        .sub_entities
+        .par_iter() // rayon automatically makes this run in parallel for s p e e d
+        .enumerate()
+        .map(|(index, sub_entity_factory)| {
+            let sub_entity_blueprint = blueprint
+                .sub_entities
+                .get(index)
+                .expect("Factory entity had no equivalent by index in blueprint");
+
+            let factory_dependency = factory_meta
+                .hash_reference_data
+                .get(sub_entity_factory.entity_type_resource_index as usize)
+                .expect("Entity resource index referred to nonexistent dependency");
+
+            (
+                format!("{:x}", sub_entity_blueprint.entity_id),
+                SubEntity {
+                    name: sub_entity_blueprint.entity_name.to_owned(),
+                    factory: factory_dependency.hash.to_owned(),
+                    blueprint: blueprint_meta
+                        .hash_reference_data
+                        .get(sub_entity_blueprint.entity_type_resource_index as usize)
+                        .expect("Entity resource index referred to nonexistent dependency")
+                        .hash
+                        .to_owned(),
+                    parent: convert_rt_reference_to_qn(
+                        &sub_entity_factory.logical_parent,
+                        &factory,
+                        &blueprint,
+                        &factory_meta,
+                    ),
+                    factory_flag: match factory_dependency.flag.as_str() {
+                        "1F" => None,
+                        flag => Some(flag.to_owned()),
+                    },
+                    editor_only: if sub_entity_blueprint.editor_only {
+                        Some(true)
+                    } else {
+                        None
+                    },
+                    properties: {
+                        let x: HashMap<String, Property> = sub_entity_factory
+                            .property_values
+                            .iter()
+                            .map(|property| {
+                                (
+                                    match &property.n_property_id {
+                                        PropertyID::Int(id) => id.to_string(),
+                                        PropertyID::String(id) => id.to_owned(),
+                                    }, // key
+                                    convert_rt_property_to_qn(
+                                        property,
+                                        false,
+                                        &factory,
+                                        &factory_meta,
+                                        &blueprint,
+                                    ), // value
+                                )
+                            })
+                            .chain(sub_entity_factory.post_init_property_values.iter().map(
+                                |property| {
+                                    (
+                                        // we do a little code duplication
+                                        match &property.n_property_id {
+                                            PropertyID::Int(id) => id.to_string(),
+                                            PropertyID::String(id) => id.to_owned(),
+                                        },
+                                        convert_rt_property_to_qn(
+                                            property,
+                                            true,
+                                            &factory,
+                                            &factory_meta,
+                                            &blueprint,
+                                        ),
+                                    )
+                                },
+                            ))
+                            .collect();
+
+                        if x.len() > 0 {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    },
+                    platform_specific_properties: {
+                        // group props by platform, then convert them all and turn into a nested hashmap structure
+                        let x: HashMap<String, HashMap<String, Property>> = sub_entity_factory
+                            .platform_specific_property_values
+                            .iter()
+                            .group_by(|property| property.platform.to_owned())
+                            .into_iter()
+                            .map(|(platform, properties)| {
+                                (
+                                    platform,
+                                    properties
+                                        .map(|property| {
+                                            (
+                                                // we do a little code duplication
+                                                match &property.property_value.n_property_id {
+                                                    PropertyID::Int(id) => id.to_string(),
+                                                    PropertyID::String(id) => id.to_owned(),
+                                                },
+                                                convert_rt_property_to_qn(
+                                                    &property.property_value,
+                                                    property.post_init.to_owned(),
+                                                    &factory,
+                                                    &factory_meta,
+                                                    &blueprint,
+                                                ),
+                                            )
+                                        })
+                                        .collect::<HashMap<String, Property>>(),
+                                )
+                            })
+                            .collect();
+
+                        if x.len() > 0 {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    },
+                    events: None,         // will be mutated later
+                    input_copying: None,  // will be mutated later
+                    output_copying: None, // will be mutated later
+                    property_aliases: {
+                        let x: HashMap<String, PropertyAlias> = sub_entity_blueprint
+                            .property_aliases
+                            .iter()
+                            .map(|alias| {
+                                (
+                                    alias.s_property_name.to_owned(),
+                                    PropertyAlias {
+                                        original_property: alias.s_alias_name.to_owned(),
+                                        original_entity: Ref::ShortRef(Some(format!(
+                                        "{:x}",
+                                        blueprint
+                                            .sub_entities
+                                            .get(alias.entity_id as usize)
+                                            .expect(
+                                                "Property alias referred to nonexistent sub-entity",
+                                            )
+                                            .entity_id
+                                    ))),
+                                    },
+                                )
+                            })
+                            .collect();
+
+                        if x.len() > 0 {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    },
+                    exposed_entities: {
+                        let x: HashMap<String, ExposedEntity> = sub_entity_blueprint
+                            .exposed_entities
+                            .iter()
+                            .map(|exposed_entity| {
+                                (
+                                    exposed_entity.s_name.to_owned(),
+                                    ExposedEntity {
+                                        is_array: exposed_entity.b_is_array.to_owned(),
+                                        targets: exposed_entity
+                                            .a_targets
+                                            .iter()
+                                            .map(|target| {
+                                                convert_rt_reference_to_qn(
+                                                    target,
+                                                    &factory,
+                                                    &blueprint,
+                                                    &factory_meta,
+                                                )
+                                            })
+                                            .collect(),
+                                    },
+                                )
+                            })
+                            .collect();
+
+                        if x.len() > 0 {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    },
+                    exposed_interfaces: {
+                        let x: HashMap<String, String> = sub_entity_blueprint
+                            .exposed_interfaces
+                            .iter()
+                            .map(|(interface, entity_index)| {
+                                (
+                                    interface.to_owned(),
+                                    format!(
+                                    "{:x}",
+                                    blueprint
+                                        .sub_entities
+                                        .get(*entity_index as usize)
+                                        .expect(
+                                            "Exposed interface referred to nonexistent sub-entity"
+                                        )
+                                        .entity_id
+                                ),
+                                )
+                            })
+                            .collect();
+
+                        if x.len() > 0 {
+                            Some(x)
+                        } else {
+                            None
+                        }
+                    },
+                    subsets: None, // will be mutated later
+                },
+            )
+        })
+        .collect();
+
+    for pin in &blueprint.pin_connections {
+        let mut relevant_sub_entity = entity
+            .entities
+            .get_mut(&format!(
+                "{:x}",
+                blueprint
+                    .sub_entities
+                    .get(pin.from_id as usize)
+                    .expect("Pin referred to nonexistent sub-entity")
+                    .entity_id
+            ))
+            .unwrap();
+
+        if relevant_sub_entity.events.is_none() {
+            relevant_sub_entity.events = Some(HashMap::new());
+        }
+
+        relevant_sub_entity
+            .events
+            .as_mut()
+            .unwrap()
+            .entry(pin.from_pin_name.to_owned())
+            .or_insert(HashMap::default())
+            .entry(pin.to_pin_name.to_owned())
+            .or_insert(Vec::default())
+            .push(if pin.constant_pin_value.property_type == "void" {
+                RefMaybeConstantValue::Ref(Ref::ShortRef(Some(format!(
+                    "{:x}",
+                    blueprint
+                        .sub_entities
+                        .get(pin.to_id as usize)
+                        .expect("Pin referred to nonexistent sub-entity")
+                        .entity_id
+                ))))
+            } else {
+                RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
+                    entity_ref: Ref::ShortRef(Some(format!(
+                        "{:x}",
+                        blueprint
+                            .sub_entities
+                            .get(pin.to_id as usize)
+                            .expect("Pin referred to nonexistent sub-entity")
+                            .entity_id
+                    ))),
+                    value: ConstantValue {
+                        value_type: pin.constant_pin_value.property_type.to_owned(),
+                        value: pin.constant_pin_value.property_value.to_owned(),
+                    },
+                })
+            }); // isn't it cool how a single statement can be about 30 lines
+    }
+
+    // cheeky bit of code duplication right here
+    for forwarding in &blueprint.input_pin_forwardings {
+        let mut relevant_sub_entity = entity
+            .entities
+            .get_mut(&format!(
+                "{:x}",
+                blueprint
+                    .sub_entities
+                    .get(forwarding.from_id as usize)
+                    .expect("Pin referred to nonexistent sub-entity")
+                    .entity_id
+            ))
+            .unwrap();
+
+        if relevant_sub_entity.input_copying.is_none() {
+            relevant_sub_entity.input_copying = Some(HashMap::new());
+        }
+
+        relevant_sub_entity
+            .input_copying
+            .as_mut()
+            .unwrap()
+            .entry(forwarding.from_pin_name.to_owned())
+            .or_insert(HashMap::default())
+            .entry(forwarding.to_pin_name.to_owned())
+            .or_insert(Vec::default())
+            .push(if forwarding.constant_pin_value.property_type == "void" {
+                RefMaybeConstantValue::Ref(Ref::ShortRef(Some(format!(
+                    "{:x}",
+                    blueprint
+                        .sub_entities
+                        .get(forwarding.to_id as usize)
+                        .expect("Pin referred to nonexistent sub-entity")
+                        .entity_id
+                ))))
+            } else {
+                RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
+                    entity_ref: Ref::ShortRef(Some(format!(
+                        "{:x}",
+                        blueprint
+                            .sub_entities
+                            .get(forwarding.to_id as usize)
+                            .expect("Pin referred to nonexistent sub-entity")
+                            .entity_id
+                    ))),
+                    value: ConstantValue {
+                        value_type: forwarding.constant_pin_value.property_type.to_owned(),
+                        value: forwarding.constant_pin_value.property_value.to_owned(),
+                    },
+                })
+            });
+    }
+
+    for forwarding in &blueprint.output_pin_forwardings {
+        let mut relevant_sub_entity = entity
+            .entities
+            .get_mut(&format!(
+                "{:x}",
+                blueprint
+                    .sub_entities
+                    .get(forwarding.from_id as usize)
+                    .expect("Pin referred to nonexistent sub-entity")
+                    .entity_id
+            ))
+            .unwrap();
+
+        if relevant_sub_entity.output_copying.is_none() {
+            relevant_sub_entity.output_copying = Some(HashMap::new());
+        }
+
+        relevant_sub_entity
+            .output_copying
+            .as_mut()
+            .unwrap()
+            .entry(forwarding.from_pin_name.to_owned())
+            .or_insert(HashMap::default())
+            .entry(forwarding.to_pin_name.to_owned())
+            .or_insert(Vec::default())
+            .push(if forwarding.constant_pin_value.property_type == "void" {
+                RefMaybeConstantValue::Ref(Ref::ShortRef(Some(format!(
+                    "{:x}",
+                    blueprint
+                        .sub_entities
+                        .get(forwarding.to_id as usize)
+                        .expect("Pin referred to nonexistent sub-entity")
+                        .entity_id
+                ))))
+            } else {
+                RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
+                    entity_ref: Ref::ShortRef(Some(format!(
+                        "{:x}",
+                        blueprint
+                            .sub_entities
+                            .get(forwarding.to_id as usize)
+                            .expect("Pin referred to nonexistent sub-entity")
+                            .entity_id
+                    ))),
+                    value: ConstantValue {
+                        value_type: forwarding.constant_pin_value.property_type.to_owned(),
+                        value: forwarding.constant_pin_value.property_value.to_owned(),
+                    },
+                })
+            });
+    }
+
+    for sub_entity in &blueprint.sub_entities {
+        sub_entity.entity_subsets.iter().for_each(|(subset, data)| {
+            data.entities.iter().for_each(|subset_entity| {
+                let mut relevant_qn = entity
+                    .entities
+                    .get_mut(&format!(
+                        "{:x}",
+                        blueprint
+                            .sub_entities
+                            .get(*subset_entity as usize)
+                            .expect("Entity subset referred to nonexistent sub-entity")
+                            .entity_id
+                    ))
+                    .unwrap();
+
+                if relevant_qn.subsets.is_none() {
+                    relevant_qn.subsets = Some(HashMap::new());
+                }
+
+                relevant_qn
+                    .subsets
+                    .as_mut()
+                    .unwrap()
+                    .entry(subset.to_owned())
+                    .or_insert(Vec::default())
+                    .push(format!("{:x}", sub_entity.entity_id));
+            });
+        });
+    }
+
+    // TODO: overrides (including local -> external pins)
 
     entity
 }

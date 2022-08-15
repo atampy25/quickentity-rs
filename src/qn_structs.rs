@@ -3,6 +3,14 @@ use serde_json;
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum SubType {
+    Brick,
+    Scene,
+    Template,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity {
     /// The hash of the TEMP file of this entity.
     #[serde(rename = "tempHash")]
@@ -45,7 +53,7 @@ pub struct Entity {
 
     /// The type of this entity.
     #[serde(rename = "subType")]
-    pub sub_type: i8,
+    pub sub_type: SubType,
 
     /// The QuickEntity format version of this entity.
     #[serde(rename = "quickEntityVersion")]
@@ -57,19 +65,21 @@ pub struct Entity {
 pub struct SubEntity {
     /// The "logical" parent of the entity.
     #[serde(rename = "parent")]
-    pub parent: Option<Ref>,
+    pub parent: Ref,
 
     /// The name of the entity.
     #[serde(rename = "name")]
     pub name: String,
 
     /// The template of the entity.
+    // TODO: yet-to-run QN poll 68ab18 Factory naming convention
     #[serde(rename = "template")]
-    pub template: String, // TODO: yet-to-run QN poll 68ab18 Factory naming convention
+    pub factory: String,
 
     /// The template's flag.
+    // TODO: yet-to-run QN poll 68ab18 Factory naming convention
     #[serde(rename = "templateFlag")]
-    pub template_flag: Option<String>, // TODO: yet-to-run QN poll 68ab18 Factory naming convention
+    pub factory_flag: Option<String>,
 
     /// The blueprint of the entity.
     #[serde(rename = "blueprint")]
@@ -109,7 +119,7 @@ pub struct SubEntity {
 
     /// Interfaces implemented by other entities that can be accessed from this entity.
     #[serde(rename = "exposedInterfaces")]
-    pub exposed_interfaces: Option<HashMap<String, Vec<String>>>,
+    pub exposed_interfaces: Option<HashMap<String, String>>,
 
     /// The subsets that this entity belongs to.
     #[serde(rename = "subsets")]
@@ -176,11 +186,11 @@ pub struct ExposedEntity {
 pub struct PropertyAlias {
     /// The other entity's property that should be accessed from this entity.
     #[serde(rename = "originalProperty")]
-    pub original_property: bool,
+    pub original_property: String,
 
     /// The other entity whose property will be accessed.
     #[serde(rename = "originalEntity")]
-    pub original_entity: Vec<Ref>,
+    pub original_entity: Ref,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
