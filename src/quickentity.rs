@@ -7,8 +7,9 @@ use serde_json::{from_value, json, to_value, Value};
 
 use crate::{
 	qn_structs::{
-		ConstantValue, Entity, ExposedEntity, FullRef, OverriddenProperty, Property, PropertyAlias,
-		PropertyOverride, Ref, RefMaybeConstantValue, RefWithConstantValue, SubEntity, SubType
+		ConstantValue, Entity, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride,
+		PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref,
+		RefMaybeConstantValue, RefWithConstantValue, SubEntity, SubType
 	},
 	rpkg_structs::ResourceMeta,
 	rt_structs::{
@@ -418,170 +419,143 @@ pub fn convert_to_qn(
 				.expect("Root entity index referred to nonexistent entity")
 				.entity_id
 		),
-		entities: HashMap::new(),
-		external_scenes: vec![],
-		override_deletes: vec![],
-		pin_connection_override_deletes: vec![],
-		pin_connection_overrides: vec![],
-		property_overrides: vec![],
-		sub_type: match blueprint.sub_type {
-			2 => SubType::Brick,
-			1 => SubType::Scene,
-			0 => SubType::Template,
-			_ => panic!("Invalid subtype")
-		},
-		quick_entity_version: 2.2
-	};
+		entities: factory
+			.sub_entities
+			.par_iter() // rayon automatically makes this run in parallel for s p e e d
+			.enumerate()
+			.map(|(index, sub_entity_factory)| {
+				let sub_entity_blueprint = blueprint
+					.sub_entities
+					.get(index)
+					.expect("Factory entity had no equivalent by index in blueprint");
 
-	// External scenes
-	for scene_index in &factory.external_scene_type_indices_in_resource_header {
-		entity.external_scenes.push(
-			factory_meta
-				.hash_reference_data
-				.get(*scene_index as usize)
-				.unwrap()
-				.hash
-				.to_owned()
-		);
-	}
+				let factory_dependency = factory_meta
+					.hash_reference_data
+					.get(sub_entity_factory.entity_type_resource_index as usize)
+					.expect("Entity resource index referred to nonexistent dependency");
 
-	entity.entities = factory
-		.sub_entities
-		.par_iter() // rayon automatically makes this run in parallel for s p e e d
-		.enumerate()
-		.map(|(index, sub_entity_factory)| {
-			let sub_entity_blueprint = blueprint
-				.sub_entities
-				.get(index)
-				.expect("Factory entity had no equivalent by index in blueprint");
-
-			let factory_dependency = factory_meta
-				.hash_reference_data
-				.get(sub_entity_factory.entity_type_resource_index as usize)
-				.expect("Entity resource index referred to nonexistent dependency");
-
-			(
-				format!("{:x}", sub_entity_blueprint.entity_id),
-				SubEntity {
-					name: sub_entity_blueprint.entity_name.to_owned(),
-					factory: factory_dependency.hash.to_owned(),
-					blueprint: blueprint_meta
-						.hash_reference_data
-						.get(sub_entity_blueprint.entity_type_resource_index as usize)
-						.expect("Entity resource index referred to nonexistent dependency")
-						.hash
-						.to_owned(),
-					parent: convert_rt_reference_to_qn(
-						&sub_entity_factory.logical_parent,
-						&factory,
-						&blueprint,
-						&factory_meta
-					),
-					factory_flag: match factory_dependency.flag.as_str() {
-						"1F" => None,
-						flag => Some(flag.to_owned())
-					},
-					editor_only: if sub_entity_blueprint.editor_only {
-						Some(true)
-					} else {
-						None
-					},
-					properties: {
-						let x: HashMap<String, Property> = sub_entity_factory
-							.property_values
-							.iter()
-							.map(|property| {
-								(
-									match &property.n_property_id {
-										PropertyID::Int(id) => id.to_string(),
-										PropertyID::String(id) => id.to_owned()
-									}, // key
-									convert_rt_property_to_qn(
-										property,
-										false,
-										&factory,
-										&factory_meta,
-										&blueprint
-									) // value
-								)
-							})
-							.chain(sub_entity_factory.post_init_property_values.iter().map(
-								|property| {
+				(
+					format!("{:x}", sub_entity_blueprint.entity_id),
+					SubEntity {
+						name: sub_entity_blueprint.entity_name.to_owned(),
+						factory: factory_dependency.hash.to_owned(),
+						blueprint: blueprint_meta
+							.hash_reference_data
+							.get(sub_entity_blueprint.entity_type_resource_index as usize)
+							.expect("Entity resource index referred to nonexistent dependency")
+							.hash
+							.to_owned(),
+						parent: convert_rt_reference_to_qn(
+							&sub_entity_factory.logical_parent,
+							&factory,
+							&blueprint,
+							&factory_meta
+						),
+						factory_flag: match factory_dependency.flag.as_str() {
+							"1F" => None,
+							flag => Some(flag.to_owned())
+						},
+						editor_only: if sub_entity_blueprint.editor_only {
+							Some(true)
+						} else {
+							None
+						},
+						properties: {
+							let x: HashMap<String, Property> = sub_entity_factory
+								.property_values
+								.iter()
+								.map(|property| {
 									(
-										// we do a little code duplication
 										match &property.n_property_id {
 											PropertyID::Int(id) => id.to_string(),
 											PropertyID::String(id) => id.to_owned()
-										},
+										}, // key
 										convert_rt_property_to_qn(
 											property,
-											true,
+											false,
 											&factory,
 											&factory_meta,
 											&blueprint
-										)
+										) // value
 									)
-								}
-							))
-							.collect();
-
-						if x.len() > 0 {
-							Some(x)
-						} else {
-							None
-						}
-					},
-					platform_specific_properties: {
-						// group props by platform, then convert them all and turn into a nested hashmap structure
-						let x: HashMap<String, HashMap<String, Property>> = sub_entity_factory
-							.platform_specific_property_values
-							.iter()
-							.group_by(|property| property.platform.to_owned())
-							.into_iter()
-							.map(|(platform, properties)| {
-								(
-									platform,
-									properties
-										.map(|property| {
-											(
-												// we do a little code duplication
-												match &property.property_value.n_property_id {
-													PropertyID::Int(id) => id.to_string(),
-													PropertyID::String(id) => id.to_owned()
-												},
-												convert_rt_property_to_qn(
-													&property.property_value,
-													property.post_init.to_owned(),
-													&factory,
-													&factory_meta,
-													&blueprint
-												)
+								})
+								.chain(sub_entity_factory.post_init_property_values.iter().map(
+									|property| {
+										(
+											// we do a little code duplication
+											match &property.n_property_id {
+												PropertyID::Int(id) => id.to_string(),
+												PropertyID::String(id) => id.to_owned()
+											},
+											convert_rt_property_to_qn(
+												property,
+												true,
+												&factory,
+												&factory_meta,
+												&blueprint
 											)
-										})
-										.collect::<HashMap<String, Property>>()
-								)
-							})
-							.collect();
+										)
+									}
+								))
+								.collect();
 
-						if x.len() > 0 {
-							Some(x)
-						} else {
-							None
-						}
-					},
-					events: None,         // will be mutated later
-					input_copying: None,  // will be mutated later
-					output_copying: None, // will be mutated later
-					property_aliases: {
-						let x: HashMap<String, PropertyAlias> = sub_entity_blueprint
-							.property_aliases
-							.iter()
-							.map(|alias| {
-								(
-									alias.s_property_name.to_owned(),
-									PropertyAlias {
-										original_property: alias.s_alias_name.to_owned(),
-										original_entity: Ref::Short(Some(format!(
+							if x.len() > 0 {
+								Some(x)
+							} else {
+								None
+							}
+						},
+						platform_specific_properties: {
+							// group props by platform, then convert them all and turn into a nested hashmap structure
+							let x: HashMap<String, HashMap<String, Property>> = sub_entity_factory
+								.platform_specific_property_values
+								.iter()
+								.group_by(|property| property.platform.to_owned())
+								.into_iter()
+								.map(|(platform, properties)| {
+									(
+										platform,
+										properties
+											.map(|property| {
+												(
+													// we do a little code duplication
+													match &property.property_value.n_property_id {
+														PropertyID::Int(id) => id.to_string(),
+														PropertyID::String(id) => id.to_owned()
+													},
+													convert_rt_property_to_qn(
+														&property.property_value,
+														property.post_init.to_owned(),
+														&factory,
+														&factory_meta,
+														&blueprint
+													)
+												)
+											})
+											.collect::<HashMap<String, Property>>()
+									)
+								})
+								.collect();
+
+							if x.len() > 0 {
+								Some(x)
+							} else {
+								None
+							}
+						},
+						events: None,         // will be mutated later
+						input_copying: None,  // will be mutated later
+						output_copying: None, // will be mutated later
+						property_aliases: {
+							let x: HashMap<String, PropertyAlias> = sub_entity_blueprint
+								.property_aliases
+								.iter()
+								.map(|alias| {
+									(
+										alias.s_property_name.to_owned(),
+										PropertyAlias {
+											original_property: alias.s_alias_name.to_owned(),
+											original_entity: Ref::Short(Some(format!(
                                         "{:x}",
                                         blueprint
                                             .sub_entities
@@ -591,57 +565,57 @@ pub fn convert_to_qn(
                                             )
                                             .entity_id
                                     )))
-									}
-								)
-							})
-							.collect();
+										}
+									)
+								})
+								.collect();
 
-						if x.len() > 0 {
-							Some(x)
-						} else {
-							None
-						}
-					},
-					exposed_entities: {
-						let x: HashMap<String, ExposedEntity> = sub_entity_blueprint
-							.exposed_entities
-							.iter()
-							.map(|exposed_entity| {
-								(
-									exposed_entity.s_name.to_owned(),
-									ExposedEntity {
-										is_array: exposed_entity.b_is_array.to_owned(),
-										targets: exposed_entity
-											.a_targets
-											.iter()
-											.map(|target| {
-												convert_rt_reference_to_qn(
-													target,
-													&factory,
-													&blueprint,
-													&factory_meta
-												)
-											})
-											.collect()
-									}
-								)
-							})
-							.collect();
+							if x.len() > 0 {
+								Some(x)
+							} else {
+								None
+							}
+						},
+						exposed_entities: {
+							let x: HashMap<String, ExposedEntity> = sub_entity_blueprint
+								.exposed_entities
+								.iter()
+								.map(|exposed_entity| {
+									(
+										exposed_entity.s_name.to_owned(),
+										ExposedEntity {
+											is_array: exposed_entity.b_is_array.to_owned(),
+											targets: exposed_entity
+												.a_targets
+												.iter()
+												.map(|target| {
+													convert_rt_reference_to_qn(
+														target,
+														&factory,
+														&blueprint,
+														&factory_meta
+													)
+												})
+												.collect()
+										}
+									)
+								})
+								.collect();
 
-						if x.len() > 0 {
-							Some(x)
-						} else {
-							None
-						}
-					},
-					exposed_interfaces: {
-						let x: HashMap<String, String> = sub_entity_blueprint
-							.exposed_interfaces
-							.iter()
-							.map(|(interface, entity_index)| {
-								(
-									interface.to_owned(),
-									format!(
+							if x.len() > 0 {
+								Some(x)
+							} else {
+								None
+							}
+						},
+						exposed_interfaces: {
+							let x: HashMap<String, String> = sub_entity_blueprint
+								.exposed_interfaces
+								.iter()
+								.map(|(interface, entity_index)| {
+									(
+										interface.to_owned(),
+										format!(
                                     "{:x}",
                                     blueprint
                                         .sub_entities
@@ -651,21 +625,101 @@ pub fn convert_to_qn(
                                         )
                                         .entity_id
                                 )
-								)
-							})
-							.collect();
+									)
+								})
+								.collect();
 
-						if x.len() > 0 {
-							Some(x)
-						} else {
-							None
-						}
-					},
-					subsets: None // will be mutated later
+							if x.len() > 0 {
+								Some(x)
+							} else {
+								None
+							}
+						},
+						subsets: None // will be mutated later
+					}
+				)
+			})
+			.collect(),
+		external_scenes: factory
+			.external_scene_type_indices_in_resource_header
+			.iter()
+			.map(|scene_index| {
+				factory_meta
+					.hash_reference_data
+					.get(*scene_index as usize)
+					.unwrap()
+					.hash
+					.to_owned()
+			})
+			.collect(),
+		override_deletes: blueprint
+			.override_deletes
+			.iter()
+			.map(|x| convert_rt_reference_to_qn(x, &factory, &blueprint, &factory_meta))
+			.collect(),
+		pin_connection_override_deletes: blueprint
+			.pin_connection_override_deletes
+			.iter()
+			.map(|x| PinConnectionOverrideDelete {
+				from_entity: convert_rt_reference_to_qn(
+					&x.from_entity,
+					&factory,
+					&blueprint,
+					&factory_meta
+				),
+				to_entity: convert_rt_reference_to_qn(
+					&x.from_entity,
+					&factory,
+					&blueprint,
+					&factory_meta
+				),
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_pin_name: x.to_pin_name.to_owned(),
+				value: match x.constant_pin_value.property_type.as_str() {
+					"void" => None,
+					_ => Some(ConstantValue {
+						value_type: x.constant_pin_value.property_type.to_owned(),
+						value: x.constant_pin_value.property_value.to_owned()
+					})
 				}
-			)
-		})
-		.collect();
+			})
+			.collect(),
+		pin_connection_overrides: blueprint
+			.pin_connection_overrides
+			.iter()
+			.map(|x| PinConnectionOverride {
+				from_entity: convert_rt_reference_to_qn(
+					&x.from_entity,
+					&factory,
+					&blueprint,
+					&factory_meta
+				),
+				to_entity: convert_rt_reference_to_qn(
+					&x.from_entity,
+					&factory,
+					&blueprint,
+					&factory_meta
+				),
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_pin_name: x.to_pin_name.to_owned(),
+				value: match x.constant_pin_value.property_type.as_str() {
+					"void" => None,
+					_ => Some(ConstantValue {
+						value_type: x.constant_pin_value.property_type.to_owned(),
+						value: x.constant_pin_value.property_value.to_owned()
+					})
+				}
+			})
+			.collect(),
+		property_overrides: vec![],
+		sub_type: match blueprint.sub_type {
+			2 => SubType::Brick,
+			1 => SubType::Scene,
+			0 => SubType::Template,
+			_ => panic!("Invalid subtype")
+		},
+		quick_entity_version: 2.2
+	}; // this statement is 311 lines long
 
 	for pin in &blueprint.pin_connections {
 		let mut relevant_sub_entity = entity
@@ -716,7 +770,7 @@ pub fn convert_to_qn(
 						value: pin.constant_pin_value.property_value.to_owned()
 					}
 				})
-			}); // isn't it cool how a single statement can be about 30 lines
+			});
 	}
 
 	// cheeky bit of code duplication right here
@@ -854,7 +908,63 @@ pub fn convert_to_qn(
 		});
 	}
 
-	// TODO: overrides (including local -> external pins)
+	// to clean up pass1
+	{
+		let mut pass1: Vec<PropertyOverride> = Vec::default();
+
+		for property_override in &factory.property_overrides {
+			let ents = vec![convert_rt_reference_to_qn(
+				&property_override.property_owner,
+				&factory,
+				&blueprint,
+				&factory_meta
+			)];
+
+			let props = HashMap::from([(
+				match &property_override.property_value.n_property_id {
+					PropertyID::Int(id) => id.to_string(),
+					PropertyID::String(id) => id.to_owned()
+				},
+				{
+					let prop = convert_rt_property_to_qn(
+						&property_override.property_value,
+						false,
+						&factory,
+						&factory_meta,
+						&blueprint
+					);
+
+					OverriddenProperty {
+						value: prop.value,
+						property_type: prop.property_type
+					} // no post-init
+				}
+			)]);
+
+			// if same entity being overridden, merge props
+			if let Some(found) = pass1.iter_mut().find(|x| x.entities == ents) {
+				found.properties.extend(props);
+			} else {
+				pass1.push(PropertyOverride {
+					entities: ents,
+					properties: props
+				});
+			}
+		}
+
+		// merge entities when same props being overridden
+		for property_override in pass1 {
+			if let Some(found) = entity
+				.property_overrides
+				.iter_mut()
+				.find(|x| x.properties == property_override.properties)
+			{
+				found.entities.extend(property_override.entities);
+			} else {
+				entity.property_overrides.push(property_override);
+			}
+		}
+	}
 
 	entity
 }

@@ -214,7 +214,7 @@ pub struct PinConnectionOverride {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: ConstantValue
+	pub value: Option<ConstantValue>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -239,7 +239,7 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: ConstantValue
+	pub value: Option<ConstantValue>
 }
 
 /// A set of overrides for entity properties.
