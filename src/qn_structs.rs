@@ -2,15 +2,15 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum SubType {
 	Brick,
 	Scene,
-	Template,
+	Template
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
 	#[serde(rename = "tempHash")]
@@ -57,11 +57,11 @@ pub struct Entity {
 
 	/// The QuickEntity format version of this entity.
 	#[serde(rename = "quickEntityVersion")]
-	pub quick_entity_version: f64,
+	pub quick_entity_version: f64
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SubEntity {
 	/// The "logical" parent of the entity.
 	#[serde(rename = "parent")]
@@ -123,17 +123,17 @@ pub struct SubEntity {
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
-	pub subsets: Option<HashMap<String, Vec<String>>>,
+	pub subsets: Option<HashMap<String, Vec<String>>>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum RefMaybeConstantValue {
 	RefWithConstantValue(RefWithConstantValue),
-	Ref(Ref),
+	Ref(Ref)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RefWithConstantValue {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -141,11 +141,11 @@ pub struct RefWithConstantValue {
 
 	/// The external scene the referenced entity resides in.
 	#[serde(rename = "value")]
-	pub value: ConstantValue,
+	pub value: ConstantValue
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Property {
 	/// The type of the property.
 	#[serde(rename = "type")]
@@ -157,10 +157,10 @@ pub struct Property {
 
 	/// Whether the property should be (presumably) loaded/set after the entity has been initialised.
 	#[serde(rename = "postInit")]
-	pub post_init: Option<bool>,
+	pub post_init: Option<bool>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ConstantValue {
 	/// The type of the simple property.
 	#[serde(rename = "type")]
@@ -168,10 +168,10 @@ pub struct ConstantValue {
 
 	/// The simple property's value.
 	#[serde(rename = "value")]
-	pub value: serde_json::Value,
+	pub value: serde_json::Value
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ExposedEntity {
 	/// Whether there are multiple target entities.
 	#[serde(rename = "isArray")]
@@ -179,10 +179,10 @@ pub struct ExposedEntity {
 
 	/// The target entity (or entities) that will be accessed.
 	#[serde(rename = "targets")]
-	pub targets: Vec<Ref>,
+	pub targets: Vec<Ref>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PropertyAlias {
 	/// The other entity's property that should be accessed from this entity.
 	#[serde(rename = "originalProperty")]
@@ -190,10 +190,10 @@ pub struct PropertyAlias {
 
 	/// The other entity whose property will be accessed.
 	#[serde(rename = "originalEntity")]
-	pub original_entity: Ref,
+	pub original_entity: Ref
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -214,10 +214,10 @@ pub struct PinConnectionOverride {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: ConstantValue,
+	pub value: ConstantValue
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -239,11 +239,11 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: ConstantValue,
+	pub value: ConstantValue
 }
 
 /// A set of overrides for entity properties.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PropertyOverride {
 	/// An array of references to the entities to override the properties of.
 	#[serde(rename = "entities")]
@@ -251,11 +251,22 @@ pub struct PropertyOverride {
 
 	/// An array of references to the entities to override the properties of.
 	#[serde(rename = "properties")]
-	pub properties: HashMap<String, Property>,
+	pub properties: HashMap<String, OverriddenProperty>
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct OverriddenProperty {
+	/// The type of the property.
+	#[serde(rename = "type")]
+	pub property_type: String,
+
+	/// The value of the property.
+	#[serde(rename = "value")]
+	pub value: serde_json::Value
 }
 
 /// A full reference.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct FullRef {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -268,13 +279,13 @@ pub struct FullRef {
 	/// The sub-entity to reference that is exposed by the referenced entity.
 	#[serde(rename = "exposedEntity")]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub exposed_entity: Option<String>,
+	pub exposed_entity: Option<String>
 }
 
 /// A reference to an entity.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum Ref {
 	Full(FullRef),
-	Short(Option<String>),
+	Short(Option<String>)
 }
