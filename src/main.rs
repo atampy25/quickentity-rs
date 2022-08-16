@@ -94,7 +94,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	);
 	let fac_meta = read_as_meta(&String::from(
 		&fs::read_dir("corpus\\items colombia")
@@ -113,7 +113,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	));
 	let blu = read_as_rtblueprint(
 		&fs::read_dir("corpus\\items colombia")
@@ -132,7 +132,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	);
 	let blu_meta = read_as_meta(
 		&fs::read_dir("corpus\\items colombia")
@@ -151,7 +151,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	);
 
 	let entity = timeit(|| convert_to_qn(&fac, &fac_meta, &blu, &blu_meta, Game::HM3));
