@@ -13,12 +13,14 @@ pub enum SubType {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
+	// TODO: yet-to-run QN poll 68ab18 Factory naming convention
 	#[serde(rename = "tempHash")]
-	pub temp_hash: String,
+	pub factory_hash: String,
 
 	/// The hash of the TBLU file of this entity.
+	// TODO: yet-to-run QN poll 68ab18 Factory naming convention
 	#[serde(rename = "tbluHash")]
-	pub tblu_hash: String,
+	pub blueprint_hash: String,
 
 	/// The root sub-entity of this entity.
 	#[serde(rename = "rootEntity")]
@@ -193,6 +195,7 @@ pub struct PropertyAlias {
 	pub original_entity: Ref
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
@@ -217,6 +220,7 @@ pub struct PinConnectionOverride {
 	pub value: Option<ConstantValue>
 }
 
+#[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.

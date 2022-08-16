@@ -409,8 +409,8 @@ pub fn convert_to_qn(
 	}
 
 	let mut entity = Entity {
-		temp_hash: factory_meta.hash_value.to_owned(),
-		tblu_hash: blueprint_meta.hash_value.to_owned(),
+		factory_hash: factory_meta.hash_value.to_owned(),
+		blueprint_hash: blueprint_meta.hash_value.to_owned(),
 		root_entity: format!(
 			"{:x}",
 			blueprint
@@ -642,7 +642,7 @@ pub fn convert_to_qn(
 			.collect(),
 		external_scenes: factory
 			.external_scene_type_indices_in_resource_header
-			.iter()
+			.par_iter()
 			.map(|scene_index| {
 				factory_meta
 					.hash_reference_data
@@ -654,12 +654,12 @@ pub fn convert_to_qn(
 			.collect(),
 		override_deletes: blueprint
 			.override_deletes
-			.iter()
+			.par_iter()
 			.map(|x| convert_rt_reference_to_qn(x, &factory, &blueprint, &factory_meta))
 			.collect(),
 		pin_connection_override_deletes: blueprint
 			.pin_connection_override_deletes
-			.iter()
+			.par_iter()
 			.map(|x| PinConnectionOverrideDelete {
 				from_entity: convert_rt_reference_to_qn(
 					&x.from_entity,
@@ -686,7 +686,7 @@ pub fn convert_to_qn(
 			.collect(),
 		pin_connection_overrides: blueprint
 			.pin_connection_overrides
-			.iter()
+			.par_iter()
 			.map(|x| PinConnectionOverride {
 				from_entity: convert_rt_reference_to_qn(
 					&x.from_entity,

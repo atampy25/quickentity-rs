@@ -8,12 +8,9 @@ use qn_structs::Entity;
 use rpkg_structs::ResourceMeta;
 use rt_structs::{RTBlueprint, RTFactory};
 
-use serde_json::{from_slice, to_vec, to_vec_pretty, Value};
-use std::time::Instant;
-use std::{
-	fs::{self, File},
-	io::Read
-};
+use serde_json::{from_slice, to_vec, Value};
+use std::time::{Instant, SystemTime};
+use std::{fs, io::Read};
 
 use crate::quickentity::{convert_to_qn, Game};
 
@@ -80,18 +77,98 @@ fn read_as_meta(path: &String) -> ResourceMeta {
 fn main() {
 	let now = Instant::now();
 
-	let entity = convert_to_qn(
-		&read_as_rtfactory(&String::from("0056406088754691.TEMP.json")),
-		&read_as_meta(&String::from("0056406088754691.TEMP.meta.JSON")),
-		&read_as_rtblueprint(&String::from("00CF14C55C3BCCA8.TBLU.json")),
-		&read_as_meta(&String::from("00CF14C55C3BCCA8.TBLU.meta.JSON")),
-		Game::HM3
+	let fac = read_as_rtfactory(
+		&fs::read_dir("corpus\\items colombia")
+			.unwrap()
+			.find(|x| {
+				x.as_ref()
+					.unwrap()
+					.file_name()
+					.to_str()
+					.unwrap()
+					.ends_with("TEMP.json")
+			})
+			.unwrap()
+			.unwrap()
+			.path()
+			.as_os_str()
+			.to_str()
+			.unwrap()
+			.to_string()
 	);
+	let fac_meta = read_as_meta(&String::from(
+		&fs::read_dir("corpus\\items colombia")
+			.unwrap()
+			.find(|x| {
+				x.as_ref()
+					.unwrap()
+					.file_name()
+					.to_str()
+					.unwrap()
+					.ends_with("TEMP.meta.JSON")
+			})
+			.unwrap()
+			.unwrap()
+			.path()
+			.as_os_str()
+			.to_str()
+			.unwrap()
+			.to_string()
+	));
+	let blu = read_as_rtblueprint(
+		&fs::read_dir("corpus\\items colombia")
+			.unwrap()
+			.find(|x| {
+				x.as_ref()
+					.unwrap()
+					.file_name()
+					.to_str()
+					.unwrap()
+					.ends_with("TBLU.json")
+			})
+			.unwrap()
+			.unwrap()
+			.path()
+			.as_os_str()
+			.to_str()
+			.unwrap()
+			.to_string()
+	);
+	let blu_meta = read_as_meta(
+		&fs::read_dir("corpus\\items colombia")
+			.unwrap()
+			.find(|x| {
+				x.as_ref()
+					.unwrap()
+					.file_name()
+					.to_str()
+					.unwrap()
+					.ends_with("TBLU.meta.JSON")
+			})
+			.unwrap()
+			.unwrap()
+			.path()
+			.as_os_str()
+			.to_str()
+			.unwrap()
+			.to_string()
+	);
+
+	let entity = timeit(|| convert_to_qn(&fac, &fac_meta, &blu, &blu_meta, Game::HM3));
 
 	// dbg!(&entity);
 
-	fs::write("entity.json", to_vec_pretty(&entity).unwrap()).unwrap();
+	fs::write("entity.json", to_vec(&entity).unwrap()).unwrap();
 
 	let elapsed = now.elapsed();
 	println!("Elapsed: {:.2?}", elapsed);
+}
+
+fn timeit<F: FnMut() -> T, T>(mut f: F) -> T {
+	let start = SystemTime::now();
+	let result = f();
+	let end = SystemTime::now();
+	let duration = end.duration_since(start).unwrap();
+	println!("Fn took {} milliseconds", duration.as_millis());
+	result
 }
