@@ -70,7 +70,7 @@ fn convert_rt_reference_to_qn(
 	factory_meta: &ResourceMeta,
 ) -> Ref {
 	if reference.exposed_entity != "" || reference.external_scene_index != -1 {
-		Ref::FullRef(FullRef {
+		Ref::Full(FullRef {
             entity_ref: match reference.entity_index {
                 -2 => format!("{:x}", reference.entity_id),
                 index if index >= 0 => {
@@ -109,7 +109,7 @@ fn convert_rt_reference_to_qn(
             },
         })
 	} else {
-		Ref::ShortRef(match reference.entity_index {
+		Ref::Short(match reference.entity_index {
 			-1 => None,
 			index if index >= 0 => Some(format!(
 				"{:x}",
@@ -131,13 +131,13 @@ fn convert_qn_reference_to_rt(
 	entity_id_to_index_mapping: &HashMap<String, u32>,
 ) -> SEntityTemplateReference {
 	match reference {
-		Ref::ShortRef(None) => SEntityTemplateReference {
+		Ref::Short(None) => SEntityTemplateReference {
 			entity_id: 18446744073709551615,
 			external_scene_index: -1,
 			entity_index: -1,
 			exposed_entity: "".to_string(),
 		},
-		Ref::ShortRef(Some(ent)) => SEntityTemplateReference {
+		Ref::Short(Some(ent)) => SEntityTemplateReference {
 			entity_id: 18446744073709551615,
 			external_scene_index: -1,
 			entity_index: entity_id_to_index_mapping
@@ -146,7 +146,7 @@ fn convert_qn_reference_to_rt(
 				.to_owned() as i32,
 			exposed_entity: "".to_string(),
 		},
-		Ref::FullRef(fullref) => SEntityTemplateReference {
+		Ref::Full(fullref) => SEntityTemplateReference {
 			entity_id: match &fullref.external_scene {
 				None => 18446744073709551615,
 				Some(_) => u64::from_str_radix(fullref.entity_ref.as_str(), 16)
@@ -175,7 +175,7 @@ fn convert_qn_reference_to_rt(
 					.to_owned() as i32,
 				Some(_) => -2,
 			},
-			exposed_entity: fullref.exposed_entity.unwrap_or("".to_string()),
+			exposed_entity: fullref.exposed_entity.unwrap_or_default(),
 		},
 	}
 }
@@ -581,7 +581,7 @@ pub fn convert_to_qn(
 									alias.s_property_name.to_owned(),
 									PropertyAlias {
 										original_property: alias.s_alias_name.to_owned(),
-										original_entity: Ref::ShortRef(Some(format!(
+										original_entity: Ref::Short(Some(format!(
                                         "{:x}",
                                         blueprint
                                             .sub_entities
@@ -693,7 +693,7 @@ pub fn convert_to_qn(
 			.entry(pin.to_pin_name.to_owned())
 			.or_insert(Vec::default())
 			.push(if pin.constant_pin_value.property_type == "void" {
-				RefMaybeConstantValue::Ref(Ref::ShortRef(Some(format!(
+				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
 					"{:x}",
 					blueprint
 						.sub_entities
@@ -703,7 +703,7 @@ pub fn convert_to_qn(
 				))))
 			} else {
 				RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-					entity_ref: Ref::ShortRef(Some(format!(
+					entity_ref: Ref::Short(Some(format!(
 						"{:x}",
 						blueprint
 							.sub_entities
@@ -746,7 +746,7 @@ pub fn convert_to_qn(
 			.entry(forwarding.to_pin_name.to_owned())
 			.or_insert(Vec::default())
 			.push(if forwarding.constant_pin_value.property_type == "void" {
-				RefMaybeConstantValue::Ref(Ref::ShortRef(Some(format!(
+				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
 					"{:x}",
 					blueprint
 						.sub_entities
@@ -756,7 +756,7 @@ pub fn convert_to_qn(
 				))))
 			} else {
 				RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-					entity_ref: Ref::ShortRef(Some(format!(
+					entity_ref: Ref::Short(Some(format!(
 						"{:x}",
 						blueprint
 							.sub_entities
@@ -798,7 +798,7 @@ pub fn convert_to_qn(
 			.entry(forwarding.to_pin_name.to_owned())
 			.or_insert(Vec::default())
 			.push(if forwarding.constant_pin_value.property_type == "void" {
-				RefMaybeConstantValue::Ref(Ref::ShortRef(Some(format!(
+				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
 					"{:x}",
 					blueprint
 						.sub_entities
@@ -808,7 +808,7 @@ pub fn convert_to_qn(
 				))))
 			} else {
 				RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-					entity_ref: Ref::ShortRef(Some(format!(
+					entity_ref: Ref::Short(Some(format!(
 						"{:x}",
 						blueprint
 							.sub_entities

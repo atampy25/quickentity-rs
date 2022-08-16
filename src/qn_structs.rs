@@ -275,6 +275,6 @@ pub struct FullRef {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Ref {
-	FullRef(FullRef),
-	ShortRef(Option<String>),
+	Full(FullRef),
+	Short(Option<String>),
 }
