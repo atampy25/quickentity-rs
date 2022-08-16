@@ -12,7 +12,7 @@ use serde_json::{from_slice, to_vec, to_vec_pretty, Value};
 use std::time::Instant;
 use std::{
 	fs::{self, File},
-	io::Read
+	io::Read,
 };
 
 use crate::quickentity::{convert_to_qn, Game};
@@ -85,7 +85,7 @@ fn main() {
 		&read_as_meta(&String::from("0056406088754691.TEMP.meta.JSON")),
 		&read_as_rtblueprint(&String::from("00CF14C55C3BCCA8.TBLU.json")),
 		&read_as_meta(&String::from("00CF14C55C3BCCA8.TBLU.meta.JSON")),
-		Game::HM3
+		Game::HM3,
 	);
 
 	// dbg!(&entity);
