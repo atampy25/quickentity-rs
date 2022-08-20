@@ -1,6 +1,5 @@
+use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
-use serde_json;
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -13,12 +12,12 @@ pub enum SubType {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
-	// TODO: yet-to-run QN poll 68ab18 Factory naming convention
+	// TODO: yet-to-run QN poll e9f47 Factory/blueprint hash naming
 	#[serde(rename = "tempHash")]
 	pub factory_hash: String,
 
 	/// The hash of the TBLU file of this entity.
-	// TODO: yet-to-run QN poll 68ab18 Factory naming convention
+	// TODO: yet-to-run QN poll e9f47 Factory/blueprint hash naming
 	#[serde(rename = "tbluHash")]
 	pub blueprint_hash: String,
 
@@ -28,7 +27,7 @@ pub struct Entity {
 
 	/// The sub-entities of this entity.
 	#[serde(rename = "entities")]
-	pub entities: HashMap<String, SubEntity>,
+	pub entities: LinkedHashMap<String, SubEntity>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
 	#[serde(rename = "propertyOverrides")]
@@ -93,39 +92,42 @@ pub struct SubEntity {
 
 	/// Properties of the entity.
 	#[serde(rename = "properties")]
-	pub properties: Option<HashMap<String, Property>>,
+	pub properties: Option<LinkedHashMap<String, Property>>,
 
 	/// Properties to apply conditionally to the entity based on platform.
 	#[serde(rename = "platformSpecificProperties")]
-	pub platform_specific_properties: Option<HashMap<String, HashMap<String, Property>>>,
+	pub platform_specific_properties:
+		Option<LinkedHashMap<String, LinkedHashMap<String, Property>>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
-	pub events: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub events: Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
-	pub input_copying: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub input_copying:
+		Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
-	pub output_copying: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub output_copying:
+		Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
-	pub property_aliases: Option<HashMap<String, PropertyAlias>>,
+	pub property_aliases: Option<LinkedHashMap<String, PropertyAlias>>,
 
 	/// Entities that can be accessed from this entity.
 	#[serde(rename = "exposedEntities")]
-	pub exposed_entities: Option<HashMap<String, ExposedEntity>>,
+	pub exposed_entities: Option<LinkedHashMap<String, ExposedEntity>>,
 
 	/// Interfaces implemented by other entities that can be accessed from this entity.
 	#[serde(rename = "exposedInterfaces")]
-	pub exposed_interfaces: Option<HashMap<String, String>>,
+	pub exposed_interfaces: Option<LinkedHashMap<String, String>>,
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
-	pub subsets: Option<HashMap<String, Vec<String>>>
+	pub subsets: Option<LinkedHashMap<String, Vec<String>>>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -143,7 +145,7 @@ pub struct RefWithConstantValue {
 
 	/// The external scene the referenced entity resides in.
 	#[serde(rename = "value")]
-	pub value: ConstantValue
+	pub value: SimpleProperty
 }
 
 #[serde_with::skip_serializing_none]
@@ -163,7 +165,7 @@ pub struct Property {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ConstantValue {
+pub struct SimpleProperty {
 	/// The type of the simple property.
 	#[serde(rename = "type")]
 	pub value_type: String,
@@ -217,7 +219,7 @@ pub struct PinConnectionOverride {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: Option<ConstantValue>
+	pub value: Option<SimpleProperty>
 }
 
 #[serde_with::skip_serializing_none]
@@ -243,7 +245,7 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: Option<ConstantValue>
+	pub value: Option<SimpleProperty>
 }
 
 /// A set of overrides for entity properties.
@@ -255,7 +257,7 @@ pub struct PropertyOverride {
 
 	/// An array of references to the entities to override the properties of.
 	#[serde(rename = "properties")]
-	pub properties: HashMap<String, OverriddenProperty>
+	pub properties: LinkedHashMap<String, OverriddenProperty>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

@@ -170,6 +170,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04c3b4822ccebfa39c02fc03d1534441b22ead323fa0f48bb7ddd8e6ba076a40"
 
 [[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -210,6 +219,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "json-patch",
+ "linked-hash-map",
  "rayon",
  "serde",
  "serde_json",

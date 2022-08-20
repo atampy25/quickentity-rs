@@ -8,7 +8,7 @@ use qn_structs::Entity;
 use rpkg_structs::ResourceMeta;
 use rt_structs::{RTBlueprint, RTFactory};
 
-use serde_json::{from_slice, to_vec, Value};
+use serde_json::{from_slice, to_vec, to_vec_pretty, Value};
 use std::time::{Instant, SystemTime};
 use std::{fs, io::Read};
 
@@ -78,7 +78,7 @@ fn main() {
 	let now = Instant::now();
 
 	let fac = read_as_rtfactory(
-		&fs::read_dir("corpus\\items colombia")
+		&fs::read_dir("corpus\\miami")
 			.unwrap()
 			.find(|x| {
 				x.as_ref()
@@ -97,7 +97,7 @@ fn main() {
 			.to_string()
 	);
 	let fac_meta = read_as_meta(&String::from(
-		&fs::read_dir("corpus\\items colombia")
+		&fs::read_dir("corpus\\miami")
 			.unwrap()
 			.find(|x| {
 				x.as_ref()
@@ -116,7 +116,7 @@ fn main() {
 			.to_string()
 	));
 	let blu = read_as_rtblueprint(
-		&fs::read_dir("corpus\\items colombia")
+		&fs::read_dir("corpus\\miami")
 			.unwrap()
 			.find(|x| {
 				x.as_ref()
@@ -135,7 +135,7 @@ fn main() {
 			.to_string()
 	);
 	let blu_meta = read_as_meta(
-		&fs::read_dir("corpus\\items colombia")
+		&fs::read_dir("corpus\\miami")
 			.unwrap()
 			.find(|x| {
 				x.as_ref()
@@ -158,7 +158,7 @@ fn main() {
 
 	// dbg!(&entity);
 
-	fs::write("entity.json", to_vec(&entity).unwrap()).unwrap();
+	fs::write("entity.json", to_vec_pretty(&entity).unwrap()).unwrap();
 
 	let elapsed = now.elapsed();
 	println!("Elapsed: {:.2?}", elapsed);

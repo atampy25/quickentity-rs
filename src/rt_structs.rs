@@ -5,7 +5,7 @@ use serde_json;
 #[serde(rename_all = "camelCase")]
 pub struct STemplateBlueprintSubEntity {
 	pub logical_parent: SEntityTemplateReference,
-	pub entity_type_resource_index: i32,
+	pub entity_type_resource_index: usize,
 
 	#[serde(rename = "entityId")]
 	pub entity_id: u64,
@@ -14,7 +14,7 @@ pub struct STemplateBlueprintSubEntity {
 	pub entity_name: String,
 	pub property_aliases: Vec<SEntityTemplatePropertyAlias>,
 	pub exposed_entities: Vec<SEntityTemplateExposedEntity>,
-	pub exposed_interfaces: Vec<(String, i32)>,
+	pub exposed_interfaces: Vec<(String, usize)>,
 	pub entity_subsets: Vec<(String, SEntityTemplateEntitySubset)>
 }
 
@@ -22,9 +22,9 @@ pub struct STemplateBlueprintSubEntity {
 #[serde(rename_all = "camelCase")]
 pub struct RTBlueprint {
 	pub sub_type: i8,
-	pub root_entity_index: i32,
+	pub root_entity_index: usize,
 	pub sub_entities: Vec<STemplateBlueprintSubEntity>,
-	pub external_scene_type_indices_in_resource_header: Vec<i32>,
+	pub external_scene_type_indices_in_resource_header: Vec<usize>,
 	pub pin_connections: Vec<SEntityTemplatePinConnection>,
 	pub input_pin_forwardings: Vec<SEntityTemplatePinConnection>,
 	pub output_pin_forwardings: Vec<SEntityTemplatePinConnection>,
@@ -37,7 +37,7 @@ pub struct RTBlueprint {
 #[serde(rename_all = "camelCase")]
 pub struct STemplateFactorySubEntity {
 	pub logical_parent: SEntityTemplateReference,
-	pub entity_type_resource_index: i32,
+	pub entity_type_resource_index: usize,
 	pub property_values: Vec<SEntityTemplateProperty>,
 	pub post_init_property_values: Vec<SEntityTemplateProperty>,
 	pub platform_specific_property_values: Vec<SEntityTemplatePlatformSpecificProperty>
@@ -48,10 +48,10 @@ pub struct STemplateFactorySubEntity {
 pub struct RTFactory {
 	pub sub_type: i32,
 	pub blueprint_index_in_resource_header: i32,
-	pub root_entity_index: i32,
+	pub root_entity_index: usize,
 	pub sub_entities: Vec<STemplateFactorySubEntity>,
 	pub property_overrides: Vec<SEntityTemplatePropertyOverride>,
-	pub external_scene_type_indices_in_resource_header: Vec<i32>
+	pub external_scene_type_indices_in_resource_header: Vec<usize>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
