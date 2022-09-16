@@ -12,12 +12,10 @@ pub enum SubType {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
-	// TODO: yet-to-run QN poll e9f47 Factory/blueprint hash naming
 	#[serde(rename = "tempHash")]
 	pub factory_hash: String,
 
 	/// The hash of the TBLU file of this entity.
-	// TODO: yet-to-run QN poll e9f47 Factory/blueprint hash naming
 	#[serde(rename = "tbluHash")]
 	pub blueprint_hash: String,
 
@@ -58,7 +56,9 @@ pub struct Entity {
 
 	/// The QuickEntity format version of this entity.
 	#[serde(rename = "quickEntityVersion")]
-	pub quick_entity_version: f64
+	pub quick_entity_version: f64 // TODO: pending QN poll 5815b1 Include extra depends
+	                              // pub factory_unused_dependencies: Vec<Dependency>,
+	                              // pub blueprint_unused_dependencies: Vec<Dependency>
 }
 
 #[serde_with::skip_serializing_none]
@@ -168,7 +168,7 @@ pub struct Property {
 pub struct SimpleProperty {
 	/// The type of the simple property.
 	#[serde(rename = "type")]
-	pub value_type: String,
+	pub property_type: String,
 
 	/// The simple property's value.
 	#[serde(rename = "value")]
@@ -205,8 +205,9 @@ pub struct PinConnectionOverride {
 	pub from_entity: Ref,
 
 	/// The name of the event on the fromEntity that will trigger the input on the toEntity.
-	#[serde(rename = "fromPinName")]
-	pub from_pin_name: String,
+	// TODO: pending QN poll 149ee0 From/to pin names
+	#[serde(rename = "fromPin")]
+	pub from_pin: String,
 
 	/// The entity whose input will be triggered.
 	#[serde(rename = "toEntity")]
@@ -214,8 +215,9 @@ pub struct PinConnectionOverride {
 
 	/// The name of the input on the toEntity that will be triggered by the event on the
 	/// fromEntity.
-	#[serde(rename = "toPinName")]
-	pub to_pin_name: String,
+	// TODO: pending QN poll 149ee0 From/to pin names
+	#[serde(rename = "toPin")]
+	pub to_pin: String,
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
@@ -231,8 +233,9 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The name of the event on the fromEntity that will no longer trigger the input on the
 	/// toEntity.
-	#[serde(rename = "fromPinName")]
-	pub from_pin_name: String,
+	// TODO: pending QN poll 149ee0 From/to pin names
+	#[serde(rename = "fromPin")]
+	pub from_pin: String,
 
 	/// The entity whose input is triggered.
 	#[serde(rename = "toEntity")]
@@ -240,8 +243,9 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The name of the input on the toEntity that will no longer be triggered by the event on
 	/// the fromEntity.
-	#[serde(rename = "toPinName")]
-	pub to_pin_name: String,
+	// TODO: pending QN poll 149ee0 From/to pin names
+	#[serde(rename = "toPin")]
+	pub to_pin: String,
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
@@ -294,4 +298,19 @@ pub struct FullRef {
 pub enum Ref {
 	Full(FullRef),
 	Short(Option<String>)
+}
+
+/// A dependency of an entity.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum Dependency {
+	Full(DependencyWithFlag),
+	Short(String)
+}
+
+/// A dependency with a flag other than the default (1F).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct DependencyWithFlag {
+	pub resource: String,
+	pub flag: String
 }

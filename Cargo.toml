@@ -9,8 +9,11 @@ edition = "2021"
 indexmap = "1.9.1"
 itertools = "0.10.3"
 json-patch = "0.2.6"
-linked-hash-map = { version ="0.5.6", features = ["serde_impl"] }
+linked-hash-map = { version = "0.5.6", features = ["serde_impl"] }
 rayon = "1.5.3"
 serde = { version = "1.0.137", features = ["derive"] }
-serde_json = { version = "1.0.81", features = ["arbitrary_precision", "preserve_order"] }
-serde_with = "1.14.0"
+serde_json = { version = "1.0.81", features = [
+    "arbitrary_precision",
+    "preserve_order",
+] }
+serde_with = "2.0.1"

@@ -8,11 +8,14 @@ use qn_structs::Entity;
 use rpkg_structs::ResourceMeta;
 use rt_structs::{RTBlueprint, RTFactory};
 
-use serde_json::{from_slice, to_vec, to_vec_pretty, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::ser::Formatter;
+use serde_json::{from_slice, to_vec, to_vec_pretty, Serializer, Value};
+use std::io;
 use std::time::{Instant, SystemTime};
 use std::{fs, io::Read};
 
-use crate::quickentity::{convert_to_qn, Game};
+use crate::quickentity::{convert_to_qn, convert_to_rt, Game};
 
 fn read_as_json(path: &String) -> Value {
 	from_slice(&{
@@ -158,10 +161,101 @@ fn main() {
 
 	// dbg!(&entity);
 
-	fs::write("entity.json", to_vec_pretty(&entity).unwrap()).unwrap();
+	fs::write("entity.json", to_vec_float_format(&entity)).unwrap();
+
+	let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
+		timeit(|| convert_to_rt(&entity, Game::HM3));
+
+	fs::write(
+		"outputs\\miami\\factory.json",
+		to_vec_float_format(&converted_fac)
+	)
+	.unwrap();
+
+	fs::write(
+		"outputs\\miami\\factory.meta.json",
+		to_vec_float_format(&converted_fac_meta)
+	)
+	.unwrap();
+
+	fs::write(
+		"outputs\\miami\\blueprint.json",
+		to_vec_float_format(&converted_blu)
+	)
+	.unwrap();
+
+	fs::write(
+		"outputs\\miami\\blueprint.meta.json",
+		to_vec_float_format(&converted_blu_meta)
+	)
+	.unwrap();
 
 	let elapsed = now.elapsed();
 	println!("Elapsed: {:.2?}", elapsed);
+}
+
+fn to_vec_float_format<W>(contents: &W) -> Vec<u8>
+where
+	W: ?Sized + Serialize
+{
+	let mut writer = Vec::with_capacity(128);
+
+	let mut ser = Serializer::with_formatter(&mut writer, FloatFormatter);
+	contents.serialize(&mut ser).unwrap();
+
+	writer
+}
+
+#[derive(Clone, Debug)]
+pub struct FloatFormatter;
+
+impl Formatter for FloatFormatter {
+	#[inline]
+	fn write_f32<W>(&mut self, writer: &mut W, value: f32) -> io::Result<()>
+	where
+		W: ?Sized + io::Write
+	{
+		writer.write_all(value.to_string().as_bytes())
+	}
+
+	#[inline]
+	fn write_f64<W>(&mut self, writer: &mut W, value: f64) -> io::Result<()>
+	where
+		W: ?Sized + io::Write
+	{
+		writer.write_all(value.to_string().as_bytes())
+	}
+
+	/// Writes a number that has already been rendered to a string.
+	#[inline]
+	fn write_number_str<W>(&mut self, writer: &mut W, value: &str) -> io::Result<()>
+	where
+		W: ?Sized + io::Write
+	{
+		let x = value.parse::<f64>();
+		if let Ok(y) = x {
+			if value.parse::<u64>().is_err()
+				|| y.to_string() == value.parse::<u64>().unwrap().to_string()
+			{
+				writer
+					.write_all(
+						if y.to_string() == "-0" {
+							"0".to_string()
+						} else {
+							y.to_string()
+						}
+						.as_bytes()
+					)
+					.unwrap();
+			} else {
+				writer.write_all(value.as_bytes()).unwrap();
+			}
+		} else {
+			writer.write_all(value.as_bytes()).unwrap();
+		}
+
+		Ok(())
+	}
 }
 
 fn timeit<F: FnMut() -> T, T>(mut f: F) -> T {

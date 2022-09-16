@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -77,10 +76,10 @@ pub struct SEntityTemplateExposedEntity {
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplatePinConnection {
 	#[serde(rename = "fromID")]
-	pub from_id: i32,
+	pub from_id: usize,
 
 	#[serde(rename = "toID")]
-	pub to_id: i32,
+	pub to_id: usize,
 
 	pub from_pin_name: String,
 	pub to_pin_name: String,
@@ -101,7 +100,7 @@ pub struct SEntityTemplatePropertyAlias {
 	pub s_alias_name: String,
 
 	#[serde(rename = "entityID")]
-	pub entity_id: i32,
+	pub entity_id: usize,
 
 	pub s_property_name: String
 }
@@ -116,7 +115,7 @@ pub struct SEntityTemplatePropertyOverride {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplateEntitySubset {
-	pub entities: Vec<i32>
+	pub entities: Vec<usize>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
