@@ -97,7 +97,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	);
 	let fac_meta = read_as_meta(&String::from(
 		&fs::read_dir("corpus\\miami")
@@ -116,7 +116,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	));
 	let blu = read_as_rtblueprint(
 		&fs::read_dir("corpus\\miami")
@@ -135,7 +135,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	);
 	let blu_meta = read_as_meta(
 		&fs::read_dir("corpus\\miami")
@@ -154,7 +154,7 @@ fn main() {
 			.as_os_str()
 			.to_str()
 			.unwrap()
-			.to_string()
+			.to_string(),
 	);
 
 	let entity = timeit(|| convert_to_qn(&fac, &fac_meta, &blu, &blu_meta, Game::HM3));
@@ -168,25 +168,25 @@ fn main() {
 
 	fs::write(
 		"outputs\\miami\\factory.json",
-		to_vec_float_format(&converted_fac)
+		to_vec_float_format(&converted_fac),
 	)
 	.unwrap();
 
 	fs::write(
 		"outputs\\miami\\factory.meta.json",
-		to_vec_float_format(&converted_fac_meta)
+		to_vec_float_format(&converted_fac_meta),
 	)
 	.unwrap();
 
 	fs::write(
 		"outputs\\miami\\blueprint.json",
-		to_vec_float_format(&converted_blu)
+		to_vec_float_format(&converted_blu),
 	)
 	.unwrap();
 
 	fs::write(
 		"outputs\\miami\\blueprint.meta.json",
-		to_vec_float_format(&converted_blu_meta)
+		to_vec_float_format(&converted_blu_meta),
 	)
 	.unwrap();
 
@@ -196,7 +196,7 @@ fn main() {
 
 fn to_vec_float_format<W>(contents: &W) -> Vec<u8>
 where
-	W: ?Sized + Serialize
+	W: ?Sized + Serialize,
 {
 	let mut writer = Vec::with_capacity(128);
 
@@ -213,7 +213,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_f32<W>(&mut self, writer: &mut W, value: f32) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		writer.write_all(value.to_string().as_bytes())
 	}
@@ -221,7 +221,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_f64<W>(&mut self, writer: &mut W, value: f64) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		writer.write_all(value.to_string().as_bytes())
 	}
@@ -230,7 +230,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_number_str<W>(&mut self, writer: &mut W, value: &str) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		let x = value.parse::<f64>();
 		if let Ok(y) = x {
@@ -244,7 +244,7 @@ impl Formatter for FloatFormatter {
 						} else {
 							y.to_string()
 						}
-						.as_bytes()
+						.as_bytes(),
 					)
 					.unwrap();
 			} else {

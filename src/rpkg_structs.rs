@@ -11,11 +11,11 @@ pub struct ResourceMeta {
 	pub hash_size_final: u32,
 	pub hash_size_in_memory: u32,
 	pub hash_size_in_video_memory: u32,
-	pub hash_value: String
+	pub hash_value: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResourceDependency {
 	pub hash: String,
-	pub flag: String
+	pub flag: String,
 }
