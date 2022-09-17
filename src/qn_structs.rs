@@ -63,10 +63,13 @@ pub struct Entity {
 	#[serde(rename = "quickEntityVersion")]
 	pub quick_entity_version: f64,
 
+	#[serde(rename = "extraFactoryDependencies")]
 	pub extra_factory_dependencies: Vec<Dependency>,
 
+	#[serde(rename = "extraBlueprintDependencies")]
 	pub extra_blueprint_dependencies: Vec<Dependency>,
 
+	#[serde(rename = "comments")]
 	pub comments: Vec<CommentEntity>
 }
 
