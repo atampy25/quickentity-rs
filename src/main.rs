@@ -4,17 +4,43 @@ mod rpkg_structs;
 mod rt_structs;
 mod util_structs;
 
+use qn_structs::Entity;
 use rpkg_structs::ResourceMeta;
 use rt_structs::{RTBlueprint, RTFactory};
 
+use clap::{Parser, Subcommand};
 use serde::Serialize;
 use serde_json::ser::Formatter;
-use serde_json::{from_slice, Serializer};
+use serde_json::{from_slice, Serializer, Value};
 use std::io;
-use std::time::{Instant, SystemTime};
+use std::time::Instant;
 use std::{fs, io::Read};
 
-use crate::quickentity::{convert_to_qn, convert_to_rt};
+use crate::quickentity::{apply_patch, convert_to_qn, convert_to_rt, generate_patch};
+
+fn read_as_value(path: &String) -> Value {
+	from_slice(&{
+		let mut vec = Vec::new();
+		fs::File::open(path)
+			.expect("Failed to open file")
+			.read_to_end(&mut vec)
+			.expect("Failed to read file");
+		vec
+	})
+	.expect("Failed to open file as JSON")
+}
+
+fn read_as_entity(path: &String) -> Entity {
+	from_slice(&{
+		let mut vec = Vec::new();
+		fs::File::open(path)
+			.expect("Failed to open file")
+			.read_to_end(&mut vec)
+			.expect("Failed to read file");
+		vec
+	})
+	.expect("Failed to open file as JSON")
+}
 
 fn read_as_rtfactory(path: &String) -> RTFactory {
 	from_slice(&{
@@ -52,118 +78,198 @@ fn read_as_meta(path: &String) -> ResourceMeta {
 	.expect("Failed to open file as JSON")
 }
 
+#[derive(Parser)]
+#[clap(author = "Atampy26", version, about = "A tool for parsing ResourceTool/RPKG entity JSON files into a more readable format and back again.", long_about = None)]
+struct Args {
+	#[clap(subcommand)]
+	command: Command
+}
+
+#[derive(Subcommand)]
+enum Command {
+	// Convert between RT/RPKG source files and QuickEntity entity JSON files.
+	Entity {
+		#[clap(subcommand)]
+		subcommand: EntityCommand
+	},
+
+	// Generate or apply a QuickEntity patch JSON.
+	Patch {
+		#[clap(subcommand)]
+		subcommand: PatchCommand
+	}
+}
+
+#[derive(Subcommand)]
+enum EntityCommand {
+	/// Convert a set of JSON files into a QuickEntity JSON file.
+	Convert {
+		/// Factory (TEMP) JSON path.
+		#[clap(short, long)]
+		input_factory: String,
+
+		/// Factory (TEMP) meta JSON path.
+		#[clap(short, long)]
+		input_factory_meta: String,
+
+		/// Blueprint (TBLU) JSON path.
+		#[clap(short, long)]
+		input_blueprint: String,
+
+		/// Blueprint (TBLU) meta JSON path.
+		#[clap(short, long)]
+		input_blueprint_meta: String,
+
+		/// Output QuickEntity JSON path.
+		#[clap(short, long)]
+		output: String
+	},
+
+	/// Generate a set of JSON files from a QuickEntity JSON file.
+	Generate {
+		/// Input QuickEntity JSON path.
+		#[clap(short, long)]
+		input: String,
+
+		/// Factory (TEMP) JSON path.
+		#[clap(short, long)]
+		output_factory: String,
+
+		/// Factory (TEMP) meta JSON path.
+		#[clap(short, long)]
+		output_factory_meta: String,
+
+		/// Blueprint (TBLU) JSON path.
+		#[clap(short, long)]
+		output_blueprint: String,
+
+		/// Blueprint (TBLU) meta JSON path.
+		#[clap(short, long)]
+		output_blueprint_meta: String
+	}
+}
+
+#[derive(Subcommand)]
+enum PatchCommand {
+	/// Generate a patch JSON that transforms one entity JSON file into another.
+	Generate {
+		/// Original QuickEntity JSON path.
+		#[clap(short, long)]
+		input1: String,
+
+		/// Modified QuickEntity JSON path.
+		#[clap(short, long)]
+		input2: String,
+
+		/// Output patch JSON path.
+		#[clap(short, long)]
+		output: String
+	},
+
+	/// Apply a patch JSON to an entity JSON file.
+	Apply {
+		/// QuickEntity JSON path.
+		#[clap(short, long)]
+		input: String,
+
+		/// Patch JSON path.
+		#[clap(short, long)]
+		patch: String,
+
+		/// Output QuickEntity JSON path.
+		#[clap(short, long)]
+		output: String
+	}
+}
+
 fn main() {
+	let args = Args::parse();
+
 	let now = Instant::now();
 
-	let fac = read_as_rtfactory(
-		&fs::read_dir("corpus\\miami")
-			.unwrap()
-			.find(|x| {
-				x.as_ref()
-					.unwrap()
-					.file_name()
-					.to_str()
-					.unwrap()
-					.ends_with("TEMP.json")
-			})
-			.unwrap()
-			.unwrap()
-			.path()
-			.as_os_str()
-			.to_str()
-			.unwrap()
-			.to_string()
-	);
-	let fac_meta = read_as_meta(&String::from(
-		&fs::read_dir("corpus\\miami")
-			.unwrap()
-			.find(|x| {
-				x.as_ref()
-					.unwrap()
-					.file_name()
-					.to_str()
-					.unwrap()
-					.ends_with("TEMP.meta.JSON")
-			})
-			.unwrap()
-			.unwrap()
-			.path()
-			.as_os_str()
-			.to_str()
-			.unwrap()
-			.to_string()
-	));
-	let blu = read_as_rtblueprint(
-		&fs::read_dir("corpus\\miami")
-			.unwrap()
-			.find(|x| {
-				x.as_ref()
-					.unwrap()
-					.file_name()
-					.to_str()
-					.unwrap()
-					.ends_with("TBLU.json")
-			})
-			.unwrap()
-			.unwrap()
-			.path()
-			.as_os_str()
-			.to_str()
-			.unwrap()
-			.to_string()
-	);
-	let blu_meta = read_as_meta(
-		&fs::read_dir("corpus\\miami")
-			.unwrap()
-			.find(|x| {
-				x.as_ref()
-					.unwrap()
-					.file_name()
-					.to_str()
-					.unwrap()
-					.ends_with("TBLU.meta.JSON")
-			})
-			.unwrap()
-			.unwrap()
-			.path()
-			.as_os_str()
-			.to_str()
-			.unwrap()
-			.to_string()
-	);
+	match args.command {
+		Command::Entity {
+			subcommand:
+				EntityCommand::Convert {
+					input_factory,
+					input_factory_meta,
+					input_blueprint,
+					input_blueprint_meta,
+					output
+				}
+		} => {
+			let factory = read_as_rtfactory(&input_factory);
+			let factory_meta = read_as_meta(&input_factory_meta);
+			let blueprint = read_as_rtblueprint(&input_blueprint);
+			let blueprint_meta = read_as_meta(&input_blueprint_meta);
 
-	let entity = timeit(|| convert_to_qn(&fac, &fac_meta, &blu, &blu_meta));
+			let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta);
 
-	// dbg!(&entity);
+			fs::write(output, to_vec_float_format(&entity)).unwrap();
+		}
 
-	fs::write("entity.json", to_vec_float_format(&entity)).unwrap();
+		Command::Entity {
+			subcommand:
+				EntityCommand::Generate {
+					input,
+					output_factory,
+					output_factory_meta,
+					output_blueprint,
+					output_blueprint_meta
+				}
+		} => {
+			let entity = read_as_entity(&input);
 
-	let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
-		timeit(|| convert_to_rt(&entity));
+			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
+				convert_to_rt(&entity);
 
-	fs::write(
-		"outputs\\miami\\factory.json",
-		to_vec_float_format(&converted_fac)
-	)
-	.unwrap();
+			fs::write(&output_factory, to_vec_float_format(&converted_fac)).unwrap();
 
-	fs::write(
-		"outputs\\miami\\factory.meta.json",
-		to_vec_float_format(&converted_fac_meta)
-	)
-	.unwrap();
+			fs::write(
+				&output_factory_meta,
+				to_vec_float_format(&converted_fac_meta)
+			)
+			.unwrap();
 
-	fs::write(
-		"outputs\\miami\\blueprint.json",
-		to_vec_float_format(&converted_blu)
-	)
-	.unwrap();
+			fs::write(&output_blueprint, to_vec_float_format(&converted_blu)).unwrap();
 
-	fs::write(
-		"outputs\\miami\\blueprint.meta.json",
-		to_vec_float_format(&converted_blu_meta)
-	)
-	.unwrap();
+			fs::write(
+				&output_blueprint_meta,
+				to_vec_float_format(&converted_blu_meta)
+			)
+			.unwrap();
+		}
+
+		Command::Patch {
+			subcommand: PatchCommand::Generate {
+				input1,
+				input2,
+				output
+			}
+		} => {
+			let entity1 = read_as_value(&input1);
+			let entity2 = read_as_value(&input2);
+
+			let patch = generate_patch(&entity1, &entity2);
+
+			fs::write(&output, to_vec_float_format(&patch)).unwrap();
+		}
+
+		Command::Patch {
+			subcommand: PatchCommand::Apply {
+				input,
+				patch,
+				output
+			}
+		} => {
+			let mut entity = read_as_value(&input);
+			let patch = read_as_value(&patch);
+
+			apply_patch(&mut entity, &patch);
+
+			fs::write(&output, to_vec_float_format(&entity)).unwrap();
+		}
+	}
 
 	let elapsed = now.elapsed();
 	println!("Elapsed: {:.2?}", elapsed);
@@ -231,13 +337,4 @@ impl Formatter for FloatFormatter {
 
 		Ok(())
 	}
-}
-
-fn timeit<F: FnMut() -> T, T>(mut f: F) -> T {
-	let start = SystemTime::now();
-	let result = f();
-	let end = SystemTime::now();
-	let duration = end.duration_since(start).unwrap();
-	println!("Fn took {} milliseconds", duration.as_millis());
-	result
 }

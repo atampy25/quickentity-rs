@@ -284,7 +284,7 @@ fn convert_rt_property_value_to_qn(
 				val,
 				"{:0>2x}",
 				(map.get("r")
-					.expect("Colour did not have required key")
+					.expect("Colour did not have required key r")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
@@ -294,7 +294,7 @@ fn convert_rt_property_value_to_qn(
 				val,
 				"{:0>2x}",
 				(map.get("g")
-					.expect("Colour did not have required key")
+					.expect("Colour did not have required key g")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
@@ -304,7 +304,7 @@ fn convert_rt_property_value_to_qn(
 				val,
 				"{:0>2x}",
 				(map.get("b")
-					.expect("Colour did not have required key")
+					.expect("Colour did not have required key b")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
@@ -325,7 +325,7 @@ fn convert_rt_property_value_to_qn(
 				val,
 				"{:0>2x}",
 				(map.get("r")
-					.expect("Colour did not have required key")
+					.expect("Colour did not have required key r")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
@@ -335,7 +335,7 @@ fn convert_rt_property_value_to_qn(
 				val,
 				"{:0>2x}",
 				(map.get("g")
-					.expect("Colour did not have required key")
+					.expect("Colour did not have required key g")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
@@ -345,7 +345,7 @@ fn convert_rt_property_value_to_qn(
 				val,
 				"{:0>2x}",
 				(map.get("b")
-					.expect("Colour did not have required key")
+					.expect("Colour did not have required key b")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
@@ -355,7 +355,7 @@ fn convert_rt_property_value_to_qn(
 				val,
 				"{:0>2x}",
 				(map.get("a")
-					.expect("Colour did not have required key")
+					.expect("Colour did not have required key a")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
@@ -1063,8 +1063,9 @@ pub fn convert_to_qn(
 		},
 		quick_entity_version: 2.2,
 		extra_factory_dependencies: vec![],
-		extra_blueprint_dependencies: vec![]
-	}; // this statement is 311 lines long
+		extra_blueprint_dependencies: vec![],
+		comments: vec![]
+	};
 
 	{
 		let depends = get_factory_dependencies(&entity);
@@ -1563,9 +1564,7 @@ pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, 
 																	entity_ref,
 																	value: _
 																}
-															) => entity_ref,
-
-															_ => panic!("Invalid external to ref for trigger on events")
+															) => entity_ref
 														}, &factory, &factory_meta, &entity_id_to_index_mapping),
 													from_pin_name: event.to_owned(),
 													to_pin_name: trigger.to_owned(),

@@ -60,7 +60,21 @@ pub struct Entity {
 
 	pub extra_factory_dependencies: Vec<Dependency>,
 
-	pub extra_blueprint_dependencies: Vec<Dependency>
+	pub extra_blueprint_dependencies: Vec<Dependency>,
+
+	pub comments: Vec<CommentEntity>
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct CommentEntity {
+	/// The sub-entity this comment is parented to.
+	pub parent: Ref,
+
+	/// The name of this comment.
+	pub name: String,
+
+	/// The text this comment holds.
+	pub text: String
 }
 
 #[serde_with::skip_serializing_none]
