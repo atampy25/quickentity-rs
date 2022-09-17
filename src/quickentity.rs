@@ -9,9 +9,10 @@ use std::fmt::Write;
 
 use crate::{
 	qn_structs::{
-		Entity, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride,
-		PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref,
-		RefMaybeConstantValue, RefWithConstantValue, SimpleProperty, SubEntity, SubType
+		Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty,
+		PinConnectionOverride, PinConnectionOverrideDelete, Property, PropertyAlias,
+		PropertyOverride, Ref, RefMaybeConstantValue, RefWithConstantValue, SimpleProperty,
+		SubEntity, SubType
 	},
 	rpkg_structs::{ResourceDependency, ResourceMeta},
 	rt_structs::{
@@ -417,8 +418,6 @@ fn convert_qn_property_value_to_rt(
 	property: &Property,
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
-	blueprint: &RTBlueprint,
-	blueprint_meta: &ResourceMeta,
 	entity_id_to_index_mapping: &HashMap<String, usize>,
 	factory_dependencies_index_mapping: &HashMap<String, usize>
 ) -> Value {
@@ -555,13 +554,11 @@ fn convert_qn_property_to_rt(
 	property_value: &Property,
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
-	blueprint: &RTBlueprint,
-	blueprint_meta: &ResourceMeta,
 	entity_id_to_index_mapping: &HashMap<String, usize>,
 	factory_dependencies_index_mapping: &HashMap<String, usize>
 ) -> SEntityTemplateProperty {
 	SEntityTemplateProperty {
-		n_property_id: convert_string_property_name_to_rt_id(&property_name),
+		n_property_id: convert_string_property_name_to_rt_id(property_name),
 		value: SEntityTemplatePropertyValue {
 			property_type: property_value.property_type.to_owned(),
 			property_value: if property_value.value.is_array() {
@@ -584,8 +581,6 @@ fn convert_qn_property_to_rt(
 								},
 								factory,
 								factory_meta,
-								blueprint,
-								blueprint_meta,
 								entity_id_to_index_mapping,
 								factory_dependencies_index_mapping
 							)
@@ -598,8 +593,6 @@ fn convert_qn_property_to_rt(
 					property_value,
 					factory,
 					factory_meta,
-					blueprint,
-					blueprint_meta,
 					entity_id_to_index_mapping,
 					factory_dependencies_index_mapping
 				)
@@ -622,12 +615,119 @@ fn convert_string_property_name_to_rt_id(property_name: &str) -> PropertyID {
 	}
 }
 
+fn get_factory_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
+	vec![
+		// blueprint first
+		vec![ResourceDependency {
+			hash: entity.blueprint_hash.to_owned(),
+			flag: "1F".to_string()
+		}],
+		// then external scenes
+		entity
+			.external_scenes
+			.par_iter()
+			.map(|scene| ResourceDependency {
+				hash: scene.to_owned(),
+				flag: "1F".to_string()
+			})
+			.collect(),
+		// then factories of sub-entities
+		entity
+			.entities
+			.iter()
+			.collect_vec()
+			.par_iter()
+			.map(|(_, sub_entity)| ResourceDependency {
+				hash: sub_entity.factory.to_owned(),
+				flag: sub_entity
+					.factory_flag
+					.to_owned()
+					.unwrap_or_else(|| "1F".to_string()) // this is slightly more efficient
+			})
+			.collect(),
+		// then ZRuntimeResourceIDs
+		entity
+			.entities
+			.iter()
+			.collect_vec()
+			.par_iter()
+			.flat_map(|(_, sub_entity)| {
+				if let Some(props) = &sub_entity.properties {
+					props
+						.iter()
+						.filter(|(_, prop)| {
+							prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
+						})
+						.map(|(_, prop)| {
+							if prop.value.is_string() {
+								ResourceDependency {
+									hash: prop.value.as_str().unwrap().to_string(),
+									flag: "1F".to_string()
+								}
+							} else {
+								ResourceDependency {
+									hash: prop
+										.value
+										.get("resource")
+										.expect("ZRuntimeResourceID must have resource")
+										.as_str()
+										.expect("ZRuntimeResourceID resource must be string")
+										.to_string(),
+									flag: prop
+										.value
+										.get("flag")
+										.expect("ZRuntimeResourceID must have flag")
+										.as_str()
+										.expect("ZRuntimeResourceID flag must be string")
+										.to_string()
+								}
+							}
+						})
+						.collect()
+				} else {
+					vec![]
+				}
+			})
+			.collect(),
+	]
+	.into_iter()
+	.concat()
+	.into_iter()
+	.unique()
+	.collect()
+}
+
+fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
+	vec![
+		entity
+			.external_scenes
+			.par_iter()
+			.map(|scene| ResourceDependency {
+				hash: scene.to_owned(),
+				flag: "1F".to_string()
+			})
+			.collect::<Vec<ResourceDependency>>(),
+		entity
+			.entities
+			.iter()
+			.map(|(_, sub_entity)| ResourceDependency {
+				hash: sub_entity.blueprint.to_owned(),
+				flag: "1F".to_string()
+			})
+			.collect(),
+	]
+	.into_iter()
+	.concat()
+	.into_iter()
+	.unique()
+	.collect()
+}
+
 pub fn convert_to_qn(
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
 	blueprint: &RTBlueprint,
-	blueprint_meta: &ResourceMeta,
-	game: Game
+	blueprint_meta: &ResourceMeta
 ) -> Entity {
 	if {
 		let mut unique = blueprint.sub_entities.to_owned();
@@ -961,8 +1061,46 @@ pub fn convert_to_qn(
 			0 => SubType::Template,
 			_ => panic!("Invalid subtype")
 		},
-		quick_entity_version: 2.2
+		quick_entity_version: 2.2,
+		extra_factory_dependencies: vec![],
+		extra_blueprint_dependencies: vec![]
 	}; // this statement is 311 lines long
+
+	{
+		let depends = get_factory_dependencies(&entity);
+		entity.extra_factory_dependencies = factory_meta
+			.hash_reference_data
+			.iter()
+			.filter(|x| !depends.contains(x))
+			.map(|x| match x {
+				ResourceDependency { hash, flag } if flag == "1F" => {
+					Dependency::Short(hash.to_owned())
+				}
+				ResourceDependency { hash, flag } => Dependency::Full(DependencyWithFlag {
+					resource: hash.to_owned(),
+					flag: flag.to_owned()
+				})
+			})
+			.collect();
+	}
+
+	{
+		let depends = get_blueprint_dependencies(&entity);
+		entity.extra_blueprint_dependencies = blueprint_meta
+			.hash_reference_data
+			.iter()
+			.filter(|x| !depends.contains(x))
+			.map(|x| match x {
+				ResourceDependency { hash, flag } if flag == "1F" => {
+					Dependency::Short(hash.to_owned())
+				}
+				ResourceDependency { hash, flag } => Dependency::Full(DependencyWithFlag {
+					resource: hash.to_owned(),
+					flag: flag.to_owned()
+				})
+			})
+			.collect();
+	}
 
 	for pin in &blueprint.pin_connections {
 		let mut relevant_sub_entity = entity
@@ -1270,10 +1408,7 @@ pub fn convert_to_qn(
 	entity
 }
 
-pub fn convert_to_rt(
-	entity: &Entity,
-	game: Game
-) -> (RTFactory, ResourceMeta, RTBlueprint, ResourceMeta) {
+pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, ResourceMeta) {
 	let entity_id_to_index_mapping: HashMap<String, usize> = entity
 		.entities
 		.keys()
@@ -1297,87 +1432,26 @@ pub fn convert_to_rt(
 			.collect()
 	};
 
-	let mut factory_meta = ResourceMeta {
+	let factory_meta = ResourceMeta {
 		hash_offset: 1367, // none of this data actually matters except for dependencies and resource type
 		hash_reference_data: vec![
-			// blueprint first
-			vec![ResourceDependency {
-				hash: entity.blueprint_hash.to_owned(),
-				flag: "1F".to_string()
-			}],
-			// then external scenes
+			get_factory_dependencies(entity),
 			entity
-				.external_scenes
-				.par_iter()
-				.map(|scene| ResourceDependency {
-					hash: scene.to_owned(),
-					flag: "1F".to_string()
-				})
-				.collect(),
-			// then factories of sub-entities
-			entity
-				.entities
+				.extra_factory_dependencies
 				.iter()
-				.collect_vec()
-				.par_iter()
-				.map(|(_, sub_entity)| ResourceDependency {
-					hash: sub_entity.factory.to_owned(),
-					flag: sub_entity
-						.factory_flag
-						.to_owned()
-						.unwrap_or_else(|| "1F".to_string()) // this is slightly more efficient
-				})
-				.collect(),
-			// then ZRuntimeResourceIDs
-			entity
-				.entities
-				.iter()
-				.collect_vec()
-				.par_iter()
-				.flat_map(|(_, sub_entity)| {
-					if let Some(props) = &sub_entity.properties {
-						props
-							.iter()
-							.filter(|(_, prop)| {
-								prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
-							})
-							.map(|(_, prop)| {
-								if prop.value.is_string() {
-									ResourceDependency {
-										hash: prop.value.as_str().unwrap().to_string(),
-										flag: "1F".to_string()
-									}
-								} else {
-									ResourceDependency {
-										hash: prop
-											.value
-											.get("resource")
-											.expect("ZRuntimeResourceID must have resource")
-											.as_str()
-											.expect("ZRuntimeResourceID resource must be string")
-											.to_string(),
-										flag: prop
-											.value
-											.get("flag")
-											.expect("ZRuntimeResourceID must have flag")
-											.as_str()
-											.expect("ZRuntimeResourceID flag must be string")
-											.to_string()
-									}
-								}
-							})
-							.collect()
-					} else {
-						vec![]
+				.map(|x| match x {
+					Dependency::Short(hash) => ResourceDependency {
+						hash: hash.to_owned(),
+						flag: "1F".to_string()
+					},
+					Dependency::Full(DependencyWithFlag { resource, flag }) => ResourceDependency {
+						hash: resource.to_owned(),
+						flag: flag.to_owned()
 					}
 				})
 				.collect(),
 		]
-		.into_iter()
-		.concat()
-		.into_iter()
-		.unique()
-		.collect(),
+		.concat(),
 		hash_reference_table_dummy: 0,
 		hash_reference_table_size: 193,
 		hash_resource_type: "TEMP".to_string(),
@@ -1563,31 +1637,26 @@ pub fn convert_to_rt(
 		external_scene_type_indices_in_resource_header: (0..entity.external_scenes.len()).collect()
 	};
 
-	let mut blueprint_meta = ResourceMeta {
+	let blueprint_meta = ResourceMeta {
 		hash_offset: 1367,
 		hash_reference_data: vec![
+			get_blueprint_dependencies(entity),
 			entity
-				.external_scenes
-				.par_iter()
-				.map(|scene| ResourceDependency {
-					hash: scene.to_owned(),
-					flag: "1F".to_string()
-				})
-				.collect::<Vec<ResourceDependency>>(),
-			entity
-				.entities
+				.extra_blueprint_dependencies
 				.iter()
-				.map(|(_, sub_entity)| ResourceDependency {
-					hash: sub_entity.blueprint.to_owned(),
-					flag: "1F".to_string()
+				.map(|x| match x {
+					Dependency::Short(hash) => ResourceDependency {
+						hash: hash.to_owned(),
+						flag: "1F".to_string()
+					},
+					Dependency::Full(DependencyWithFlag { resource, flag }) => ResourceDependency {
+						hash: resource.to_owned(),
+						flag: flag.to_owned()
+					}
 				})
 				.collect(),
 		]
-		.into_iter()
-		.concat()
-		.into_iter()
-		.unique()
-		.collect(),
+		.concat(),
 		hash_reference_table_dummy: 0,
 		hash_reference_table_size: 193,
 		hash_resource_type: "TBLU".to_string(),
@@ -1644,8 +1713,6 @@ pub fn convert_to_rt(
 											},
 											&factory,
 											&factory_meta,
-											&blueprint,
-											&blueprint_meta,
 											&entity_id_to_index_mapping,
 											&factory_dependencies_index_mapping
 										)
@@ -1667,88 +1734,79 @@ pub fn convert_to_rt(
 		.iter()
 		.collect_vec()
 		.par_iter()
-		.enumerate()
-		.map(
-			|(entity_index, (entity_id, sub_entity))| STemplateFactorySubEntity {
-				logical_parent: convert_qn_reference_to_rt(
-					&sub_entity.parent,
-					&factory,
-					&factory_meta,
-					&entity_id_to_index_mapping
-				),
-				entity_type_resource_index: *factory_dependencies_index_mapping
-					.get(&sub_entity.factory)
-					.unwrap(),
-				property_values: if let Some(props) = sub_entity.properties.to_owned() {
-					props
-						.iter()
-						.filter(|(x, y)| !y.post_init.unwrap_or(false))
-						.map(|(x, y)| {
-							convert_qn_property_to_rt(
-								x,
-								y,
-								&factory,
-								&factory_meta,
-								&blueprint,
-								&blueprint_meta,
-								&entity_id_to_index_mapping,
-								&factory_dependencies_index_mapping
-							)
-						})
-						.collect()
-				} else {
-					vec![]
-				},
-				post_init_property_values: if let Some(props) = sub_entity.properties.to_owned() {
-					props
-						.iter()
-						.filter(|(x, y)| y.post_init.unwrap_or(false))
-						.map(|(x, y)| {
-							convert_qn_property_to_rt(
-								x,
-								y,
-								&factory,
-								&factory_meta,
-								&blueprint,
-								&blueprint_meta,
-								&entity_id_to_index_mapping,
-								&factory_dependencies_index_mapping
-							)
-						})
-						.collect()
-				} else {
-					vec![]
-				},
-				platform_specific_property_values: if let Some(p_s_props) =
-					sub_entity.platform_specific_properties.to_owned()
-				{
-					p_s_props
-						.iter()
-						.flat_map(|(platform, props)| {
-							props
-								.iter()
-								.map(|(x, y)| SEntityTemplatePlatformSpecificProperty {
-									platform: platform.to_owned(),
-									post_init: y.post_init.unwrap_or(false),
-									property_value: convert_qn_property_to_rt(
-										x,
-										y,
-										&factory,
-										&factory_meta,
-										&blueprint,
-										&blueprint_meta,
-										&entity_id_to_index_mapping,
-										&factory_dependencies_index_mapping
-									)
-								})
-								.collect::<Vec<SEntityTemplatePlatformSpecificProperty>>()
-						})
-						.collect()
-				} else {
-					vec![]
-				}
+		.map(|(_, sub_entity)| STemplateFactorySubEntity {
+			logical_parent: convert_qn_reference_to_rt(
+				&sub_entity.parent,
+				&factory,
+				&factory_meta,
+				&entity_id_to_index_mapping
+			),
+			entity_type_resource_index: *factory_dependencies_index_mapping
+				.get(&sub_entity.factory)
+				.unwrap(),
+			property_values: if let Some(props) = sub_entity.properties.to_owned() {
+				props
+					.iter()
+					.filter(|(_, x)| !x.post_init.unwrap_or(false))
+					.map(|(x, y)| {
+						convert_qn_property_to_rt(
+							x,
+							y,
+							&factory,
+							&factory_meta,
+							&entity_id_to_index_mapping,
+							&factory_dependencies_index_mapping
+						)
+					})
+					.collect()
+			} else {
+				vec![]
+			},
+			post_init_property_values: if let Some(props) = sub_entity.properties.to_owned() {
+				props
+					.iter()
+					.filter(|(_, y)| y.post_init.unwrap_or(false))
+					.map(|(x, y)| {
+						convert_qn_property_to_rt(
+							x,
+							y,
+							&factory,
+							&factory_meta,
+							&entity_id_to_index_mapping,
+							&factory_dependencies_index_mapping
+						)
+					})
+					.collect()
+			} else {
+				vec![]
+			},
+			platform_specific_property_values: if let Some(p_s_props) =
+				sub_entity.platform_specific_properties.to_owned()
+			{
+				p_s_props
+					.iter()
+					.flat_map(|(platform, props)| {
+						props
+							.iter()
+							.map(|(x, y)| SEntityTemplatePlatformSpecificProperty {
+								platform: platform.to_owned(),
+								post_init: y.post_init.unwrap_or(false),
+								property_value: convert_qn_property_to_rt(
+									x,
+									y,
+									&factory,
+									&factory_meta,
+									&entity_id_to_index_mapping,
+									&factory_dependencies_index_mapping
+								)
+							})
+							.collect::<Vec<SEntityTemplatePlatformSpecificProperty>>()
+					})
+					.collect()
+			} else {
+				vec![]
 			}
-		)
+		})
 		.collect();
 
 	blueprint.sub_entities = entity
@@ -1756,29 +1814,27 @@ pub fn convert_to_rt(
 		.iter()
 		.collect_vec()
 		.par_iter()
-		.enumerate()
-		.map(
-			|(entity_index, (entity_id, sub_entity))| STemplateBlueprintSubEntity {
-				logical_parent: convert_qn_reference_to_rt(
-					&sub_entity.parent,
-					&factory,
-					&factory_meta,
-					&entity_id_to_index_mapping
-				),
-				entity_type_resource_index: *blueprint_dependencies_index_mapping
-					.get(&sub_entity.blueprint)
-					.unwrap(),
-				entity_id: u64::from_str_radix(entity_id, 16).expect("entity_id must be valid hex"),
-				editor_only: sub_entity.editor_only.unwrap_or(false),
-				entity_name: sub_entity.name.to_owned(),
-				property_aliases: if sub_entity.property_aliases.is_some() {
-					sub_entity
-						.property_aliases
-						.as_ref()
-						.unwrap()
-						.iter()
-						.map(|(aliased_name, alias)| {
-							SEntityTemplatePropertyAlias {
+		.map(|(entity_id, sub_entity)| STemplateBlueprintSubEntity {
+			logical_parent: convert_qn_reference_to_rt(
+				&sub_entity.parent,
+				&factory,
+				&factory_meta,
+				&entity_id_to_index_mapping
+			),
+			entity_type_resource_index: *blueprint_dependencies_index_mapping
+				.get(&sub_entity.blueprint)
+				.unwrap(),
+			entity_id: u64::from_str_radix(entity_id, 16).expect("entity_id must be valid hex"),
+			editor_only: sub_entity.editor_only.unwrap_or(false),
+			entity_name: sub_entity.name.to_owned(),
+			property_aliases: if sub_entity.property_aliases.is_some() {
+				sub_entity
+					.property_aliases
+					.as_ref()
+					.unwrap()
+					.iter()
+					.map(|(aliased_name, alias)| {
+						SEntityTemplatePropertyAlias {
 								entity_id: match &alias.original_entity {
 									Ref::Short(r) => match r {
 										Some(r) => entity_id_to_index_mapping.get(r).expect(
@@ -1795,61 +1851,60 @@ pub fn convert_to_rt(
 								s_alias_name: alias.original_property.to_owned(),
 								s_property_name: aliased_name.to_owned()
 							}
-						})
-						.collect()
-				} else {
-					vec![]
-				},
-				exposed_entities: if sub_entity.exposed_entities.is_some() {
-					sub_entity
-						.exposed_entities
-						.as_ref()
-						.unwrap()
-						.iter()
-						.map(
-							|(exposed_name, exposed_entity)| SEntityTemplateExposedEntity {
-								s_name: exposed_name.to_owned(),
-								b_is_array: exposed_entity.is_array,
-								a_targets: exposed_entity
-									.targets
-									.iter()
-									.map(|target| {
-										convert_qn_reference_to_rt(
-											target,
-											&factory,
-											&factory_meta,
-											&entity_id_to_index_mapping
-										)
-									})
-									.collect()
-							}
+					})
+					.collect()
+			} else {
+				vec![]
+			},
+			exposed_entities: if sub_entity.exposed_entities.is_some() {
+				sub_entity
+					.exposed_entities
+					.as_ref()
+					.unwrap()
+					.iter()
+					.map(
+						|(exposed_name, exposed_entity)| SEntityTemplateExposedEntity {
+							s_name: exposed_name.to_owned(),
+							b_is_array: exposed_entity.is_array,
+							a_targets: exposed_entity
+								.targets
+								.iter()
+								.map(|target| {
+									convert_qn_reference_to_rt(
+										target,
+										&factory,
+										&factory_meta,
+										&entity_id_to_index_mapping
+									)
+								})
+								.collect()
+						}
+					)
+					.collect()
+			} else {
+				vec![]
+			},
+			exposed_interfaces: if sub_entity.exposed_interfaces.is_some() {
+				sub_entity
+					.exposed_interfaces
+					.as_ref()
+					.unwrap()
+					.iter()
+					.map(|(interface, implementor)| {
+						(
+							interface.to_owned(),
+							entity_id_to_index_mapping
+								.get(implementor)
+								.expect("Exposed interface referenced nonexistent local entity")
+								.to_owned()
 						)
-						.collect()
-				} else {
-					vec![]
-				},
-				exposed_interfaces: if sub_entity.exposed_interfaces.is_some() {
-					sub_entity
-						.exposed_interfaces
-						.as_ref()
-						.unwrap()
-						.iter()
-						.map(|(interface, implementor)| {
-							(
-								interface.to_owned(),
-								entity_id_to_index_mapping
-									.get(implementor)
-									.expect("Exposed interface referenced nonexistent local entity")
-									.to_owned()
-							)
-						})
-						.collect()
-				} else {
-					vec![]
-				},
-				entity_subsets: vec![] // will be mutated later
-			}
-		)
+					})
+					.collect()
+			} else {
+				vec![]
+			},
+			entity_subsets: vec![] // will be mutated later
+		})
 		.collect();
 
 	for (entity_index, (_, sub_entity)) in entity.entities.iter().enumerate() {

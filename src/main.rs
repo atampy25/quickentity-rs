@@ -4,42 +4,17 @@ mod rpkg_structs;
 mod rt_structs;
 mod util_structs;
 
-use qn_structs::Entity;
 use rpkg_structs::ResourceMeta;
 use rt_structs::{RTBlueprint, RTFactory};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::ser::Formatter;
-use serde_json::{from_slice, to_vec, to_vec_pretty, Serializer, Value};
+use serde_json::{from_slice, Serializer};
 use std::io;
 use std::time::{Instant, SystemTime};
 use std::{fs, io::Read};
 
-use crate::quickentity::{convert_to_qn, convert_to_rt, Game};
-
-fn read_as_json(path: &String) -> Value {
-	from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	})
-	.expect("Failed to open file as JSON")
-}
-
-fn read_as_entity(path: &String) -> Entity {
-	from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	})
-	.expect("Failed to open file as JSON")
-}
+use crate::quickentity::{convert_to_qn, convert_to_rt};
 
 fn read_as_rtfactory(path: &String) -> RTFactory {
 	from_slice(&{
@@ -157,14 +132,14 @@ fn main() {
 			.to_string()
 	);
 
-	let entity = timeit(|| convert_to_qn(&fac, &fac_meta, &blu, &blu_meta, Game::HM3));
+	let entity = timeit(|| convert_to_qn(&fac, &fac_meta, &blu, &blu_meta));
 
 	// dbg!(&entity);
 
 	fs::write("entity.json", to_vec_float_format(&entity)).unwrap();
 
 	let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
-		timeit(|| convert_to_rt(&entity, Game::HM3));
+		timeit(|| convert_to_rt(&entity));
 
 	fs::write(
 		"outputs\\miami\\factory.json",

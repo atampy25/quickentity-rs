@@ -1,7 +1,7 @@
 use linked_hash_map::LinkedHashMap;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SubType {
 	Brick,
@@ -56,13 +56,15 @@ pub struct Entity {
 
 	/// The QuickEntity format version of this entity.
 	#[serde(rename = "quickEntityVersion")]
-	pub quick_entity_version: f64 // TODO: pending QN poll 5815b1 Include extra depends
-	                              // pub factory_unused_dependencies: Vec<Dependency>,
-	                              // pub blueprint_unused_dependencies: Vec<Dependency>
+	pub quick_entity_version: f64,
+
+	pub extra_factory_dependencies: Vec<Dependency>,
+
+	pub extra_blueprint_dependencies: Vec<Dependency>
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SubEntity {
 	/// The "logical" parent of the entity.
 	#[serde(rename = "parent")]
@@ -73,12 +75,10 @@ pub struct SubEntity {
 	pub name: String,
 
 	/// The template of the entity.
-	// TODO: yet-to-run QN poll 68ab18 Factory naming convention
 	#[serde(rename = "template")]
 	pub factory: String,
 
 	/// The template's flag.
-	// TODO: yet-to-run QN poll 68ab18 Factory naming convention
 	#[serde(rename = "templateFlag")]
 	pub factory_flag: Option<String>,
 
@@ -130,14 +130,14 @@ pub struct SubEntity {
 	pub subsets: Option<LinkedHashMap<String, Vec<String>>>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum RefMaybeConstantValue {
 	RefWithConstantValue(RefWithConstantValue),
 	Ref(Ref)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct RefWithConstantValue {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -149,7 +149,7 @@ pub struct RefWithConstantValue {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Property {
 	/// The type of the property.
 	#[serde(rename = "type")]
@@ -164,7 +164,7 @@ pub struct Property {
 	pub post_init: Option<bool>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SimpleProperty {
 	/// The type of the simple property.
 	#[serde(rename = "type")]
@@ -175,7 +175,7 @@ pub struct SimpleProperty {
 	pub value: serde_json::Value
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ExposedEntity {
 	/// Whether there are multiple target entities.
 	#[serde(rename = "isArray")]
@@ -186,7 +186,7 @@ pub struct ExposedEntity {
 	pub targets: Vec<Ref>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PropertyAlias {
 	/// The other entity's property that should be accessed from this entity.
 	#[serde(rename = "originalProperty")]
@@ -198,14 +198,13 @@ pub struct PropertyAlias {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
 	#[serde(rename = "fromEntity")]
 	pub from_entity: Ref,
 
 	/// The name of the event on the fromEntity that will trigger the input on the toEntity.
-	// TODO: pending QN poll 149ee0 From/to pin names
 	#[serde(rename = "fromPin")]
 	pub from_pin: String,
 
@@ -215,7 +214,6 @@ pub struct PinConnectionOverride {
 
 	/// The name of the input on the toEntity that will be triggered by the event on the
 	/// fromEntity.
-	// TODO: pending QN poll 149ee0 From/to pin names
 	#[serde(rename = "toPin")]
 	pub to_pin: String,
 
@@ -225,7 +223,7 @@ pub struct PinConnectionOverride {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -233,7 +231,6 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The name of the event on the fromEntity that will no longer trigger the input on the
 	/// toEntity.
-	// TODO: pending QN poll 149ee0 From/to pin names
 	#[serde(rename = "fromPin")]
 	pub from_pin: String,
 
@@ -243,7 +240,6 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The name of the input on the toEntity that will no longer be triggered by the event on
 	/// the fromEntity.
-	// TODO: pending QN poll 149ee0 From/to pin names
 	#[serde(rename = "toPin")]
 	pub to_pin: String,
 
@@ -253,7 +249,7 @@ pub struct PinConnectionOverrideDelete {
 }
 
 /// A set of overrides for entity properties.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PropertyOverride {
 	/// An array of references to the entities to override the properties of.
 	#[serde(rename = "entities")]
@@ -264,7 +260,7 @@ pub struct PropertyOverride {
 	pub properties: LinkedHashMap<String, OverriddenProperty>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct OverriddenProperty {
 	/// The type of the property.
 	#[serde(rename = "type")]
@@ -276,7 +272,7 @@ pub struct OverriddenProperty {
 }
 
 /// A full reference.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct FullRef {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -293,7 +289,7 @@ pub struct FullRef {
 }
 
 /// A reference to an entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum Ref {
 	Full(FullRef),
@@ -301,7 +297,7 @@ pub enum Ref {
 }
 
 /// A dependency of an entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum Dependency {
 	Full(DependencyWithFlag),
@@ -309,7 +305,7 @@ pub enum Dependency {
 }
 
 /// A dependency with a flag other than the default (1F).
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DependencyWithFlag {
 	pub resource: String,
 	pub flag: String
