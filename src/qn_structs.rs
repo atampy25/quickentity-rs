@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum SubType {
 	Brick,
 	Scene,
-	Template
+	Template,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -60,7 +60,7 @@ pub struct Entity {
 
 	pub extra_factory_dependencies: Vec<Dependency>,
 
-	pub extra_blueprint_dependencies: Vec<Dependency>
+	pub extra_blueprint_dependencies: Vec<Dependency>,
 }
 
 #[serde_with::skip_serializing_none]
@@ -127,14 +127,14 @@ pub struct SubEntity {
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
-	pub subsets: Option<LinkedHashMap<String, Vec<String>>>
+	pub subsets: Option<LinkedHashMap<String, Vec<String>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum RefMaybeConstantValue {
 	RefWithConstantValue(RefWithConstantValue),
-	Ref(Ref)
+	Ref(Ref),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -145,7 +145,7 @@ pub struct RefWithConstantValue {
 
 	/// The external scene the referenced entity resides in.
 	#[serde(rename = "value")]
-	pub value: SimpleProperty
+	pub value: SimpleProperty,
 }
 
 #[serde_with::skip_serializing_none]
@@ -161,7 +161,7 @@ pub struct Property {
 
 	/// Whether the property should be (presumably) loaded/set after the entity has been initialised.
 	#[serde(rename = "postInit")]
-	pub post_init: Option<bool>
+	pub post_init: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -172,7 +172,7 @@ pub struct SimpleProperty {
 
 	/// The simple property's value.
 	#[serde(rename = "value")]
-	pub value: serde_json::Value
+	pub value: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -183,7 +183,7 @@ pub struct ExposedEntity {
 
 	/// The target entity (or entities) that will be accessed.
 	#[serde(rename = "targets")]
-	pub targets: Vec<Ref>
+	pub targets: Vec<Ref>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -194,7 +194,7 @@ pub struct PropertyAlias {
 
 	/// The other entity whose property will be accessed.
 	#[serde(rename = "originalEntity")]
-	pub original_entity: Ref
+	pub original_entity: Ref,
 }
 
 #[serde_with::skip_serializing_none]
@@ -219,7 +219,7 @@ pub struct PinConnectionOverride {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: Option<SimpleProperty>
+	pub value: Option<SimpleProperty>,
 }
 
 #[serde_with::skip_serializing_none]
@@ -245,7 +245,7 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: Option<SimpleProperty>
+	pub value: Option<SimpleProperty>,
 }
 
 /// A set of overrides for entity properties.
@@ -257,7 +257,7 @@ pub struct PropertyOverride {
 
 	/// An array of references to the entities to override the properties of.
 	#[serde(rename = "properties")]
-	pub properties: LinkedHashMap<String, OverriddenProperty>
+	pub properties: LinkedHashMap<String, OverriddenProperty>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -268,7 +268,7 @@ pub struct OverriddenProperty {
 
 	/// The value of the property.
 	#[serde(rename = "value")]
-	pub value: serde_json::Value
+	pub value: serde_json::Value,
 }
 
 /// A full reference.
@@ -285,7 +285,7 @@ pub struct FullRef {
 	/// The sub-entity to reference that is exposed by the referenced entity.
 	#[serde(rename = "exposedEntity")]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub exposed_entity: Option<String>
+	pub exposed_entity: Option<String>,
 }
 
 /// A reference to an entity.
@@ -293,7 +293,7 @@ pub struct FullRef {
 #[serde(untagged)]
 pub enum Ref {
 	Full(FullRef),
-	Short(Option<String>)
+	Short(Option<String>),
 }
 
 /// A dependency of an entity.
@@ -301,12 +301,12 @@ pub enum Ref {
 #[serde(untagged)]
 pub enum Dependency {
 	Full(DependencyWithFlag),
-	Short(String)
+	Short(String),
 }
 
 /// A dependency with a flag other than the default (1F).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct DependencyWithFlag {
 	pub resource: String,
-	pub flag: String
+	pub flag: String,
 }
