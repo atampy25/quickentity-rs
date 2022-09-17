@@ -82,7 +82,7 @@ fn read_as_meta(path: &String) -> ResourceMeta {
 #[clap(author = "Atampy26", version, about = "A tool for parsing ResourceTool/RPKG entity JSON files into a more readable format and back again.", long_about = None)]
 struct Args {
 	#[clap(subcommand)]
-	command: Command
+	command: Command,
 }
 
 #[derive(Subcommand)]
@@ -90,14 +90,14 @@ enum Command {
 	// Convert between RT/RPKG source files and QuickEntity entity JSON files.
 	Entity {
 		#[clap(subcommand)]
-		subcommand: EntityCommand
+		subcommand: EntityCommand,
 	},
 
 	// Generate or apply a QuickEntity patch JSON.
 	Patch {
 		#[clap(subcommand)]
-		subcommand: PatchCommand
-	}
+		subcommand: PatchCommand,
+	},
 }
 
 #[derive(Subcommand)]
@@ -122,7 +122,7 @@ enum EntityCommand {
 
 		/// Output QuickEntity JSON path.
 		#[clap(short, long)]
-		output: String
+		output: String,
 	},
 
 	/// Generate a set of JSON files from a QuickEntity JSON file.
@@ -145,8 +145,8 @@ enum EntityCommand {
 
 		/// Blueprint (TBLU) meta JSON path.
 		#[clap(short, long)]
-		output_blueprint_meta: String
-	}
+		output_blueprint_meta: String,
+	},
 }
 
 #[derive(Subcommand)]
@@ -163,7 +163,7 @@ enum PatchCommand {
 
 		/// Output patch JSON path.
 		#[clap(short, long)]
-		output: String
+		output: String,
 	},
 
 	/// Apply a patch JSON to an entity JSON file.
@@ -178,8 +178,8 @@ enum PatchCommand {
 
 		/// Output QuickEntity JSON path.
 		#[clap(short, long)]
-		output: String
-	}
+		output: String,
+	},
 }
 
 fn main() {
@@ -195,8 +195,8 @@ fn main() {
 					input_factory_meta,
 					input_blueprint,
 					input_blueprint_meta,
-					output
-				}
+					output,
+				},
 		} => {
 			let factory = read_as_rtfactory(&input_factory);
 			let factory_meta = read_as_meta(&input_factory_meta);
@@ -215,8 +215,8 @@ fn main() {
 					output_factory,
 					output_factory_meta,
 					output_blueprint,
-					output_blueprint_meta
-				}
+					output_blueprint_meta,
+				},
 		} => {
 			let entity = read_as_entity(&input);
 
@@ -227,7 +227,7 @@ fn main() {
 
 			fs::write(
 				&output_factory_meta,
-				to_vec_float_format(&converted_fac_meta)
+				to_vec_float_format(&converted_fac_meta),
 			)
 			.unwrap();
 
@@ -235,7 +235,7 @@ fn main() {
 
 			fs::write(
 				&output_blueprint_meta,
-				to_vec_float_format(&converted_blu_meta)
+				to_vec_float_format(&converted_blu_meta),
 			)
 			.unwrap();
 		}
@@ -244,8 +244,8 @@ fn main() {
 			subcommand: PatchCommand::Generate {
 				input1,
 				input2,
-				output
-			}
+				output,
+			},
 		} => {
 			let entity1 = read_as_value(&input1);
 			let entity2 = read_as_value(&input2);
@@ -259,8 +259,8 @@ fn main() {
 			subcommand: PatchCommand::Apply {
 				input,
 				patch,
-				output
-			}
+				output,
+			},
 		} => {
 			let mut entity = read_as_value(&input);
 			let patch = read_as_value(&patch);
@@ -277,7 +277,7 @@ fn main() {
 
 fn to_vec_float_format<W>(contents: &W) -> Vec<u8>
 where
-	W: ?Sized + Serialize
+	W: ?Sized + Serialize,
 {
 	let mut writer = Vec::with_capacity(128);
 
@@ -294,7 +294,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_f32<W>(&mut self, writer: &mut W, value: f32) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		writer.write_all(value.to_string().as_bytes())
 	}
@@ -302,7 +302,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_f64<W>(&mut self, writer: &mut W, value: f64) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		writer.write_all(value.to_string().as_bytes())
 	}
@@ -311,7 +311,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_number_str<W>(&mut self, writer: &mut W, value: &str) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		let x = value.parse::<f64>();
 		if let Ok(y) = x {
@@ -325,7 +325,7 @@ impl Formatter for FloatFormatter {
 						} else {
 							y.to_string()
 						}
-						.as_bytes()
+						.as_bytes(),
 					)
 					.unwrap();
 			} else {
