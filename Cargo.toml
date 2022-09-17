@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "3.2.22", features = ["derive"] }
-indexmap = "1.9.1"
 itertools = "0.10.3"
 json-patch = "0.2.6"
 linked-hash-map = { version = "0.5.6", features = ["serde_impl"] }

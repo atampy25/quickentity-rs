@@ -416,7 +416,6 @@ name = "quickentity-rs"
 version = "1.0.0"
 dependencies = [
  "clap",
- "indexmap",
  "itertools",
  "json-patch",
  "linked-hash-map",
