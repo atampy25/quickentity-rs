@@ -133,6 +133,7 @@ pub struct SEntityTemplateProperty {
 	#[serde(rename = "nPropertyID")]
 	pub n_property_id: PropertyID,
 
+	#[serde(rename = "value")]
 	pub value: SEntityTemplatePropertyValue
 }
 

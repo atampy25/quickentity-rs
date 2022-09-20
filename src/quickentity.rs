@@ -1172,6 +1172,10 @@ pub fn convert_to_qn(
 			))
 			.unwrap();
 
+		if relevant_sub_entity.events.is_none() {
+			relevant_sub_entity.events = Some(LinkedHashMap::new());
+		}
+
 		relevant_sub_entity
 			.events
 			.as_mut()
