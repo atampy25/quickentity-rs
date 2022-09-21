@@ -222,8 +222,8 @@ pub struct ExposedEntity {
 	pub is_array: bool,
 
 	/// The target entity (or entities) that will be accessed.
-	#[serde(rename = "targets")]
-	pub targets: Vec<Ref>
+	#[serde(rename = "refersTo")]
+	pub refers_to: Vec<Ref>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]

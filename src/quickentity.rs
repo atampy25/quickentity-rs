@@ -924,7 +924,7 @@ pub fn convert_to_qn(
 											exposed_entity.s_name.to_owned(),
 											ExposedEntity {
 												is_array: exposed_entity.b_is_array.to_owned(),
-												targets: exposed_entity
+												refers_to: exposed_entity
 													.a_targets
 													.iter()
 													.map(|target| {
@@ -1870,7 +1870,7 @@ pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, 
 							s_name: exposed_name.to_owned(),
 							b_is_array: exposed_entity.is_array,
 							a_targets: exposed_entity
-								.targets
+								.refers_to
 								.iter()
 								.map(|target| {
 									convert_qn_reference_to_rt(
