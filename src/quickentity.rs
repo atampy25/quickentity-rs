@@ -69,7 +69,7 @@ pub fn generate_patch(original: &Value, modified: &Value) -> Value {
 		"tempHash": modified.get("tempHash").expect("Failed to get tempHash"),
 		"tbluHash": modified.get("tbluHash").expect("Failed to get tbluHash"),
 		"patch": rfcpatch,
-		"patchVersion": 4
+		"patchVersion": 5
 	})
 }
 
@@ -1061,7 +1061,7 @@ pub fn convert_to_qn(
 			0 => SubType::Template,
 			_ => panic!("Invalid subtype")
 		},
-		quick_entity_version: 2.2,
+		quick_entity_version: 3.0,
 		extra_factory_dependencies: vec![],
 		extra_blueprint_dependencies: vec![],
 		comments: vec![]
