@@ -145,7 +145,7 @@ pub struct SubEntity {
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
 	#[ts(type = "Record<string, PropertyAlias>")]
-	pub property_aliases: Option<LinkedHashMap<String, PropertyAlias>>,
+	pub property_aliases: Option<LinkedHashMap<String, Vec<PropertyAlias>>>,
 
 	/// Entities that can be accessed from this entity.
 	#[serde(rename = "exposedEntities")]
