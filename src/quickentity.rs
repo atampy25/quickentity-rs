@@ -533,16 +533,16 @@ fn convert_qn_property_value_to_rt(
 		}),
 
 		"SColorRGB" => json!({
-			"r": (f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(0).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0).to_string(),
-			"g": (f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(2).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0).to_string(),
-			"b": (f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(4).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0).to_string()
+			"r": f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(0).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0,
+			"g": f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(2).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0,
+			"b": f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(4).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0
 		}),
 
 		"SColorRGBA" => json!({
-			"r": (f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(0).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0).to_string(),
-			"g": (f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(2).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0).to_string(),
-			"b": (f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(4).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0).to_string(),
-			"a": (f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(6).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0).to_string()
+			"r": f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(0).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0,
+			"g": f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(2).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0,
+			"b": f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(4).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0,
+			"a": f64::from(u8::from_str_radix(&property.value.as_str().unwrap().chars().skip(1).skip(6).nth(1).unwrap().to_string(), 16).unwrap()) / 255.0
 		}),
 
 		_ => property.value.to_owned()
