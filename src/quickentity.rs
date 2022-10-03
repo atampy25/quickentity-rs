@@ -1072,10 +1072,27 @@ pub fn convert_to_qn(
 
 	{
 		let depends = get_factory_dependencies(&entity);
+
 		entity.extra_factory_dependencies = factory_meta
 			.hash_reference_data
 			.iter()
-			.filter(|x| !depends.contains(x))
+			.filter(|x| {
+				if x.hash.contains(':') {
+					!depends.contains(&ResourceDependency {
+						hash: format!(
+							"00{}",
+							format!("{:X}", md5::compute(&x.hash))
+								.chars()
+								.skip(2)
+								.take(14)
+								.collect::<String>()
+						),
+						flag: x.flag.to_owned()
+					})
+				} else {
+					!depends.contains(x)
+				}
+			})
 			.map(|x| match x {
 				ResourceDependency { hash, flag } if flag == "1F" => {
 					Dependency::Short(hash.to_owned())
