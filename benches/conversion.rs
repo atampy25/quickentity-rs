@@ -9,7 +9,7 @@ use quickentity_rs::{
 	apply_patch, convert_to_qn, convert_to_rt, generate_patch,
 	qn_structs::Entity,
 	rpkg_structs::ResourceMeta,
-	rt_structs::{RTBlueprint, RTFactory}
+	rt_structs::{RTBlueprint, RTFactory},
 };
 use serde_json::{from_slice, Value};
 
@@ -40,7 +40,7 @@ fn benchmark(c: &mut Criterion) {
 				&factory_ic,
 				&factory_meta_ic,
 				&blueprint_ic,
-				&blueprint_meta_ic
+				&blueprint_meta_ic,
 			);
 		})
 	});
@@ -51,7 +51,7 @@ fn benchmark(c: &mut Criterion) {
 				&factory_sm,
 				&factory_meta_sm,
 				&blueprint_sm,
-				&blueprint_meta_sm
+				&blueprint_meta_sm,
 			);
 		})
 	});
@@ -62,7 +62,7 @@ fn benchmark(c: &mut Criterion) {
 				&factory_gp,
 				&factory_meta_gp,
 				&blueprint_gp,
-				&blueprint_meta_gp
+				&blueprint_meta_gp,
 			);
 		})
 	});
@@ -73,7 +73,7 @@ fn benchmark(c: &mut Criterion) {
 				&factory_se,
 				&factory_meta_se,
 				&blueprint_se,
-				&blueprint_meta_se
+				&blueprint_meta_se,
 			);
 		})
 	});
