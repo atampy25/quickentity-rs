@@ -1,3 +1,8 @@
+pub mod qn_structs;
+pub mod rpkg_structs;
+pub mod rt_structs;
+pub mod util_structs;
+
 use linked_hash_map::LinkedHashMap;
 use std::collections::HashMap;
 
@@ -7,25 +12,20 @@ use rayon::prelude::*;
 use serde_json::{from_value, json, to_value, Value};
 use std::fmt::Write;
 
-use crate::{
-	qn_structs::{
-		Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty,
-		PinConnectionOverride, PinConnectionOverrideDelete, Property, PropertyAlias,
-		PropertyOverride, Ref, RefMaybeConstantValue, RefWithConstantValue, SimpleProperty,
-		SubEntity, SubType
-	},
-	rpkg_structs::{ResourceDependency, ResourceMeta},
-	rt_structs::{
-		PropertyID, RTBlueprint, RTFactory, SEntityTemplateEntitySubset,
-		SEntityTemplateExposedEntity, SEntityTemplatePinConnection,
-		SEntityTemplatePlatformSpecificProperty, SEntityTemplateProperty,
-		SEntityTemplatePropertyAlias, SEntityTemplatePropertyOverride,
-		SEntityTemplatePropertyValue, SEntityTemplateReference,
-		SExternalEntityTemplatePinConnection, STemplateBlueprintSubEntity,
-		STemplateFactorySubEntity
-	},
-	util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue}
+use qn_structs::{
+	Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty,
+	PinConnectionOverride, PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride,
+	Ref, RefMaybeConstantValue, RefWithConstantValue, SimpleProperty, SubEntity, SubType
 };
+use rpkg_structs::{ResourceDependency, ResourceMeta};
+use rt_structs::{
+	PropertyID, RTBlueprint, RTFactory, SEntityTemplateEntitySubset, SEntityTemplateExposedEntity,
+	SEntityTemplatePinConnection, SEntityTemplatePlatformSpecificProperty, SEntityTemplateProperty,
+	SEntityTemplatePropertyAlias, SEntityTemplatePropertyOverride, SEntityTemplatePropertyValue,
+	SEntityTemplateReference, SExternalEntityTemplatePinConnection, STemplateBlueprintSubEntity,
+	STemplateFactorySubEntity
+};
+use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue};
 
 const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
@@ -1088,7 +1088,7 @@ pub fn convert_to_qn(
 								.collect::<String>()
 						),
 						flag: x.flag.to_owned()
-					})
+					}) && !depends.contains(x)
 				} else {
 					!depends.contains(x)
 				}
@@ -1110,7 +1110,23 @@ pub fn convert_to_qn(
 		entity.extra_blueprint_dependencies = blueprint_meta
 			.hash_reference_data
 			.iter()
-			.filter(|x| !depends.contains(x))
+			.filter(|x| {
+				if x.hash.contains(':') {
+					!depends.contains(&ResourceDependency {
+						hash: format!(
+							"00{}",
+							format!("{:X}", md5::compute(&x.hash))
+								.chars()
+								.skip(2)
+								.take(14)
+								.collect::<String>()
+						),
+						flag: x.flag.to_owned()
+					}) && !depends.contains(x)
+				} else {
+					!depends.contains(x)
+				}
+			})
 			.map(|x| match x {
 				ResourceDependency { hash, flag } if flag == "1F" => {
 					Dependency::Short(hash.to_owned())

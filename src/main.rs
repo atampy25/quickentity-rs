@@ -1,82 +1,12 @@
-mod qn_structs;
-mod quickentity;
-mod rpkg_structs;
-mod rt_structs;
-mod util_structs;
-
-use qn_structs::Entity;
-use rpkg_structs::ResourceMeta;
-use rt_structs::{RTBlueprint, RTFactory};
+mod io_utils;
 
 use clap::{Parser, Subcommand};
-use serde::Serialize;
-use serde_json::ser::Formatter;
-use serde_json::{from_slice, Serializer, Value};
-use std::io;
+use std::fs;
 use std::time::Instant;
-use std::{fs, io::Read};
 
-use crate::quickentity::{apply_patch, convert_to_qn, convert_to_rt, generate_patch};
+use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rt, generate_patch};
 
-fn read_as_value(path: &String) -> Value {
-	from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	})
-	.expect("Failed to open file as JSON")
-}
-
-fn read_as_entity(path: &String) -> Entity {
-	from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	})
-	.expect("Failed to open file as JSON")
-}
-
-fn read_as_rtfactory(path: &String) -> RTFactory {
-	from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	})
-	.expect("Failed to open file as JSON")
-}
-
-fn read_as_rtblueprint(path: &String) -> RTBlueprint {
-	from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	})
-	.expect("Failed to open file as JSON")
-}
-
-fn read_as_meta(path: &String) -> ResourceMeta {
-	from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	})
-	.expect("Failed to open file as JSON")
-}
+use io_utils::*;
 
 #[derive(Parser)]
 #[clap(author = "Atampy26", version, about = "A tool for parsing ResourceTool/RPKG entity JSON files into a more readable format and back again.", long_about = None)]
@@ -273,68 +203,4 @@ fn main() {
 
 	let elapsed = now.elapsed();
 	println!("Elapsed: {:.2?}", elapsed);
-}
-
-fn to_vec_float_format<W>(contents: &W) -> Vec<u8>
-where
-	W: ?Sized + Serialize
-{
-	let mut writer = Vec::with_capacity(128);
-
-	let mut ser = Serializer::with_formatter(&mut writer, FloatFormatter);
-	contents.serialize(&mut ser).unwrap();
-
-	writer
-}
-
-#[derive(Clone, Debug)]
-pub struct FloatFormatter;
-
-impl Formatter for FloatFormatter {
-	#[inline]
-	fn write_f32<W>(&mut self, writer: &mut W, value: f32) -> io::Result<()>
-	where
-		W: ?Sized + io::Write
-	{
-		writer.write_all(value.to_string().as_bytes())
-	}
-
-	#[inline]
-	fn write_f64<W>(&mut self, writer: &mut W, value: f64) -> io::Result<()>
-	where
-		W: ?Sized + io::Write
-	{
-		writer.write_all(value.to_string().as_bytes())
-	}
-
-	/// Writes a number that has already been rendered to a string.
-	#[inline]
-	fn write_number_str<W>(&mut self, writer: &mut W, value: &str) -> io::Result<()>
-	where
-		W: ?Sized + io::Write
-	{
-		let x = value.parse::<f64>();
-		if let Ok(y) = x {
-			if value.parse::<u64>().is_err()
-				|| y.to_string() == value.parse::<u64>().unwrap().to_string()
-			{
-				writer
-					.write_all(
-						if y.to_string() == "-0" {
-							"0".to_string()
-						} else {
-							y.to_string()
-						}
-						.as_bytes()
-					)
-					.unwrap();
-			} else {
-				writer.write_all(value.as_bytes()).unwrap();
-			}
-		} else {
-			writer.write_all(value.as_bytes()).unwrap();
-		}
-
-		Ok(())
-	}
 }
