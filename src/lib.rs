@@ -652,41 +652,89 @@ fn get_factory_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 			.collect_vec()
 			.par_iter()
 			.flat_map(|(_, sub_entity)| {
-				if let Some(props) = &sub_entity.properties {
-					props
-						.iter()
-						.filter(|(_, prop)| {
-							prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
-						})
-						.map(|(_, prop)| {
-							if prop.value.is_string() {
-								ResourceDependency {
-									hash: prop.value.as_str().unwrap().to_string(),
-									flag: "1F".to_string()
+				vec![
+					if let Some(props) = &sub_entity.properties {
+						props
+							.iter()
+							.filter(|(_, prop)| {
+								prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
+							})
+							.map(|(_, prop)| {
+								if prop.value.is_string() {
+									ResourceDependency {
+										hash: prop.value.as_str().unwrap().to_string(),
+										flag: "1F".to_string()
+									}
+								} else {
+									ResourceDependency {
+										hash: prop
+											.value
+											.get("resource")
+											.expect("ZRuntimeResourceID must have resource")
+											.as_str()
+											.expect("ZRuntimeResourceID resource must be string")
+											.to_string(),
+										flag: prop
+											.value
+											.get("flag")
+											.expect("ZRuntimeResourceID must have flag")
+											.as_str()
+											.expect("ZRuntimeResourceID flag must be string")
+											.to_string()
+									}
 								}
-							} else {
-								ResourceDependency {
-									hash: prop
-										.value
-										.get("resource")
-										.expect("ZRuntimeResourceID must have resource")
-										.as_str()
-										.expect("ZRuntimeResourceID resource must be string")
-										.to_string(),
-									flag: prop
-										.value
-										.get("flag")
-										.expect("ZRuntimeResourceID must have flag")
-										.as_str()
-										.expect("ZRuntimeResourceID flag must be string")
-										.to_string()
-								}
-							}
-						})
-						.collect()
-				} else {
-					vec![]
-				}
+							})
+							.collect()
+					} else {
+						vec![]
+					},
+					if let Some(platforms) = &sub_entity.platform_specific_properties {
+						platforms
+							.iter()
+							.map(|(_, props)| {
+								props
+									.iter()
+									.filter(|(_, prop)| {
+										prop.property_type == "ZRuntimeResourceID"
+											&& !prop.value.is_null()
+									})
+									.map(|(_, prop)| {
+										if prop.value.is_string() {
+											ResourceDependency {
+												hash: prop.value.as_str().unwrap().to_string(),
+												flag: "1F".to_string()
+											}
+										} else {
+											ResourceDependency {
+											hash: prop
+												.value
+												.get("resource")
+												.expect("ZRuntimeResourceID must have resource")
+												.as_str()
+												.expect(
+													"ZRuntimeResourceID resource must be string"
+												)
+												.to_string(),
+											flag: prop
+												.value
+												.get("flag")
+												.expect("ZRuntimeResourceID must have flag")
+												.as_str()
+												.expect("ZRuntimeResourceID flag must be string")
+												.to_string()
+										}
+										}
+									})
+									.collect()
+							})
+							.into_iter()
+							.concat()
+					} else {
+						vec![]
+					},
+				]
+				.into_iter()
+				.concat()
 			})
 			.collect(),
 	]
