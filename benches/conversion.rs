@@ -40,7 +40,8 @@ fn benchmark(c: &mut Criterion) {
 				&factory_ic,
 				&factory_meta_ic,
 				&blueprint_ic,
-				&blueprint_meta_ic
+				&blueprint_meta_ic,
+				true
 			);
 		})
 	});
@@ -51,7 +52,8 @@ fn benchmark(c: &mut Criterion) {
 				&factory_sm,
 				&factory_meta_sm,
 				&blueprint_sm,
-				&blueprint_meta_sm
+				&blueprint_meta_sm,
+				true
 			);
 		})
 	});
@@ -62,7 +64,8 @@ fn benchmark(c: &mut Criterion) {
 				&factory_gp,
 				&factory_meta_gp,
 				&blueprint_gp,
-				&blueprint_meta_gp
+				&blueprint_meta_gp,
+				true
 			);
 		})
 	});
@@ -73,7 +76,8 @@ fn benchmark(c: &mut Criterion) {
 				&factory_se,
 				&factory_meta_se,
 				&blueprint_se,
-				&blueprint_meta_se
+				&blueprint_meta_se,
+				true
 			);
 		})
 	});

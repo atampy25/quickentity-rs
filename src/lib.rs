@@ -193,7 +193,8 @@ fn convert_rt_property_value_to_qn(
 	property: &SEntityTemplatePropertyValue,
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
-	blueprint: &RTBlueprint
+	blueprint: &RTBlueprint,
+	convert_lossless: bool
 ) -> Value {
 	match property.property_type.as_str() {
 		"SEntityTemplateReference" => to_value(convert_rt_reference_to_qn(
@@ -236,17 +237,96 @@ fn convert_rt_property_value_to_qn(
 		}
 
 		"SMatrix43" => {
-			let matrix = from_value::<SMatrix43PropertyValue>(property.property_value.to_owned())
-				.expect("SMatrix43 did not have a valid format");
+			let mut matrix =
+				from_value::<SMatrix43PropertyValue>(property.property_value.to_owned())
+					.expect("SMatrix43 did not have a valid format");
 
-			json!({
-				"rotation": {
-					"x": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.YAxis.z).atan2(matrix.ZAxis.z) } else { (matrix.ZAxis.y).atan2(matrix.YAxis.y) }) * RAD2DEG,
-					"y": matrix.XAxis.z.clamp(-1.0, 1.0).asin() * RAD2DEG,
-					"z": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.XAxis.y).atan2(matrix.XAxis.x) } else { 0.0 }) * RAD2DEG
-				},
-				"position": matrix.Trans
-			})
+			// this is all from three.js
+
+			let n11 = matrix.XAxis.x;
+			let n12 = matrix.XAxis.y;
+			let n13 = matrix.XAxis.z;
+			let n14 = 0.0;
+			let n21 = matrix.YAxis.x;
+			let n22 = matrix.YAxis.y;
+			let n23 = matrix.YAxis.z;
+			let n24 = 0.0;
+			let n31 = matrix.ZAxis.x;
+			let n32 = matrix.ZAxis.y;
+			let n33 = matrix.ZAxis.z;
+			let n34 = 0.0;
+			let n41 = matrix.Trans.x;
+			let n42 = matrix.Trans.y;
+			let n43 = matrix.Trans.z;
+			let n44 = 1.0;
+
+			let det =
+				n41 * (n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33
+					+ n12 * n24 * n33 + n13 * n22 * n34
+					- n12 * n23 * n34) + n42
+					* (n11 * n23 * n34 - n11 * n24 * n33 + n14 * n21 * n33 - n13 * n21 * n34
+						+ n13 * n24 * n31 - n14 * n23 * n31)
+					+ n43
+						* (n11 * n24 * n32 - n11 * n22 * n34 - n14 * n21 * n32
+							+ n12 * n21 * n34 + n14 * n22 * n31
+							- n12 * n24 * n31) + n44
+					* (-n13 * n22 * n31 - n11 * n23 * n32 + n11 * n22 * n33 + n13 * n21 * n32
+						- n12 * n21 * n33 + n12 * n23 * n31);
+
+			let mut sx = n11 * n11 + n21 * n21 + n31 * n31;
+			let sy = n12 * n12 + n22 * n22 + n32 * n32;
+			let sz = n13 * n13 + n23 * n23 + n33 * n33;
+
+			if det < 0.0 {
+				sx = -sx
+			};
+
+			let pos = json!({ "x": n41, "y": n42, "z": n43 });
+			let scale = json!({ "x": sx, "y": sy, "z": sz });
+
+			let inv_sx = 1.0 / sx;
+			let inv_sy = 1.0 / sy;
+			let inv_sz = 1.0 / sz;
+
+			matrix.XAxis.x *= inv_sx;
+			matrix.YAxis.x *= inv_sx;
+			matrix.ZAxis.x *= inv_sx;
+			matrix.XAxis.y *= inv_sy;
+			matrix.YAxis.y *= inv_sy;
+			matrix.ZAxis.y *= inv_sy;
+			matrix.XAxis.z *= inv_sz;
+			matrix.YAxis.z *= inv_sz;
+			matrix.ZAxis.z *= inv_sz;
+
+			if (format!("{:.2}", scale.get("x").unwrap().as_f64().unwrap()) != "1.00"
+				|| format!("{:.2}", scale.get("y").unwrap().as_f64().unwrap()) != "1.00"
+				|| format!("{:.2}", scale.get("z").unwrap().as_f64().unwrap()) != "1.00")
+				&& (if convert_lossless {
+					scale.get("x").unwrap().as_f64().unwrap() != 1.0
+						|| scale.get("y").unwrap().as_f64().unwrap() != 1.0
+						|| scale.get("z").unwrap().as_f64().unwrap() != 1.0
+				} else {
+					true
+				}) {
+				json!({
+					"rotation": {
+						"x": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.YAxis.z).atan2(matrix.ZAxis.z) } else { (matrix.ZAxis.y).atan2(matrix.YAxis.y) }) * RAD2DEG,
+						"y": matrix.XAxis.z.clamp(-1.0, 1.0).asin() * RAD2DEG,
+						"z": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.XAxis.y).atan2(matrix.XAxis.x) } else { 0.0 }) * RAD2DEG
+					},
+					"position": pos,
+					"scale": scale
+				})
+			} else {
+				json!({
+					"rotation": {
+						"x": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.YAxis.z).atan2(matrix.ZAxis.z) } else { (matrix.ZAxis.y).atan2(matrix.YAxis.y) }) * RAD2DEG,
+						"y": matrix.XAxis.z.clamp(-1.0, 1.0).asin() * RAD2DEG,
+						"z": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.XAxis.y).atan2(matrix.XAxis.x) } else { 0.0 }) * RAD2DEG
+					},
+					"position": pos
+				})
+			}
 		}
 
 		"ZGuid" => {
@@ -374,7 +454,8 @@ fn convert_rt_property_to_qn(
 	post_init: bool,
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
-	blueprint: &RTBlueprint
+	blueprint: &RTBlueprint,
+	convert_lossless: bool
 ) -> Property {
 	Property {
 		property_type: property.value.property_type.to_owned(),
@@ -401,14 +482,21 @@ fn convert_rt_property_to_qn(
 							.expect("RT property array value was invalid"),
 							factory,
 							factory_meta,
-							blueprint
+							blueprint,
+							convert_lossless
 						)
 					})
 					.collect::<Vec<Value>>()
 			)
 			.unwrap()
 		} else {
-			convert_rt_property_value_to_qn(&property.value, factory, factory_meta, blueprint)
+			convert_rt_property_value_to_qn(
+				&property.value,
+				factory,
+				factory_meta,
+				blueprint,
+				convert_lossless
+			)
 		},
 		post_init: if post_init { Some(true) } else { None }
 	}
@@ -482,33 +570,69 @@ fn convert_qn_property_value_to_rt(
 				.as_f64()
 				.unwrap() * DEG2RAD;
 
-			let a = x.cos();
-			let b = x.sin();
-			let c = y.cos();
-			let d = y.sin();
-			let e = z.cos();
-			let f = z.sin();
+			let c1 = (x / 2.0).cos();
+			let c2 = (y / 2.0).cos();
+			let c3 = (z / 2.0).cos();
 
-			let ae = a * e;
-			let af = a * f;
-			let be = b * e;
-			let bf = b * f;
+			let s1 = (x / 2.0).sin();
+			let s2 = (y / 2.0).sin();
+			let s3 = (z / 2.0).sin();
+
+			let quat_x = s1 * c2 * c3 + c1 * s2 * s3;
+			let quat_y = c1 * s2 * c3 - s1 * c2 * s3;
+			let quat_z = c1 * c2 * s3 + s1 * s2 * c3;
+			let quat_w = c1 * c2 * c3 - s1 * s2 * s3;
+			
+			let x2 = quat_x + quat_x;
+			let y2 = quat_y + quat_y;
+			let z2 = quat_z + quat_z;
+			let xx = quat_x * x2;
+			let xy = quat_x * y2;
+			let xz = quat_x * z2;
+			let yy = quat_y * y2;
+			let yz = quat_y * z2;
+			let zz = quat_z * z2;
+			let wx = quat_w * x2;
+			let wy = quat_w * y2;
+			let wz = quat_w * z2;
+
+			let sx = obj
+				.get("scale")
+				.unwrap()
+				.get("x")
+				.unwrap()
+				.as_f64()
+				.unwrap();
+			let sy = obj
+				.get("scale")
+				.unwrap()
+				.get("y")
+				.unwrap()
+				.as_f64()
+				.unwrap();
+			let sz = obj
+				.get("scale")
+				.unwrap()
+				.get("z")
+				.unwrap()
+				.as_f64()
+				.unwrap();
 
 			json!({
 				"XAxis": {
-					"x": c * e,
-					"y": -c * f,
-					"z": d
+					"x": (1.0 - (yy + zz)) * sx,
+					"y": (xy - wz) * sy,
+					"z": (xz + wy) * sz
 				},
 				"YAxis": {
-					"x": af + be * d,
-					"y": ae - bf * d,
-					"z": -b * c
+					"x": (xy + wz) * sx,
+					"y": (1.0 - (xx + zz)) * sy,
+					"z": (yz - wx) * sz
 				},
 				"ZAxis": {
-					"x": bf - ae * d,
-					"y": be + af * d,
-					"z": a * c
+					"x": (xz - wy) * sx,
+					"y": (yz + wx) * sy,
+					"z": (1.0 - (xx + yy)) * sz
 				},
 				"Trans": {
 					"x": obj.get("position").unwrap().get("x").unwrap().as_f64().unwrap(),
@@ -865,7 +989,8 @@ pub fn convert_to_qn(
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
 	blueprint: &RTBlueprint,
-	blueprint_meta: &ResourceMeta
+	blueprint_meta: &ResourceMeta,
+	convert_lossless: bool
 ) -> Entity {
 	if {
 		let mut unique = blueprint.sub_entities.to_owned();
@@ -946,7 +1071,8 @@ pub fn convert_to_qn(
 												false,
 												factory,
 												factory_meta,
-												blueprint
+												blueprint,
+												convert_lossless
 											) // value
 										)
 									})
@@ -963,7 +1089,8 @@ pub fn convert_to_qn(
 													true,
 													factory,
 													factory_meta,
-													blueprint
+													blueprint,
+													convert_lossless
 												)
 											)
 										}
@@ -1007,7 +1134,8 @@ pub fn convert_to_qn(
 																property.post_init.to_owned(),
 																factory,
 																factory_meta,
-																blueprint
+																blueprint,
+																convert_lossless
 															)
 														)
 													})
@@ -1547,7 +1675,8 @@ pub fn convert_to_qn(
 						false,
 						factory,
 						factory_meta,
-						blueprint
+						blueprint,
+						convert_lossless
 					);
 
 					OverriddenProperty {

@@ -52,7 +52,11 @@ enum EntityCommand {
 
 		/// Output QuickEntity JSON path.
 		#[clap(short, long)]
-		output: String
+		output: String,
+
+		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.)
+		#[clap(short, long, action)]
+		lossless: bool
 	},
 
 	/// Generate a set of JSON files from a QuickEntity JSON file.
@@ -125,7 +129,8 @@ fn main() {
 					input_factory_meta,
 					input_blueprint,
 					input_blueprint_meta,
-					output
+					output,
+					lossless
 				}
 		} => {
 			let factory = read_as_rtfactory(&input_factory);
@@ -133,7 +138,13 @@ fn main() {
 			let blueprint = read_as_rtblueprint(&input_blueprint);
 			let blueprint_meta = read_as_meta(&input_blueprint_meta);
 
-			let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta);
+			let entity = convert_to_qn(
+				&factory,
+				&factory_meta,
+				&blueprint,
+				&blueprint_meta,
+				lossless
+			);
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 		}
