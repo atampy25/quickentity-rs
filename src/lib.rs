@@ -582,7 +582,7 @@ fn convert_qn_property_value_to_rt(
 			let quat_y = c1 * s2 * c3 - s1 * c2 * s3;
 			let quat_z = c1 * c2 * s3 + s1 * s2 * c3;
 			let quat_w = c1 * c2 * c3 - s1 * s2 * s3;
-			
+
 			let x2 = quat_x + quat_x;
 			let y2 = quat_y + quat_y;
 			let z2 = quat_z + quat_z;
@@ -596,27 +596,35 @@ fn convert_qn_property_value_to_rt(
 			let wy = quat_w * y2;
 			let wz = quat_w * z2;
 
-			let sx = obj
-				.get("scale")
-				.unwrap()
-				.get("x")
-				.unwrap()
-				.as_f64()
-				.unwrap();
-			let sy = obj
-				.get("scale")
-				.unwrap()
-				.get("y")
-				.unwrap()
-				.as_f64()
-				.unwrap();
-			let sz = obj
-				.get("scale")
-				.unwrap()
-				.get("z")
-				.unwrap()
-				.as_f64()
-				.unwrap();
+			let sx = if let Some(scale) = obj.get("scale") {
+				scale
+					.get("x")
+					.expect("Scale must have x value")
+					.as_f64()
+					.expect("Scale must be number")
+			} else {
+				1.0
+			};
+
+			let sy = if let Some(scale) = obj.get("scale") {
+				scale
+					.get("y")
+					.expect("Scale must have y value")
+					.as_f64()
+					.expect("Scale must be number")
+			} else {
+				1.0
+			};
+
+			let sz = if let Some(scale) = obj.get("scale") {
+				scale
+					.get("z")
+					.expect("Scale must have z value")
+					.as_f64()
+					.expect("Scale must be number")
+			} else {
+				1.0
+			};
 
 			json!({
 				"XAxis": {
