@@ -36,6 +36,7 @@ pub enum Game {
 	HM3
 }
 
+#[time_graph::instrument]
 pub fn apply_patch(entity: &mut Value, patch: &Value) {
 	apply_rfc_patch(
 		entity,
@@ -50,6 +51,7 @@ pub fn apply_patch(entity: &mut Value, patch: &Value) {
 	.expect("Failed to apply patch");
 }
 
+#[time_graph::instrument]
 pub fn generate_patch(original: &Value, modified: &Value) -> Value {
 	let mut rfcpatch = json!(diff(original, modified));
 
@@ -73,6 +75,7 @@ pub fn generate_patch(original: &Value, modified: &Value) -> Value {
 	})
 }
 
+#[time_graph::instrument]
 fn convert_rt_reference_to_qn(
 	reference: &SEntityTemplateReference,
 	factory: &RTFactory,
@@ -133,6 +136,7 @@ fn convert_rt_reference_to_qn(
 	}
 }
 
+#[time_graph::instrument]
 fn convert_qn_reference_to_rt(
 	reference: &Ref,
 	factory: &RTFactory,
@@ -189,6 +193,7 @@ fn convert_qn_reference_to_rt(
 	}
 }
 
+#[time_graph::instrument]
 fn convert_rt_property_value_to_qn(
 	property: &SEntityTemplatePropertyValue,
 	factory: &RTFactory,
@@ -216,7 +221,7 @@ fn convert_rt_property_value_to_qn(
 				} => Value::Null,
 
 				ZRuntimeResourceIDPropertyValue {
-					m_IDHigh: _id_high, // We ignore the id_high as no resource in the game has that many depends
+					m_IDHigh: _, // We ignore the id_high as no resource in the game has that many depends
 					m_IDLow: id_low
 				} => {
 					let depend_data = factory_meta
@@ -230,7 +235,7 @@ fn convert_rt_property_value_to_qn(
 							"flag": depend_data.flag
 						})
 					} else {
-						to_value(depend_data.hash.to_owned()).expect("Hash of ZRuntimeResourceID depend was not a valid JSON value (should have been string)")
+						to_value(depend_data.hash.to_owned()).unwrap()
 					}
 				}
 			}
@@ -298,16 +303,15 @@ fn convert_rt_property_value_to_qn(
 			matrix.YAxis.z *= inv_sz;
 			matrix.ZAxis.z *= inv_sz;
 
-			if (format!("{:.2}", scale.get("x").unwrap().as_f64().unwrap()) != "1.00"
-				|| format!("{:.2}", scale.get("y").unwrap().as_f64().unwrap()) != "1.00"
-				|| format!("{:.2}", scale.get("z").unwrap().as_f64().unwrap()) != "1.00")
-				&& (if convert_lossless {
-					scale.get("x").unwrap().as_f64().unwrap() != 1.0
-						|| scale.get("y").unwrap().as_f64().unwrap() != 1.0
-						|| scale.get("z").unwrap().as_f64().unwrap() != 1.0
-				} else {
-					true
-				}) {
+			if if convert_lossless {
+				scale.get("x").unwrap().as_f64().unwrap() != 1.0
+					|| scale.get("y").unwrap().as_f64().unwrap() != 1.0
+					|| scale.get("z").unwrap().as_f64().unwrap() != 1.0
+			} else {
+				format!("{:.2}", scale.get("x").unwrap().as_f64().unwrap()) != "1.00"
+					|| format!("{:.2}", scale.get("y").unwrap().as_f64().unwrap()) != "1.00"
+					|| format!("{:.2}", scale.get("z").unwrap().as_f64().unwrap()) != "1.00"
+			} {
 				json!({
 					"rotation": {
 						"x": (if matrix.XAxis.z.abs() < 0.9999999 { (- matrix.YAxis.z).atan2(matrix.ZAxis.z) } else { (matrix.ZAxis.y).atan2(matrix.YAxis.y) }) * RAD2DEG,
@@ -333,24 +337,21 @@ fn convert_rt_property_value_to_qn(
 			let guid = from_value::<ZGuidPropertyValue>(property.property_value.to_owned())
 				.expect("ZGuid did not have a valid format");
 
-			let mut val = String::from("");
-			write!(val, "{:0>8x}", guid._a).unwrap();
-			write!(val, "-").unwrap();
-			write!(val, "{:0>4x}", guid._b).unwrap();
-			write!(val, "-").unwrap();
-			write!(val, "{:0>4x}", guid._c).unwrap();
-			write!(val, "-").unwrap();
-			write!(val, "{:0>2x}", guid._d).unwrap();
-			write!(val, "{:0>2x}", guid._e).unwrap();
-			write!(val, "-").unwrap();
-			write!(val, "{:0>2x}", guid._f).unwrap();
-			write!(val, "{:0>2x}", guid._g).unwrap();
-			write!(val, "{:0>2x}", guid._h).unwrap();
-			write!(val, "{:0>2x}", guid._i).unwrap();
-			write!(val, "{:0>2x}", guid._j).unwrap();
-			write!(val, "{:0>2x}", guid._k).unwrap();
-
-			to_value(val).unwrap()
+			to_value(format!(
+				"{:0>8x}-{:0>4x}-{:0>4x}-{:0>2x}{:0>2x}-{:0>2x}{:0>2x}{:0>2x}{:0>2x}{:0>2x}{:0>2x}",
+				guid._a,
+				guid._b,
+				guid._c,
+				guid._d,
+				guid._e,
+				guid._f,
+				guid._g,
+				guid._h,
+				guid._i,
+				guid._j,
+				guid._k
+			))
+			.unwrap()
 		}
 
 		"SColorRGB" => {
@@ -359,39 +360,25 @@ fn convert_rt_property_value_to_qn(
 				.as_object()
 				.expect("SColorRGB was not an object");
 
-			let mut val = String::from("#");
-			write!(
-				val,
-				"{:0>2x}",
+			to_value(format!(
+				"#{:0>2x}{:0>2x}{:0>2x}",
 				(map.get("r")
 					.expect("Colour did not have required key r")
 					.as_f64()
 					.unwrap() * 255.0)
-					.round() as u8
-			)
-			.unwrap();
-			write!(
-				val,
-				"{:0>2x}",
+					.round() as u8,
 				(map.get("g")
 					.expect("Colour did not have required key g")
 					.as_f64()
 					.unwrap() * 255.0)
-					.round() as u8
-			)
-			.unwrap();
-			write!(
-				val,
-				"{:0>2x}",
+					.round() as u8,
 				(map.get("b")
 					.expect("Colour did not have required key b")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
-			)
-			.unwrap();
-
-			to_value(val).unwrap()
+			))
+			.unwrap()
 		}
 
 		"SColorRGBA" => {
@@ -400,55 +387,37 @@ fn convert_rt_property_value_to_qn(
 				.as_object()
 				.expect("SColorRGBA was not an object");
 
-			let mut val = String::from("#");
-			write!(
-				val,
-				"{:0>2x}",
+			to_value(format!(
+				"#{:0>2x}{:0>2x}{:0>2x}{:0>2x}",
 				(map.get("r")
 					.expect("Colour did not have required key r")
 					.as_f64()
 					.unwrap() * 255.0)
-					.round() as u8
-			)
-			.unwrap();
-			write!(
-				val,
-				"{:0>2x}",
+					.round() as u8,
 				(map.get("g")
 					.expect("Colour did not have required key g")
 					.as_f64()
 					.unwrap() * 255.0)
-					.round() as u8
-			)
-			.unwrap();
-			write!(
-				val,
-				"{:0>2x}",
+					.round() as u8,
 				(map.get("b")
 					.expect("Colour did not have required key b")
 					.as_f64()
 					.unwrap() * 255.0)
-					.round() as u8
-			)
-			.unwrap();
-			write!(
-				val,
-				"{:0>2x}",
+					.round() as u8,
 				(map.get("a")
 					.expect("Colour did not have required key a")
 					.as_f64()
 					.unwrap() * 255.0)
 					.round() as u8
-			)
-			.unwrap();
-
-			to_value(val).unwrap()
+			))
+			.unwrap()
 		}
 
 		_ => property.property_value.to_owned()
 	}
 }
 
+#[time_graph::instrument]
 fn convert_rt_property_to_qn(
 	property: &SEntityTemplateProperty,
 	post_init: bool,
@@ -473,13 +442,10 @@ fn convert_rt_property_to_qn(
 						y.next_back(); // discard closing >
 
 						convert_rt_property_value_to_qn(
-							&from_value({
-								json!({
-									"$type": y.collect::<String>(), // mock a single value for each array element
-									"$val": x
-								})
-							})
-							.expect("RT property array value was invalid"),
+							&SEntityTemplatePropertyValue {
+								property_type: y.collect::<String>(), // mock a single value for each array element
+								property_value: x.to_owned()
+							},
 							factory,
 							factory_meta,
 							blueprint,
@@ -502,6 +468,7 @@ fn convert_rt_property_to_qn(
 	}
 }
 
+#[time_graph::instrument]
 fn convert_qn_property_value_to_rt(
 	property: &Property,
 	factory: &RTFactory,
@@ -681,6 +648,7 @@ fn convert_qn_property_value_to_rt(
 	}
 }
 
+#[time_graph::instrument]
 fn convert_qn_property_to_rt(
 	property_name: &str,
 	property_value: &Property,
@@ -733,6 +701,7 @@ fn convert_qn_property_to_rt(
 	}
 }
 
+#[time_graph::instrument]
 fn convert_string_property_name_to_rt_id(property_name: &str) -> PropertyID {
 	if property_name.parse::<u64>().is_ok() && {
 		let x = format!("{:x}", property_name.parse::<u64>().unwrap())
@@ -747,6 +716,7 @@ fn convert_string_property_name_to_rt_id(property_name: &str) -> PropertyID {
 	}
 }
 
+#[time_graph::instrument]
 fn get_factory_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 	vec![
 		// blueprint first
@@ -1047,6 +1017,7 @@ fn get_factory_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 	.collect()
 }
 
+#[time_graph::instrument]
 fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 	vec![
 		entity
@@ -1073,6 +1044,7 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 	.collect()
 }
 
+#[time_graph::instrument]
 pub fn convert_to_qn(
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
@@ -1804,6 +1776,7 @@ pub fn convert_to_qn(
 	entity
 }
 
+#[time_graph::instrument]
 pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, ResourceMeta) {
 	let entity_id_to_index_mapping: HashMap<String, usize> = entity
 		.entities

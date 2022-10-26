@@ -2,7 +2,6 @@ mod io_utils;
 
 use clap::{Parser, Subcommand};
 use std::fs;
-use std::time::Instant;
 
 use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rt, generate_patch};
 
@@ -54,9 +53,13 @@ enum EntityCommand {
 		#[clap(short, long)]
 		output: String,
 
-		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.)
+		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.).
 		#[clap(short, long, action)]
-		lossless: bool
+		lossless: bool,
+
+		/// Display performance data once finished.
+		#[clap(short, long, action)]
+		profile: bool
 	},
 
 	/// Generate a set of JSON files from a QuickEntity JSON file.
@@ -79,7 +82,11 @@ enum EntityCommand {
 
 		/// Blueprint (TBLU) meta JSON path.
 		#[clap(short, long)]
-		output_blueprint_meta: String
+		output_blueprint_meta: String,
+
+		/// Display performance data once finished.
+		#[clap(short, long, action)]
+		profile: bool
 	}
 }
 
@@ -97,7 +104,11 @@ enum PatchCommand {
 
 		/// Output patch JSON path.
 		#[clap(short, long)]
-		output: String
+		output: String,
+
+		/// Display performance data once finished.
+		#[clap(short, long, action)]
+		profile: bool
 	},
 
 	/// Apply a patch JSON to an entity JSON file.
@@ -112,14 +123,16 @@ enum PatchCommand {
 
 		/// Output QuickEntity JSON path.
 		#[clap(short, long)]
-		output: String
+		output: String,
+
+		/// Display performance data once finished.
+		#[clap(short, long, action)]
+		profile: bool
 	}
 }
 
 fn main() {
 	let args = Args::parse();
-
-	let now = Instant::now();
 
 	match args.command {
 		Command::Entity {
@@ -130,9 +143,14 @@ fn main() {
 					input_blueprint,
 					input_blueprint_meta,
 					output,
-					lossless
+					lossless,
+					profile
 				}
 		} => {
+			if profile {
+				time_graph::enable_data_collection(true);
+			}
+
 			let factory = read_as_rtfactory(&input_factory);
 			let factory_meta = read_as_meta(&input_factory_meta);
 			let blueprint = read_as_rtblueprint(&input_blueprint);
@@ -147,6 +165,10 @@ fn main() {
 			);
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
+
+			if profile {
+				println!("{}", time_graph::get_full_graph().as_table());
+			}
 		}
 
 		Command::Entity {
@@ -156,9 +178,14 @@ fn main() {
 					output_factory,
 					output_factory_meta,
 					output_blueprint,
-					output_blueprint_meta
+					output_blueprint_meta,
+					profile
 				}
 		} => {
+			if profile {
+				time_graph::enable_data_collection(true);
+			}
+
 			let entity = read_as_entity(&input);
 
 			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
@@ -179,39 +206,59 @@ fn main() {
 				to_vec_float_format(&converted_blu_meta)
 			)
 			.unwrap();
+
+			if profile {
+				println!("{}", time_graph::get_full_graph().as_table());
+			}
 		}
 
 		Command::Patch {
-			subcommand: PatchCommand::Generate {
-				input1,
-				input2,
-				output
-			}
+			subcommand:
+				PatchCommand::Generate {
+					input1,
+					input2,
+					output,
+					profile
+				}
 		} => {
+			if profile {
+				time_graph::enable_data_collection(true);
+			}
+
 			let entity1 = read_as_value(&input1);
 			let entity2 = read_as_value(&input2);
 
 			let patch = generate_patch(&entity1, &entity2);
 
 			fs::write(&output, to_vec_float_format(&patch)).unwrap();
+
+			if profile {
+				println!("{}", time_graph::get_full_graph().as_table());
+			}
 		}
 
 		Command::Patch {
 			subcommand: PatchCommand::Apply {
 				input,
 				patch,
-				output
+				output,
+				profile
 			}
 		} => {
+			if profile {
+				time_graph::enable_data_collection(true);
+			}
+
 			let mut entity = read_as_value(&input);
 			let patch = read_as_value(&patch);
 
 			apply_patch(&mut entity, &patch);
 
 			fs::write(&output, to_vec_float_format(&entity)).unwrap();
+
+			if profile {
+				println!("{}", time_graph::get_full_graph().as_table());
+			}
 		}
 	}
-
-	let elapsed = now.elapsed();
-	println!("Elapsed: {:.2?}", elapsed);
 }
