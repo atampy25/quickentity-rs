@@ -777,7 +777,7 @@ fn get_factory_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 					.unwrap_or_else(|| "1F".to_string()) // this is slightly more efficient
 			})
 			.collect(),
-		// then ZRuntimeResourceIDs
+		// then sub-entity ZRuntimeResourceIDs
 		entity
 			.entities
 			.iter()
@@ -956,6 +956,86 @@ fn get_factory_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 					},
 				]
 				.into_iter()
+				.concat()
+			})
+			.collect(),
+		// then property override ZRuntimeResourceIDs
+		entity
+			.property_overrides
+			.par_iter()
+			.flat_map(|PropertyOverride { properties, .. }| {
+				vec![
+					properties
+						.iter()
+						.filter(|(_, prop)| {
+							prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
+						})
+						.map(|(_, prop)| {
+							if prop.value.is_string() {
+								ResourceDependency {
+									hash: prop.value.as_str().unwrap().to_string(),
+									flag: "1F".to_string()
+								}
+							} else {
+								ResourceDependency {
+									hash: prop
+										.value
+										.get("resource")
+										.expect("ZRuntimeResourceID must have resource")
+										.as_str()
+										.expect("ZRuntimeResourceID resource must be string")
+										.to_string(),
+									flag: prop
+										.value
+										.get("flag")
+										.expect("ZRuntimeResourceID must have flag")
+										.as_str()
+										.expect("ZRuntimeResourceID flag must be string")
+										.to_string()
+								}
+							}
+						})
+						.collect_vec(),
+					properties
+						.iter()
+						.filter(|(_, prop)| {
+							prop.property_type == "TArray<ZRuntimeResourceID>"
+								&& !prop.value.is_null()
+						})
+						.map(|(_, prop)| {
+							prop.value
+								.as_array()
+								.expect("TArray<ZRuntimeResourceID> must be array")
+								.iter()
+								.map(|value| {
+									if value.is_string() {
+										ResourceDependency {
+											hash: value.as_str().unwrap().to_string(),
+											flag: "1F".to_string()
+										}
+									} else {
+										ResourceDependency {
+											hash: value
+												.get("resource")
+												.expect("ZRuntimeResourceID must have resource")
+												.as_str()
+												.expect(
+													"ZRuntimeResourceID resource must be string"
+												)
+												.to_string(),
+											flag: value
+												.get("flag")
+												.expect("ZRuntimeResourceID must have flag")
+												.as_str()
+												.expect("ZRuntimeResourceID flag must be string")
+												.to_string()
+										}
+									}
+								})
+								.collect()
+						})
+						.concat(),
+				]
 				.concat()
 			})
 			.collect(),
