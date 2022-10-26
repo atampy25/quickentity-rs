@@ -14,7 +14,7 @@ pub struct STemplateBlueprintSubEntity {
 	pub property_aliases: Vec<SEntityTemplatePropertyAlias>,
 	pub exposed_entities: Vec<SEntityTemplateExposedEntity>,
 	pub exposed_interfaces: Vec<(String, usize)>,
-	pub entity_subsets: Vec<(String, SEntityTemplateEntitySubset)>
+	pub entity_subsets: Vec<(String, SEntityTemplateEntitySubset)>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -29,7 +29,7 @@ pub struct RTBlueprint {
 	pub output_pin_forwardings: Vec<SEntityTemplatePinConnection>,
 	pub override_deletes: Vec<SEntityTemplateReference>,
 	pub pin_connection_overrides: Vec<SExternalEntityTemplatePinConnection>,
-	pub pin_connection_override_deletes: Vec<SExternalEntityTemplatePinConnection>
+	pub pin_connection_override_deletes: Vec<SExternalEntityTemplatePinConnection>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -39,7 +39,7 @@ pub struct STemplateFactorySubEntity {
 	pub entity_type_resource_index: usize,
 	pub property_values: Vec<SEntityTemplateProperty>,
 	pub post_init_property_values: Vec<SEntityTemplateProperty>,
-	pub platform_specific_property_values: Vec<SEntityTemplatePlatformSpecificProperty>
+	pub platform_specific_property_values: Vec<SEntityTemplatePlatformSpecificProperty>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -50,7 +50,7 @@ pub struct RTFactory {
 	pub root_entity_index: usize,
 	pub sub_entities: Vec<STemplateFactorySubEntity>,
 	pub property_overrides: Vec<SEntityTemplatePropertyOverride>,
-	pub external_scene_type_indices_in_resource_header: Vec<usize>
+	pub external_scene_type_indices_in_resource_header: Vec<usize>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -61,7 +61,7 @@ pub struct SEntityTemplateReference {
 
 	pub external_scene_index: i32,
 	pub entity_index: i32,
-	pub exposed_entity: String
+	pub exposed_entity: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -69,7 +69,7 @@ pub struct SEntityTemplateReference {
 pub struct SEntityTemplateExposedEntity {
 	pub s_name: String,
 	pub b_is_array: bool,
-	pub a_targets: Vec<SEntityTemplateReference>
+	pub a_targets: Vec<SEntityTemplateReference>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -83,7 +83,7 @@ pub struct SEntityTemplatePinConnection {
 
 	pub from_pin_name: String,
 	pub to_pin_name: String,
-	pub constant_pin_value: SEntityTemplatePropertyValue
+	pub constant_pin_value: SEntityTemplatePropertyValue,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -91,7 +91,7 @@ pub struct SEntityTemplatePinConnection {
 pub struct SEntityTemplatePlatformSpecificProperty {
 	pub property_value: SEntityTemplateProperty,
 	pub platform: String,
-	pub post_init: bool
+	pub post_init: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -102,20 +102,20 @@ pub struct SEntityTemplatePropertyAlias {
 	#[serde(rename = "entityID")]
 	pub entity_id: usize,
 
-	pub s_property_name: String
+	pub s_property_name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplatePropertyOverride {
 	pub property_owner: SEntityTemplateReference,
-	pub property_value: SEntityTemplateProperty
+	pub property_value: SEntityTemplateProperty,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SEntityTemplateEntitySubset {
-	pub entities: Vec<usize>
+	pub entities: Vec<usize>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -125,7 +125,7 @@ pub struct SExternalEntityTemplatePinConnection {
 	pub to_entity: SEntityTemplateReference,
 	pub from_pin_name: String,
 	pub to_pin_name: String,
-	pub constant_pin_value: SEntityTemplatePropertyValue
+	pub constant_pin_value: SEntityTemplatePropertyValue,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -134,7 +134,7 @@ pub struct SEntityTemplateProperty {
 	pub n_property_id: PropertyID,
 
 	#[serde(rename = "value")]
-	pub value: SEntityTemplatePropertyValue
+	pub value: SEntityTemplatePropertyValue,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -143,12 +143,12 @@ pub struct SEntityTemplatePropertyValue {
 	pub property_type: String,
 
 	#[serde(rename = "$val")]
-	pub property_value: serde_json::Value
+	pub property_value: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum PropertyID {
 	Int(u64),
-	String(String)
+	String(String),
 }
