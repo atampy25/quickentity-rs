@@ -34,58 +34,58 @@ enum EntityCommand {
 	/// Convert a set of JSON files into a QuickEntity JSON file.
 	Convert {
 		/// Factory (TEMP) JSON path.
-		#[clap(short, long)]
+		#[clap(short = "if", long)]
 		input_factory: String,
 
 		/// Factory (TEMP) meta JSON path.
-		#[clap(short, long)]
+		#[clap(short = "ifm", long)]
 		input_factory_meta: String,
 
 		/// Blueprint (TBLU) JSON path.
-		#[clap(short, long)]
+		#[clap(short = "ib", long)]
 		input_blueprint: String,
 
 		/// Blueprint (TBLU) meta JSON path.
-		#[clap(short, long)]
+		#[clap(short = "ibm", long)]
 		input_blueprint_meta: String,
 
 		/// Output QuickEntity JSON path.
-		#[clap(short, long)]
+		#[clap(short = "o", long)]
 		output: String,
 
 		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.).
-		#[clap(short, long, action)]
+		#[clap(short = "l", long, action)]
 		lossless: bool,
 
 		/// Display performance data once finished.
-		#[clap(short, long, action)]
+		#[clap(long, action)]
 		profile: bool
 	},
 
 	/// Generate a set of JSON files from a QuickEntity JSON file.
 	Generate {
 		/// Input QuickEntity JSON path.
-		#[clap(short, long)]
+		#[clap(short = "i", long)]
 		input: String,
 
 		/// Factory (TEMP) JSON path.
-		#[clap(short, long)]
+		#[clap(short = "of", long)]
 		output_factory: String,
 
 		/// Factory (TEMP) meta JSON path.
-		#[clap(short, long)]
+		#[clap(short = "ofm", long)]
 		output_factory_meta: String,
 
 		/// Blueprint (TBLU) JSON path.
-		#[clap(short, long)]
+		#[clap(short = "ob", long)]
 		output_blueprint: String,
 
 		/// Blueprint (TBLU) meta JSON path.
-		#[clap(short, long)]
+		#[clap(short = "obm", long)]
 		output_blueprint_meta: String,
 
 		/// Display performance data once finished.
-		#[clap(short, long, action)]
+		#[clap(long, action)]
 		profile: bool
 	}
 }
@@ -95,38 +95,38 @@ enum PatchCommand {
 	/// Generate a patch JSON that transforms one entity JSON file into another.
 	Generate {
 		/// Original QuickEntity JSON path.
-		#[clap(short, long)]
+		#[clap(short = "i1", long)]
 		input1: String,
 
 		/// Modified QuickEntity JSON path.
-		#[clap(short, long)]
+		#[clap(short = "i2", long)]
 		input2: String,
 
 		/// Output patch JSON path.
-		#[clap(short, long)]
+		#[clap(short = "o", long)]
 		output: String,
 
 		/// Display performance data once finished.
-		#[clap(short, long, action)]
+		#[clap(long, action)]
 		profile: bool
 	},
 
 	/// Apply a patch JSON to an entity JSON file.
 	Apply {
 		/// QuickEntity JSON path.
-		#[clap(short, long)]
+		#[clap(short = "i", long)]
 		input: String,
 
 		/// Patch JSON path.
-		#[clap(short, long)]
+		#[clap(long)]
 		patch: String,
 
 		/// Output QuickEntity JSON path.
-		#[clap(short, long)]
+		#[clap(short = "o", long)]
 		output: String,
 
 		/// Display performance data once finished.
-		#[clap(short, long, action)]
+		#[clap(long, action)]
 		profile: bool
 	}
 }
