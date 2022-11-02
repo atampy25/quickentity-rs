@@ -11,7 +11,7 @@ use io_utils::*;
 #[clap(author = "Atampy26", version, about = "A tool for parsing ResourceTool/RPKG entity JSON files into a more readable format and back again.", long_about = None)]
 struct Args {
 	#[clap(subcommand)]
-	command: Command
+	command: Command,
 }
 
 #[derive(Subcommand)]
@@ -19,14 +19,14 @@ enum Command {
 	// Convert between RT/RPKG source files and QuickEntity entity JSON files.
 	Entity {
 		#[clap(subcommand)]
-		subcommand: EntityCommand
+		subcommand: EntityCommand,
 	},
 
 	// Generate or apply a QuickEntity patch JSON.
 	Patch {
 		#[clap(subcommand)]
-		subcommand: PatchCommand
-	}
+		subcommand: PatchCommand,
+	},
 }
 
 #[derive(Subcommand)]
@@ -59,7 +59,7 @@ enum EntityCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
+		profile: bool,
 	},
 
 	/// Generate a set of JSON files from a QuickEntity JSON file.
@@ -86,8 +86,8 @@ enum EntityCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
-	}
+		profile: bool,
+	},
 }
 
 #[derive(Subcommand)]
@@ -108,7 +108,7 @@ enum PatchCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
+		profile: bool,
 	},
 
 	/// Apply a patch JSON to an entity JSON file.
@@ -127,8 +127,8 @@ enum PatchCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
-	}
+		profile: bool,
+	},
 }
 
 fn main() {
@@ -144,8 +144,8 @@ fn main() {
 					input_blueprint_meta,
 					output,
 					lossless,
-					profile
-				}
+					profile,
+				},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -161,7 +161,7 @@ fn main() {
 				&factory_meta,
 				&blueprint,
 				&blueprint_meta,
-				lossless
+				lossless,
 			);
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
@@ -179,8 +179,8 @@ fn main() {
 					output_factory_meta,
 					output_blueprint,
 					output_blueprint_meta,
-					profile
-				}
+					profile,
+				},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -195,7 +195,7 @@ fn main() {
 
 			fs::write(
 				&output_factory_meta,
-				to_vec_float_format(&converted_fac_meta)
+				to_vec_float_format(&converted_fac_meta),
 			)
 			.unwrap();
 
@@ -203,7 +203,7 @@ fn main() {
 
 			fs::write(
 				&output_blueprint_meta,
-				to_vec_float_format(&converted_blu_meta)
+				to_vec_float_format(&converted_blu_meta),
 			)
 			.unwrap();
 
@@ -218,8 +218,8 @@ fn main() {
 					input1,
 					input2,
 					output,
-					profile
-				}
+					profile,
+				},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -242,8 +242,8 @@ fn main() {
 				input,
 				patch,
 				output,
-				profile
-			}
+				profile,
+			},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
