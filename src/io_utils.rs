@@ -70,7 +70,7 @@ pub fn read_as_meta(path: &str) -> ResourceMeta {
 
 pub fn to_vec_float_format<W>(contents: &W) -> Vec<u8>
 where
-	W: ?Sized + Serialize
+	W: ?Sized + Serialize,
 {
 	let mut writer = Vec::with_capacity(128);
 
@@ -87,7 +87,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_f32<W>(&mut self, writer: &mut W, value: f32) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		writer.write_all(value.to_string().as_bytes())
 	}
@@ -95,7 +95,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_f64<W>(&mut self, writer: &mut W, value: f64) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		writer.write_all(value.to_string().as_bytes())
 	}
@@ -104,7 +104,7 @@ impl Formatter for FloatFormatter {
 	#[inline]
 	fn write_number_str<W>(&mut self, writer: &mut W, value: &str) -> io::Result<()>
 	where
-		W: ?Sized + io::Write
+		W: ?Sized + io::Write,
 	{
 		let x = value.parse::<f64>();
 		if let Ok(y) = x {
@@ -118,7 +118,7 @@ impl Formatter for FloatFormatter {
 						} else {
 							y.to_string()
 						}
-						.as_bytes()
+						.as_bytes(),
 					)
 					.unwrap();
 			} else {
