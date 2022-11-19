@@ -7,6 +7,25 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug unit tests in library 'quickentity-rs'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=quickentity-rs"
+                ],
+                "filter": {
+                    "name": "quickentity-rs",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug executable 'quickentity-rs'",
             "cargo": {
                 "args": [
@@ -36,6 +55,81 @@
                 "filter": {
                     "name": "quickentity-rs",
                     "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'quickentity-gui'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=quickentity-gui",
+                    "--package=quickentity-rs"
+                ],
+                "filter": {
+                    "name": "quickentity-gui",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'quickentity-gui'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=quickentity-gui",
+                    "--package=quickentity-rs"
+                ],
+                "filter": {
+                    "name": "quickentity-gui",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'conversion'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=conversion",
+                    "--package=quickentity-rs"
+                ],
+                "filter": {
+                    "name": "conversion",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'io_utils'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=io_utils",
+                    "--package=quickentity-rs"
+                ],
+                "filter": {
+                    "name": "io_utils",
+                    "kind": "bench"
                 }
             },
             "args": [],
