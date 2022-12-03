@@ -3,7 +3,10 @@ mod io_utils;
 use clap::{Parser, Subcommand};
 use std::fs;
 
-use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rt, generate_patch};
+use quickentity_rs::{
+	apply_patch, convert_modern_blueprint_to_2016, convert_modern_factory_to_2016, convert_to_qn,
+	convert_to_rt, generate_patch
+};
 
 use io_utils::*;
 
@@ -86,7 +89,11 @@ enum EntityCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
+		profile: bool,
+
+		/// Output RT JSON files compatible with HITMAN (2016).
+		#[clap(long, action)]
+		h1: bool
 	}
 }
 
@@ -179,7 +186,8 @@ fn main() {
 					output_factory_meta,
 					output_blueprint,
 					output_blueprint_meta,
-					profile
+					profile,
+					h1
 				}
 		} => {
 			if profile {
@@ -191,7 +199,14 @@ fn main() {
 			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
 				convert_to_rt(&entity);
 
-			fs::write(&output_factory, to_vec_float_format(&converted_fac)).unwrap();
+			fs::write(&output_factory, {
+				if h1 {
+					to_vec_float_format(&convert_modern_factory_to_2016(&converted_fac))
+				} else {
+					to_vec_float_format(&converted_fac)
+				}
+			})
+			.unwrap();
 
 			fs::write(
 				&output_factory_meta,
@@ -199,7 +214,14 @@ fn main() {
 			)
 			.unwrap();
 
-			fs::write(&output_blueprint, to_vec_float_format(&converted_blu)).unwrap();
+			fs::write(&output_factory, {
+				if h1 {
+					to_vec_float_format(&convert_modern_blueprint_to_2016(&converted_blu))
+				} else {
+					to_vec_float_format(&converted_blu)
+				}
+			})
+			.unwrap();
 
 			fs::write(
 				&output_blueprint_meta,

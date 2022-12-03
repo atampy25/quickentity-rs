@@ -1,10 +1,11 @@
 use quickentity_rs::qn_structs::Entity;
 use quickentity_rs::rpkg_structs::ResourceMeta;
 use quickentity_rs::rt_structs::{RTBlueprint, RTFactory};
+use quickentity_rs::{convert_2016_blueprint_to_modern, convert_2016_factory_to_modern};
 
 use serde::Serialize;
 use serde_json::ser::Formatter;
-use serde_json::{from_slice, Serializer, Value};
+use serde_json::{from_slice, from_value, Serializer, Value};
 use std::io;
 use std::{fs, io::Read};
 
@@ -33,7 +34,7 @@ pub fn read_as_entity(path: &str) -> Entity {
 }
 
 pub fn read_as_rtfactory(path: &str) -> RTFactory {
-	from_slice(&{
+	let val = from_slice::<Value>(&{
 		let mut vec = Vec::new();
 		fs::File::open(path)
 			.expect("Failed to open file")
@@ -41,11 +42,17 @@ pub fn read_as_rtfactory(path: &str) -> RTFactory {
 			.expect("Failed to read file");
 		vec
 	})
-	.expect("Failed to open file as JSON")
+	.expect("Failed to open file as JSON");
+
+	if val.get("entityTemplates").is_some() {
+		convert_2016_factory_to_modern(&from_value(val).expect("Failed to read file as RT struct"))
+	} else {
+		from_value(val).expect("Failed to read file as RT struct")
+	}
 }
 
 pub fn read_as_rtblueprint(path: &str) -> RTBlueprint {
-	from_slice(&{
+	let val = from_slice::<Value>(&{
 		let mut vec = Vec::new();
 		fs::File::open(path)
 			.expect("Failed to open file")
@@ -53,7 +60,15 @@ pub fn read_as_rtblueprint(path: &str) -> RTBlueprint {
 			.expect("Failed to read file");
 		vec
 	})
-	.expect("Failed to open file as JSON")
+	.expect("Failed to open file as JSON");
+
+	if val.get("entityTemplates").is_some() {
+		convert_2016_blueprint_to_modern(
+			&from_value(val).expect("Failed to read file as RT struct")
+		)
+	} else {
+		from_value(val).expect("Failed to read file as RT struct")
+	}
 }
 
 pub fn read_as_meta(path: &str) -> ResourceMeta {

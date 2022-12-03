@@ -1,16 +1,20 @@
 pub mod qn_structs;
 pub mod rpkg_structs;
+pub mod rt_2016_structs;
 pub mod rt_structs;
 pub mod util_structs;
 
 use linked_hash_map::LinkedHashMap;
+use rt_2016_structs::{
+	RTBlueprint2016, RTFactory2016, SEntityTemplatePinConnection2016, STemplateSubEntity,
+	STemplateSubEntityBlueprint
+};
 use std::collections::HashMap;
 
 use itertools::Itertools;
 use json_patch::{diff, from_value as json_patch_from_value, patch as apply_rfc_patch};
 use rayon::prelude::*;
 use serde_json::{from_value, json, to_value, Value};
-use std::fmt::Write;
 
 use qn_structs::{
 	Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty,
@@ -29,12 +33,6 @@ use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceI
 
 const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
-
-pub enum Game {
-	HM1,
-	HM2,
-	HM3
-}
 
 #[time_graph::instrument]
 pub fn apply_patch(entity: &mut Value, patch: &Value) {
@@ -2550,4 +2548,186 @@ pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, 
 		.collect();
 
 	(factory, factory_meta, blueprint, blueprint_meta)
+}
+
+pub fn convert_2016_factory_to_modern(factory: &RTFactory2016) -> RTFactory {
+	RTFactory {
+		sub_type: factory.sub_type,
+		blueprint_index_in_resource_header: factory.blueprint_index_in_resource_header,
+		root_entity_index: factory.root_entity_index,
+		sub_entities: factory
+			.entity_templates
+			.iter()
+			.map(|x| STemplateFactorySubEntity {
+				entity_type_resource_index: x.entity_type_resource_index,
+				logical_parent: x.logical_parent.to_owned(),
+				platform_specific_property_values: Vec::with_capacity(0),
+				property_values: x.property_values.to_owned(),
+				post_init_property_values: x.post_init_property_values.to_owned()
+			})
+			.collect(),
+		property_overrides: factory.property_overrides.to_owned(),
+		external_scene_type_indices_in_resource_header: factory
+			.external_scene_type_indices_in_resource_header
+			.to_owned()
+	}
+}
+
+pub fn convert_modern_factory_to_2016(factory: &RTFactory) -> RTFactory2016 {
+	RTFactory2016 {
+		sub_type: factory.sub_type,
+		blueprint_index_in_resource_header: factory.blueprint_index_in_resource_header,
+		root_entity_index: factory.root_entity_index,
+		entity_templates: factory
+			.sub_entities
+			.iter()
+			.map(|x| STemplateSubEntity {
+				entity_type_resource_index: x.entity_type_resource_index,
+				logical_parent: x.logical_parent.to_owned(),
+				property_values: x.property_values.to_owned(),
+				post_init_property_values: x.post_init_property_values.to_owned()
+			})
+			.collect(),
+		property_overrides: factory.property_overrides.to_owned(),
+		external_scene_type_indices_in_resource_header: factory
+			.external_scene_type_indices_in_resource_header
+			.to_owned()
+	}
+}
+
+pub fn convert_2016_blueprint_to_modern(blueprint: &RTBlueprint2016) -> RTBlueprint {
+	RTBlueprint {
+		sub_type: blueprint.sub_type,
+		root_entity_index: blueprint.root_entity_index,
+		sub_entities: blueprint
+			.entity_templates
+			.iter()
+			.map(|x| STemplateBlueprintSubEntity {
+				entity_id: x.entity_id,
+				editor_only: false,
+				entity_name: x.entity_name.to_owned(),
+				entity_subsets: x.entity_subsets.to_owned(),
+				entity_type_resource_index: x.entity_type_resource_index,
+				exposed_entities: x
+					.exposed_entities
+					.iter()
+					.map(|(x, y)| SEntityTemplateExposedEntity {
+						b_is_array: false,
+						a_targets: vec![y.to_owned()],
+						s_name: x.to_owned()
+					})
+					.collect(),
+				exposed_interfaces: x.exposed_interfaces.to_owned(),
+				logical_parent: x.logical_parent.to_owned(),
+				property_aliases: x.property_aliases.to_owned()
+			})
+			.collect(),
+		external_scene_type_indices_in_resource_header: blueprint
+			.external_scene_type_indices_in_resource_header
+			.to_owned(),
+		pin_connections: blueprint
+			.pin_connections
+			.iter()
+			.map(|x| SEntityTemplatePinConnection {
+				from_id: x.from_id,
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_id: x.to_id,
+				to_pin_name: x.to_pin_name.to_owned(),
+				constant_pin_value: SEntityTemplatePropertyValue {
+					property_type: "void".to_string(),
+					property_value: Value::Null
+				}
+			})
+			.collect(),
+		input_pin_forwardings: blueprint
+			.input_pin_forwardings
+			.iter()
+			.map(|x| SEntityTemplatePinConnection {
+				from_id: x.from_id,
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_id: x.to_id,
+				to_pin_name: x.to_pin_name.to_owned(),
+				constant_pin_value: SEntityTemplatePropertyValue {
+					property_type: "void".to_string(),
+					property_value: Value::Null
+				}
+			})
+			.collect(),
+		output_pin_forwardings: blueprint
+			.output_pin_forwardings
+			.iter()
+			.map(|x| SEntityTemplatePinConnection {
+				from_id: x.from_id,
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_id: x.to_id,
+				to_pin_name: x.to_pin_name.to_owned(),
+				constant_pin_value: SEntityTemplatePropertyValue {
+					property_type: "void".to_string(),
+					property_value: Value::Null
+				}
+			})
+			.collect(),
+		override_deletes: blueprint.override_deletes.to_owned(),
+		pin_connection_overrides: Vec::with_capacity(0),
+		pin_connection_override_deletes: Vec::with_capacity(0)
+	}
+}
+
+pub fn convert_modern_blueprint_to_2016(blueprint: &RTBlueprint) -> RTBlueprint2016 {
+	RTBlueprint2016 {
+		sub_type: blueprint.sub_type,
+		root_entity_index: blueprint.root_entity_index,
+		entity_templates: blueprint
+			.sub_entities
+			.iter()
+			.map(|x| STemplateSubEntityBlueprint {
+				entity_id: x.entity_id,
+				entity_name: x.entity_name.to_owned(),
+				entity_subsets: x.entity_subsets.to_owned(),
+				entity_type_resource_index: x.entity_type_resource_index,
+				exposed_entities: x
+					.exposed_entities
+					.iter()
+					.map(|x| (x.s_name.to_owned(), x.a_targets[0].to_owned()))
+					.collect(),
+				exposed_interfaces: x.exposed_interfaces.to_owned(),
+				logical_parent: x.logical_parent.to_owned(),
+				property_aliases: x.property_aliases.to_owned()
+			})
+			.collect(),
+		external_scene_type_indices_in_resource_header: blueprint
+			.external_scene_type_indices_in_resource_header
+			.to_owned(),
+		pin_connections: blueprint
+			.pin_connections
+			.iter()
+			.map(|x| SEntityTemplatePinConnection2016 {
+				from_id: x.from_id,
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_id: x.to_id,
+				to_pin_name: x.to_pin_name.to_owned()
+			})
+			.collect(),
+		input_pin_forwardings: blueprint
+			.input_pin_forwardings
+			.iter()
+			.map(|x| SEntityTemplatePinConnection2016 {
+				from_id: x.from_id,
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_id: x.to_id,
+				to_pin_name: x.to_pin_name.to_owned()
+			})
+			.collect(),
+		output_pin_forwardings: blueprint
+			.output_pin_forwardings
+			.iter()
+			.map(|x| SEntityTemplatePinConnection2016 {
+				from_id: x.from_id,
+				from_pin_name: x.from_pin_name.to_owned(),
+				to_id: x.to_id,
+				to_pin_name: x.to_pin_name.to_owned()
+			})
+			.collect(),
+		override_deletes: blueprint.override_deletes.to_owned()
+	}
 }
