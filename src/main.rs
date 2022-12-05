@@ -214,7 +214,7 @@ fn main() {
 			)
 			.unwrap();
 
-			fs::write(&output_factory, {
+			fs::write(&output_blueprint, {
 				if h1 {
 					to_vec_float_format(&convert_modern_blueprint_to_2016(&converted_blu))
 				} else {
