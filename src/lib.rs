@@ -3761,7 +3761,7 @@ pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, 
 		hash_size_final: 2377,
 		hash_size_in_memory: 1525,
 		hash_size_in_video_memory: 4294967295,
-		hash_value: entity.factory_hash.to_owned()
+		hash_value: entity.blueprint_hash.to_owned()
 	};
 
 	let factory_dependencies_index_mapping: HashMap<String, usize> = factory_meta
