@@ -4,7 +4,7 @@ use ts_rs::TS;
 
 use crate::qn_structs::{
 	CommentEntity, Dependency, ExposedEntity, PinConnectionOverride, PinConnectionOverrideDelete,
-	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SubEntity, SubType
+	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SubEntity, SubType,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
@@ -39,7 +39,7 @@ pub enum PatchOperation {
 	RemoveExtraBlueprintDependency(Dependency),
 
 	AddComment(CommentEntity),
-	RemoveComment(CommentEntity)
+	RemoveComment(CommentEntity),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
@@ -58,7 +58,7 @@ pub enum SubEntityOperation {
 		property_name: String,
 
 		#[ts(type = "any")]
-		value: Value
+		value: Value,
 	},
 	SetPropertyPostInit(String, bool),
 	RemovePropertyByName(String),
@@ -71,7 +71,7 @@ pub enum SubEntityOperation {
 		property_name: String,
 
 		#[ts(type = "any")]
-		value: Value
+		value: Value,
 	},
 	SetPlatformSpecificPropertyPostInit(String, String, bool),
 	RemovePlatformSpecificPropertyByName(String, String),
@@ -104,5 +104,5 @@ pub enum SubEntityOperation {
 
 	AddSubset(String, String),
 	RemoveSubset(String, String),
-	RemoveAllSubsetsFor(String)
+	RemoveAllSubsetsFor(String),
 }
