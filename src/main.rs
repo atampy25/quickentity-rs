@@ -247,8 +247,8 @@ fn main() {
 				time_graph::enable_data_collection(true);
 			}
 
-			let entity1 = read_as_value(&input1);
-			let entity2 = read_as_value(&input2);
+			let entity1 = read_as_entity(&input1);
+			let entity2 = read_as_entity(&input2);
 
 			let patch = generate_patch(&entity1, &entity2);
 
@@ -271,7 +271,7 @@ fn main() {
 				time_graph::enable_data_collection(true);
 			}
 
-			let mut entity = read_as_value(&input);
+			let mut entity = read_as_entity(&input);
 			let patch = read_as_value(&patch);
 
 			apply_patch(&mut entity, &patch);

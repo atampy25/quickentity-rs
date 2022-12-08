@@ -98,12 +98,14 @@ pub struct SubEntity {
 	#[serde(rename = "name")]
 	pub name: String,
 
-	/// The template of the entity.
-	#[serde(rename = "template")]
+	/// The factory of the entity.
+	#[serde(rename = "factory")]
+	#[serde(alias = "template")]
 	pub factory: String,
 
-	/// The template's flag.
-	#[serde(rename = "templateFlag")]
+	/// The factory's flag.
+	#[serde(rename = "factoryFlag")]
+	#[serde(alias = "templateFlag")]
 	pub factory_flag: Option<String>,
 
 	/// The blueprint of the entity.

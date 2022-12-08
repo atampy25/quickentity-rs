@@ -1,3 +1,4 @@
+pub mod patch_structs;
 pub mod qn_structs;
 pub mod rpkg_structs;
 pub mod rt_2016_structs;
@@ -5,6 +6,7 @@ pub mod rt_structs;
 pub mod util_structs;
 
 use linked_hash_map::LinkedHashMap;
+use patch_structs::{PatchOperation, SubEntityOperation};
 use rt_2016_structs::{
 	RTBlueprint2016, RTFactory2016, SEntityTemplatePinConnection2016, STemplateSubEntity,
 	STemplateSubEntityBlueprint
@@ -12,7 +14,6 @@ use rt_2016_structs::{
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use json_patch::{diff, from_value as json_patch_from_value, patch as apply_rfc_patch};
 use rayon::prelude::*;
 use serde_json::{from_value, json, to_value, Value};
 
@@ -35,41 +36,1772 @@ const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
 
 #[time_graph::instrument]
-pub fn apply_patch(entity: &mut Value, patch: &Value) {
-	apply_rfc_patch(
-		entity,
-		&json_patch_from_value(
-			patch
-				.get("patch")
-				.expect("Failed to get patch from file")
-				.to_owned()
-		)
-		.expect("Failed to convert patch to RFC6902")
+pub fn apply_patch(entity: &mut Entity, patch: &Value) {
+	let patch: Vec<PatchOperation> = from_value(
+		patch
+			.get("patch")
+			.expect("Patch didn't define a patch!")
+			.to_owned()
 	)
-	.expect("Failed to apply patch");
+	.unwrap();
+
+	for operation in patch {
+		match operation {
+			PatchOperation::SetRootEntity(value) => {
+				entity.root_entity = value;
+			}
+
+			PatchOperation::SetSubType(value) => {
+				entity.sub_type = value;
+			}
+
+			PatchOperation::RemoveEntityByID(value) => {
+				entity.entities.remove(&value);
+			}
+
+			PatchOperation::AddEntity(id, data) => {
+				entity.entities.insert(id, *data);
+			}
+
+			PatchOperation::SubEntityOperation(entity_id, op) => {
+				let entity = entity
+					.entities
+					.get_mut(&entity_id)
+					.expect("SubEntityOperation couldn't find entity ID!");
+
+				match op {
+					SubEntityOperation::SetParent(value) => {
+						entity.parent = value;
+					}
+
+					SubEntityOperation::SetName(value) => {
+						entity.name = value;
+					}
+
+					SubEntityOperation::SetFactory(value) => {
+						entity.factory = value;
+					}
+
+					SubEntityOperation::SetFactoryFlag(value) => {
+						entity.factory_flag = value;
+					}
+
+					SubEntityOperation::SetBlueprint(value) => {
+						entity.blueprint = value;
+					}
+
+					SubEntityOperation::SetEditorOnly(value) => {
+						entity.editor_only = value;
+					}
+
+					SubEntityOperation::AddProperty(name, data) => {
+						entity
+							.properties
+							.get_or_insert(Default::default())
+							.insert(name, data);
+					}
+
+					SubEntityOperation::RemovePropertyByName(name) => {
+						entity
+							.properties
+							.as_mut()
+							.expect("RemovePropertyByName couldn't find properties!")
+							.remove(&name)
+							.expect("RemovePropertyByName couldn't find expected property!");
+
+						if entity.properties.as_ref().unwrap().is_empty() {
+							entity.properties = None;
+						}
+					}
+
+					SubEntityOperation::SetPropertyType(name, value) => {
+						entity
+							.properties
+							.get_or_insert(Default::default())
+							.get_mut(&name)
+							.expect("SetPropertyType couldn't find expected property!")
+							.property_type = value;
+					}
+
+					SubEntityOperation::SetPropertyValue {
+						property_name,
+						value
+					} => {
+						entity
+							.properties
+							.get_or_insert(Default::default())
+							.get_mut(&property_name)
+							.expect("SetPropertyValue couldn't find expected property!")
+							.value = value;
+					}
+
+					SubEntityOperation::SetPropertyPostInit(name, value) => {
+						entity
+							.properties
+							.get_or_insert(Default::default())
+							.get_mut(&name)
+							.expect("SetPropertyPostInit couldn't find expected property!")
+							.post_init = if value { Some(true) } else { None };
+					}
+
+					SubEntityOperation::AddPlatformSpecificProperty(platform, name, data) => {
+						entity
+							.platform_specific_properties
+							.get_or_insert(Default::default())
+							.entry(platform)
+							.or_default()
+							.insert(name, data);
+					}
+
+					SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
+						entity
+							.platform_specific_properties
+							.as_mut()
+							.expect("RemovePSPropertiesForPlatform couldn't find properties!")
+							.remove(&name)
+							.expect(
+								"RemovePSPropertiesForPlatform couldn't find platform to remove!"
+							);
+
+						if entity
+							.platform_specific_properties
+							.as_ref()
+							.unwrap()
+							.is_empty()
+						{
+							entity.platform_specific_properties = None;
+						}
+					}
+
+					SubEntityOperation::RemovePlatformSpecificPropertyByName(platform, name) => {
+						entity
+							.platform_specific_properties
+							.as_mut()
+							.expect("RemovePSPropertyByName couldn't find properties!")
+							.get_mut(&platform)
+							.expect("RemovePSPropertyByName couldn't find platform!")
+							.remove(&name);
+
+						if entity
+							.platform_specific_properties
+							.as_ref()
+							.unwrap()
+							.get(&platform)
+							.unwrap()
+							.is_empty()
+						{
+							entity
+								.platform_specific_properties
+								.as_mut()
+								.unwrap()
+								.remove(&platform);
+						}
+
+						if entity
+							.platform_specific_properties
+							.as_ref()
+							.unwrap()
+							.is_empty()
+						{
+							entity.platform_specific_properties = None;
+						}
+					}
+
+					SubEntityOperation::SetPlatformSpecificPropertyType(platform, name, value) => {
+						entity
+							.platform_specific_properties
+							.as_mut()
+							.expect("SetPSPropertyType couldn't find properties!")
+							.get_mut(&platform)
+							.expect("SetPSPropertyType couldn't find expected platform!")
+							.get_mut(&name)
+							.expect("SetPSPropertyType couldn't find expected property!")
+							.property_type = value;
+					}
+
+					SubEntityOperation::SetPlatformSpecificPropertyValue {
+						platform,
+						property_name,
+						value
+					} => {
+						entity
+							.platform_specific_properties
+							.as_mut()
+							.expect("SetPSPropertyValue couldn't find properties!")
+							.get_mut(&platform)
+							.expect("SetPSPropertyValue couldn't find expected platform!")
+							.get_mut(&property_name)
+							.expect("SetPSPropertyValue couldn't find expected property!")
+							.value = value;
+					}
+
+					SubEntityOperation::SetPlatformSpecificPropertyPostInit(
+						platform,
+						name,
+						value
+					) => {
+						entity
+							.platform_specific_properties
+							.as_mut()
+							.expect("SetPSPropertyPostInit couldn't find properties!")
+							.get_mut(&platform)
+							.expect("SetPSPropertyPostInit couldn't find expected platform!")
+							.get_mut(&name)
+							.expect("SetPSPropertyPostInit couldn't find expected property!")
+							.post_init = if value { Some(true) } else { None };
+					}
+
+					SubEntityOperation::RemoveAllEventConnectionsForEvent(event) => {
+						entity
+							.events
+							.as_mut()
+							.expect("RemoveAllEventConnectionsForEvent couldn't find events!")
+							.remove(&event)
+							.expect("RemoveAllEventConnectionsForEvent couldn't find event!");
+
+						if entity.events.as_ref().unwrap().is_empty() {
+							entity.events = None;
+						}
+					}
+
+					SubEntityOperation::RemoveAllEventConnectionsForTrigger(event, trigger) => {
+						entity
+							.events
+							.as_mut()
+							.expect("RemoveAllEventConnectionsForTrigger couldn't find events!")
+							.get_mut(&event)
+							.expect("RemoveAllEventConnectionsForTrigger couldn't find event!")
+							.remove(&trigger)
+							.expect("RemoveAllEventConnectionsForTrigger couldn't find trigger!");
+
+						if entity
+							.events
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.is_empty()
+						{
+							entity.events.as_mut().unwrap().remove(&event);
+						}
+
+						if entity.events.as_ref().unwrap().is_empty() {
+							entity.events = None;
+						}
+					}
+
+					SubEntityOperation::RemoveEventConnection(event, trigger, reference) => {
+						let ind = entity
+							.events
+							.as_ref()
+							.expect("RemoveEventConnection couldn't find events!")
+							.get(&event)
+							.expect("RemoveEventConnection couldn't find event!")
+							.get(&trigger)
+							.expect("RemoveEventConnection couldn't find trigger!")
+							.iter()
+							.position(|x| *x == reference)
+							.expect("RemoveEventConnection couldn't find reference!");
+
+						entity
+							.events
+							.as_mut()
+							.unwrap()
+							.get_mut(&event)
+							.unwrap()
+							.get_mut(&trigger)
+							.unwrap()
+							.remove(ind);
+
+						if entity
+							.events
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.get(&trigger)
+							.unwrap()
+							.is_empty()
+						{
+							entity
+								.events
+								.as_mut()
+								.unwrap()
+								.get_mut(&event)
+								.unwrap()
+								.remove(&trigger);
+						}
+
+						if entity
+							.events
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.is_empty()
+						{
+							entity.events.as_mut().unwrap().remove(&event);
+						}
+
+						if entity.events.as_ref().unwrap().is_empty() {
+							entity.events = None;
+						}
+					}
+
+					SubEntityOperation::AddEventConnection(event, trigger, reference) => {
+						if entity.events.is_none() {
+							entity.events = Some(Default::default());
+						}
+
+						if entity.events.as_ref().unwrap().get(&event).is_none() {
+							entity
+								.events
+								.as_mut()
+								.unwrap()
+								.insert(event.to_owned(), Default::default());
+						}
+
+						if entity
+							.events
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.get(&trigger)
+							.is_none()
+						{
+							entity
+								.events
+								.as_mut()
+								.unwrap()
+								.get_mut(&event)
+								.unwrap()
+								.insert(trigger.to_owned(), Default::default());
+						}
+
+						entity
+							.events
+							.as_mut()
+							.unwrap()
+							.get_mut(&event)
+							.unwrap()
+							.get_mut(&trigger)
+							.unwrap()
+							.push(reference);
+					}
+
+					SubEntityOperation::RemoveAllInputCopyConnectionsForInput(event) => {
+						entity
+							.input_copying
+							.as_mut()
+							.expect("RemoveAllInputCopyConnectionsForInput couldn't find input copying!")
+							.remove(&event)
+							.expect("RemoveAllInputCopyConnectionsForInput couldn't find input!");
+
+						if entity.input_copying.as_ref().unwrap().is_empty() {
+							entity.input_copying = None;
+						}
+					}
+
+					SubEntityOperation::RemoveAllInputCopyConnectionsForTrigger(event, trigger) => {
+						entity
+							.input_copying
+							.as_mut()
+							.expect("RemoveAllInputCopyConnectionsForTrigger couldn't find input copying!")
+							.get_mut(&event)
+							.expect("RemoveAllInputCopyConnectionsForTrigger couldn't find input!")
+							.remove(&trigger)
+							.expect("RemoveAllInputCopyConnectionsForTrigger couldn't find trigger!");
+
+						if entity
+							.input_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.is_empty()
+						{
+							entity.input_copying.as_mut().unwrap().remove(&event);
+						}
+
+						if entity.input_copying.as_ref().unwrap().is_empty() {
+							entity.input_copying = None;
+						}
+					}
+
+					SubEntityOperation::RemoveInputCopyConnection(event, trigger, reference) => {
+						let ind = entity
+							.input_copying
+							.as_ref()
+							.expect("RemoveInputCopyConnection couldn't find input copying!")
+							.get(&event)
+							.expect("RemoveInputCopyConnection couldn't find input!")
+							.get(&trigger)
+							.expect("RemoveInputCopyConnection couldn't find trigger!")
+							.iter()
+							.position(|x| *x == reference)
+							.expect("RemoveInputCopyConnection couldn't find reference!");
+
+						entity
+							.input_copying
+							.as_mut()
+							.unwrap()
+							.get_mut(&event)
+							.unwrap()
+							.get_mut(&trigger)
+							.unwrap()
+							.remove(ind);
+
+						if entity
+							.input_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.get(&trigger)
+							.unwrap()
+							.is_empty()
+						{
+							entity
+								.input_copying
+								.as_mut()
+								.unwrap()
+								.get_mut(&event)
+								.unwrap()
+								.remove(&trigger);
+						}
+
+						if entity
+							.input_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.is_empty()
+						{
+							entity.input_copying.as_mut().unwrap().remove(&event);
+						}
+
+						if entity.input_copying.as_ref().unwrap().is_empty() {
+							entity.input_copying = None;
+						}
+					}
+
+					SubEntityOperation::AddInputCopyConnection(event, trigger, reference) => {
+						if entity.input_copying.is_none() {
+							entity.input_copying = Some(Default::default());
+						}
+
+						if entity.input_copying.as_ref().unwrap().get(&event).is_none() {
+							entity
+								.input_copying
+								.as_mut()
+								.unwrap()
+								.insert(event.to_owned(), Default::default());
+						}
+
+						if entity
+							.input_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.get(&trigger)
+							.is_none()
+						{
+							entity
+								.input_copying
+								.as_mut()
+								.unwrap()
+								.get_mut(&event)
+								.unwrap()
+								.insert(trigger.to_owned(), Default::default());
+						}
+
+						entity
+							.input_copying
+							.as_mut()
+							.unwrap()
+							.get_mut(&event)
+							.unwrap()
+							.get_mut(&trigger)
+							.unwrap()
+							.push(reference);
+					}
+
+					SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(event) => {
+						entity
+							.output_copying
+							.as_mut()
+							.expect("RemoveAllOutputCopyConnectionsForOutput couldn't find output copying!")
+							.remove(&event)
+							.expect("RemoveAllOutputCopyConnectionsForOutput couldn't find event!");
+
+						if entity.output_copying.as_ref().unwrap().is_empty() {
+							entity.output_copying = None;
+						}
+					}
+
+					SubEntityOperation::RemoveAllOutputCopyConnectionsForPropagate(
+						event,
+						trigger
+					) => {
+						entity
+							.output_copying
+							.as_mut()
+							.expect("RemoveAllOutputCopyConnectionsForPropagate couldn't find output copying!")
+							.get_mut(&event)
+							.expect("RemoveAllOutputCopyConnectionsForPropagate couldn't find event!")
+							.remove(&trigger)
+							.expect("RemoveAllOutputCopyConnectionsForPropagate couldn't find propagate!");
+
+						if entity
+							.output_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.is_empty()
+						{
+							entity.output_copying.as_mut().unwrap().remove(&event);
+						}
+
+						if entity.output_copying.as_ref().unwrap().is_empty() {
+							entity.output_copying = None;
+						}
+					}
+
+					SubEntityOperation::RemoveOutputCopyConnection(event, trigger, reference) => {
+						let ind = entity
+							.output_copying
+							.as_ref()
+							.expect("RemoveOutputCopyConnection couldn't find output copying!")
+							.get(&event)
+							.expect("RemoveOutputCopyConnection couldn't find event!")
+							.get(&trigger)
+							.expect("RemoveOutputCopyConnection couldn't find propagate!")
+							.iter()
+							.position(|x| *x == reference)
+							.expect("RemoveOutputCopyConnection couldn't find reference!");
+
+						entity
+							.output_copying
+							.as_mut()
+							.unwrap()
+							.get_mut(&event)
+							.unwrap()
+							.get_mut(&trigger)
+							.unwrap()
+							.remove(ind);
+
+						if entity
+							.output_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.get(&trigger)
+							.unwrap()
+							.is_empty()
+						{
+							entity
+								.output_copying
+								.as_mut()
+								.unwrap()
+								.get_mut(&event)
+								.unwrap()
+								.remove(&trigger);
+						}
+
+						if entity
+							.output_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.is_empty()
+						{
+							entity.output_copying.as_mut().unwrap().remove(&event);
+						}
+
+						if entity.output_copying.as_ref().unwrap().is_empty() {
+							entity.output_copying = None;
+						}
+					}
+
+					SubEntityOperation::AddOutputCopyConnection(event, trigger, reference) => {
+						if entity.output_copying.is_none() {
+							entity.output_copying = Some(Default::default());
+						}
+
+						if entity
+							.output_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.is_none()
+						{
+							entity
+								.output_copying
+								.as_mut()
+								.unwrap()
+								.insert(event.to_owned(), Default::default());
+						}
+
+						if entity
+							.output_copying
+							.as_ref()
+							.unwrap()
+							.get(&event)
+							.unwrap()
+							.get(&trigger)
+							.is_none()
+						{
+							entity
+								.output_copying
+								.as_mut()
+								.unwrap()
+								.get_mut(&event)
+								.unwrap()
+								.insert(trigger.to_owned(), Default::default());
+						}
+
+						entity
+							.output_copying
+							.as_mut()
+							.unwrap()
+							.get_mut(&event)
+							.unwrap()
+							.get_mut(&trigger)
+							.unwrap()
+							.push(reference);
+					}
+
+					SubEntityOperation::AddPropertyAliasConnection(alias, data) => {
+						entity
+							.property_aliases
+							.get_or_insert(Default::default())
+							.entry(alias)
+							.or_default()
+							.push(data);
+					}
+
+					SubEntityOperation::RemovePropertyAlias(alias) => {
+						entity
+							.property_aliases
+							.get_or_insert(Default::default())
+							.remove(&alias)
+							.expect("RemovePropertyAlias couldn't find alias!");
+
+						if entity.property_aliases.as_ref().unwrap().is_empty() {
+							entity.property_aliases = None;
+						}
+					}
+
+					SubEntityOperation::RemoveConnectionForPropertyAlias(alias, data) => {
+						let connection = entity
+							.property_aliases
+							.as_ref()
+							.expect("RemoveConnectionForPropertyAlias had no aliases to remove!")
+							.get(&alias)
+							.expect("RemoveConnectionForPropertyAlias couldn't find alias!")
+							.iter()
+							.position(|x| *x == data)
+							.expect("RemoveConnectionForPropertyAlias couldn't find connection!");
+
+						entity
+							.property_aliases
+							.as_mut()
+							.unwrap()
+							.get_mut(&alias)
+							.unwrap()
+							.remove(connection);
+
+						if entity
+							.property_aliases
+							.as_ref()
+							.unwrap()
+							.get(&alias)
+							.unwrap()
+							.is_empty()
+						{
+							entity.property_aliases.as_mut().unwrap().remove(&alias);
+						}
+
+						if entity.property_aliases.as_ref().unwrap().is_empty() {
+							entity.property_aliases = None;
+						}
+					}
+
+					SubEntityOperation::SetExposedEntity(name, data) => {
+						entity
+							.exposed_entities
+							.get_or_insert(Default::default())
+							.insert(name, data);
+					}
+
+					SubEntityOperation::RemoveExposedEntity(name) => {
+						entity
+							.exposed_entities
+							.as_mut()
+							.expect("RemoveExposedEntity had no exposed entities to remove!")
+							.remove(&name)
+							.expect("RemoveExposedEntity couldn't find exposed entity to remove!");
+					}
+
+					SubEntityOperation::SetExposedInterface(name, implementor) => {
+						entity
+							.exposed_interfaces
+							.get_or_insert(Default::default())
+							.insert(name, implementor);
+					}
+
+					SubEntityOperation::RemoveExposedInterface(name) => {
+						entity
+							.exposed_interfaces
+							.as_mut()
+							.expect("RemoveExposedInterface had no exposed entities to remove!")
+							.remove(&name)
+							.expect(
+								"RemoveExposedInterface couldn't find exposed entity to remove!"
+							);
+					}
+
+					SubEntityOperation::AddSubset(name, ent) => {
+						entity
+							.subsets
+							.get_or_insert(Default::default())
+							.entry(name)
+							.or_default()
+							.push(ent);
+					}
+
+					SubEntityOperation::RemoveSubset(name, ent) => {
+						let ind = entity
+							.subsets
+							.as_ref()
+							.expect("RemoveSubset had no subsets to remove!")
+							.get(&name)
+							.expect("RemoveSubset couldn't find subset to remove from!")
+							.iter()
+							.position(|x| *x == ent);
+
+						entity
+							.subsets
+							.as_mut()
+							.unwrap()
+							.get_mut(&name)
+							.unwrap()
+							.remove(ind.expect(
+								"RemoveSubset couldn't find the entity to remove from the subset!"
+							));
+					}
+
+					SubEntityOperation::RemoveAllSubsetsFor(name) => {
+						entity
+							.subsets
+							.as_mut()
+							.expect("RemoveAllSubsetsFor had no subsets to remove!")
+							.remove(&name)
+							.expect("RemoveAllSubsetsFor couldn't find subset to remove!");
+					}
+				}
+			}
+
+			PatchOperation::AddPropertyOverride(value) => {
+				entity.property_overrides.push(value);
+			}
+
+			PatchOperation::RemovePropertyOverride(value) => {
+				entity.property_overrides.remove(
+					entity
+						.property_overrides
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemovePropertyOverride couldn't find expected value!")
+				);
+			}
+
+			PatchOperation::AddOverrideDelete(value) => {
+				entity.override_deletes.push(value);
+			}
+
+			PatchOperation::RemoveOverrideDelete(value) => {
+				entity.override_deletes.remove(
+					entity
+						.override_deletes
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemoveOverrideDelete couldn't find expected value!")
+				);
+			}
+
+			PatchOperation::AddPinConnectionOverride(value) => {
+				entity.pin_connection_overrides.push(value);
+			}
+
+			PatchOperation::RemovePinConnectionOverride(value) => {
+				entity.pin_connection_overrides.remove(
+					entity
+						.pin_connection_overrides
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemovePinConnectionOverride couldn't find expected value!")
+				);
+			}
+
+			PatchOperation::AddPinConnectionOverrideDelete(value) => {
+				entity.pin_connection_override_deletes.push(value);
+			}
+
+			PatchOperation::RemovePinConnectionOverrideDelete(value) => {
+				entity.pin_connection_override_deletes.remove(
+					entity
+						.pin_connection_override_deletes
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemovePinConnectionOverrideDelete couldn't find expected value!")
+				);
+			}
+
+			PatchOperation::AddExternalScene(value) => {
+				entity.external_scenes.push(value);
+			}
+
+			PatchOperation::RemoveExternalScene(value) => {
+				entity.external_scenes.remove(
+					entity
+						.external_scenes
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemoveExternalScene couldn't find expected value!")
+				);
+			}
+
+			PatchOperation::AddExtraFactoryDependency(value) => {
+				entity.extra_factory_dependencies.push(value);
+			}
+
+			PatchOperation::RemoveExtraFactoryDependency(value) => {
+				entity.extra_factory_dependencies.remove(
+					entity
+						.extra_factory_dependencies
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemoveExtraFactoryDependency couldn't find expected value!")
+				);
+			}
+
+			PatchOperation::AddExtraBlueprintDependency(value) => {
+				entity.extra_blueprint_dependencies.push(value);
+			}
+
+			PatchOperation::RemoveExtraBlueprintDependency(value) => {
+				entity.extra_blueprint_dependencies.remove(
+					entity
+						.extra_blueprint_dependencies
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemoveExtraBlueprintDependency couldn't find expected value!")
+				);
+			}
+
+			PatchOperation::AddComment(value) => {
+				entity.comments.push(value);
+			}
+
+			PatchOperation::RemoveComment(value) => {
+				entity.comments.remove(
+					entity
+						.comments
+						.par_iter()
+						.position_any(|x| *x == value)
+						.expect("RemoveComment couldn't find expected value!")
+				);
+			}
+		}
+	}
 }
 
 #[time_graph::instrument]
-pub fn generate_patch(original: &Value, modified: &Value) -> Value {
-	let mut rfcpatch = json!(diff(original, modified));
+pub fn generate_patch(original: &Entity, modified: &Entity) -> Value {
+	if original.quick_entity_version != modified.quick_entity_version {
+		panic!("Can't create patches between differing QuickEntity versions!")
+	}
 
-	if let Some(pos) =
-		rfcpatch
-			.as_array_mut()
-			.unwrap()
-			.iter()
-			.position(|value| match value.get("path") {
-				Some(path) => path == "/quickEntityVersion",
-				_ => false
-			}) {
-		rfcpatch.as_array_mut().unwrap().remove(pos);
+	let mut patch: Vec<PatchOperation> = vec![];
+
+	let mut original = original.clone();
+	let mut modified = modified.clone();
+
+	if original.root_entity != modified.root_entity {
+		patch.push(PatchOperation::SetRootEntity(
+			modified.root_entity.to_owned()
+		));
+	}
+
+	if original.sub_type != modified.sub_type {
+		patch.push(PatchOperation::SetSubType(modified.sub_type.to_owned()));
+	}
+
+	for entity_id in original.entities.keys() {
+		if !modified.entities.contains_key(entity_id) {
+			patch.push(PatchOperation::RemoveEntityByID(entity_id.to_owned()));
+		}
+	}
+
+	for (entity_id, new_entity_data) in &mut modified.entities {
+		if let Some(old_entity_data) = original.entities.get_mut(entity_id) {
+			if old_entity_data.parent != new_entity_data.parent {
+				patch.push(PatchOperation::SubEntityOperation(
+					entity_id.to_owned(),
+					SubEntityOperation::SetParent(new_entity_data.parent.to_owned())
+				));
+			}
+
+			if old_entity_data.name != new_entity_data.name {
+				patch.push(PatchOperation::SubEntityOperation(
+					entity_id.to_owned(),
+					SubEntityOperation::SetName(new_entity_data.name.to_owned())
+				));
+			}
+
+			if old_entity_data.factory != new_entity_data.factory {
+				patch.push(PatchOperation::SubEntityOperation(
+					entity_id.to_owned(),
+					SubEntityOperation::SetFactory(new_entity_data.factory.to_owned())
+				));
+			}
+
+			if old_entity_data.factory_flag != new_entity_data.factory_flag {
+				patch.push(PatchOperation::SubEntityOperation(
+					entity_id.to_owned(),
+					SubEntityOperation::SetFactoryFlag(new_entity_data.factory_flag.to_owned())
+				));
+			}
+
+			if old_entity_data.blueprint != new_entity_data.blueprint {
+				patch.push(PatchOperation::SubEntityOperation(
+					entity_id.to_owned(),
+					SubEntityOperation::SetBlueprint(new_entity_data.blueprint.to_owned())
+				));
+			}
+
+			if old_entity_data.editor_only != new_entity_data.editor_only {
+				patch.push(PatchOperation::SubEntityOperation(
+					entity_id.to_owned(),
+					SubEntityOperation::SetEditorOnly(new_entity_data.editor_only.to_owned())
+				));
+			}
+
+			if old_entity_data.properties.is_none() {
+				old_entity_data.properties = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.properties.is_none() {
+				new_entity_data.properties = Some(LinkedHashMap::new());
+			}
+
+			for property_name in old_entity_data.properties.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.properties
+					.as_ref()
+					.unwrap()
+					.contains_key(property_name)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemovePropertyByName(property_name.to_owned())
+					));
+				}
+			}
+
+			for (property_name, new_property_data) in new_entity_data.properties.as_ref().unwrap() {
+				if let Some(old_property_data) = old_entity_data
+					.properties
+					.as_ref()
+					.unwrap()
+					.get(property_name)
+				{
+					if old_property_data.property_type != new_property_data.property_type {
+						patch.push(PatchOperation::SubEntityOperation(
+							entity_id.to_owned(),
+							SubEntityOperation::SetPropertyType(
+								property_name.to_owned(),
+								new_property_data.property_type.to_owned()
+							)
+						));
+					}
+
+					if old_property_data.value != new_property_data.value {
+						patch.push(PatchOperation::SubEntityOperation(
+							entity_id.to_owned(),
+							SubEntityOperation::SetPropertyValue {
+								property_name: property_name.to_owned(),
+								value: new_property_data.value.to_owned()
+							}
+						));
+					}
+
+					if old_property_data.post_init != new_property_data.post_init {
+						patch.push(PatchOperation::SubEntityOperation(
+							entity_id.to_owned(),
+							SubEntityOperation::SetPropertyPostInit(
+								property_name.to_owned(),
+								new_property_data.post_init.unwrap_or(false)
+							)
+						));
+					}
+				} else {
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::AddProperty(
+							property_name.to_owned(),
+							new_property_data.to_owned()
+						)
+					));
+				}
+			}
+
+			// Duplicated from above except with an extra layer for platform
+			if old_entity_data.platform_specific_properties.is_none() {
+				old_entity_data.platform_specific_properties = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.platform_specific_properties.is_none() {
+				new_entity_data.platform_specific_properties = Some(LinkedHashMap::new());
+			}
+
+			for platform_name in old_entity_data
+				.platform_specific_properties
+				.as_ref()
+				.unwrap()
+				.keys()
+			{
+				if !new_entity_data
+					.platform_specific_properties
+					.as_ref()
+					.unwrap()
+					.contains_key(platform_name)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(
+							platform_name.to_owned()
+						)
+					));
+				}
+			}
+
+			for (platform_name, new_properties_data) in new_entity_data
+				.platform_specific_properties
+				.as_ref()
+				.unwrap()
+			{
+				if let Some(old_properties_data) = old_entity_data
+					.platform_specific_properties
+					.as_ref()
+					.unwrap()
+					.get(platform_name)
+				{
+					for property_name in old_properties_data.keys() {
+						if !new_entity_data
+							.properties
+							.as_ref()
+							.unwrap()
+							.contains_key(property_name)
+						{
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::RemovePlatformSpecificPropertyByName(
+									platform_name.to_owned(),
+									property_name.to_owned()
+								)
+							));
+						}
+					}
+
+					for (property_name, new_property_data) in new_properties_data {
+						if let Some(old_property_data) = old_properties_data.get(property_name) {
+							if old_property_data.property_type != new_property_data.property_type {
+								patch.push(PatchOperation::SubEntityOperation(
+									entity_id.to_owned(),
+									SubEntityOperation::SetPlatformSpecificPropertyType(
+										platform_name.to_owned(),
+										property_name.to_owned(),
+										new_property_data.property_type.to_owned()
+									)
+								));
+							}
+
+							if old_property_data.value != new_property_data.value {
+								patch.push(PatchOperation::SubEntityOperation(
+									entity_id.to_owned(),
+									SubEntityOperation::SetPlatformSpecificPropertyValue {
+										platform: platform_name.to_owned(),
+										property_name: property_name.to_owned(),
+										value: new_property_data.value.to_owned()
+									}
+								));
+							}
+
+							if old_property_data.post_init != new_property_data.post_init {
+								patch.push(PatchOperation::SubEntityOperation(
+									entity_id.to_owned(),
+									SubEntityOperation::SetPlatformSpecificPropertyPostInit(
+										platform_name.to_owned(),
+										property_name.to_owned(),
+										new_property_data.post_init.unwrap_or(false)
+									)
+								));
+							}
+						} else {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::AddPlatformSpecificProperty(
+									platform_name.to_owned(),
+									property_name.to_owned(),
+									new_property_data.to_owned()
+								)
+							));
+						}
+					}
+				} else {
+					for (property_name, new_property_data) in new_properties_data {
+						patch.push(PatchOperation::SubEntityOperation(
+							entity_id.to_owned(),
+							SubEntityOperation::AddPlatformSpecificProperty(
+								platform_name.to_owned(),
+								property_name.to_owned(),
+								new_property_data.to_owned()
+							)
+						))
+					}
+				}
+			}
+
+			// An egregious amount of code duplication
+			if old_entity_data.events.is_none() {
+				old_entity_data.events = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.events.is_none() {
+				new_entity_data.events = Some(LinkedHashMap::new());
+			}
+
+			for event_name in old_entity_data.events.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.events
+					.as_ref()
+					.unwrap()
+					.contains_key(event_name)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemoveAllEventConnectionsForEvent(
+							event_name.to_owned()
+						)
+					));
+				}
+			}
+
+			for (event_name, new_events_data) in new_entity_data.events.as_ref().unwrap() {
+				if let Some(old_events_data) =
+					old_entity_data.events.as_ref().unwrap().get(event_name)
+				{
+					for trigger_name in old_events_data.keys() {
+						if !new_events_data.contains_key(trigger_name) {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::RemoveAllEventConnectionsForTrigger(
+									event_name.to_owned(),
+									trigger_name.to_owned()
+								)
+							));
+						}
+					}
+
+					for (trigger_name, new_refs_data) in new_events_data {
+						if let Some(old_refs_data) = old_events_data.get(trigger_name) {
+							for i in old_refs_data {
+								if !new_refs_data.contains(i) {
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::RemoveEventConnection(
+											event_name.to_owned(),
+											trigger_name.to_owned(),
+											i.to_owned()
+										)
+									))
+								}
+							}
+
+							for i in new_refs_data {
+								if !old_refs_data.contains(i) {
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::AddEventConnection(
+											event_name.to_owned(),
+											trigger_name.to_owned(),
+											i.to_owned()
+										)
+									))
+								}
+							}
+						} else {
+							for i in new_refs_data {
+								patch.push(PatchOperation::SubEntityOperation(
+									entity_id.to_owned(),
+									SubEntityOperation::AddEventConnection(
+										event_name.to_owned(),
+										trigger_name.to_owned(),
+										i.to_owned()
+									)
+								))
+							}
+						}
+					}
+				} else {
+					for (trigger_name, new_refs_data) in new_events_data {
+						for i in new_refs_data {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::AddEventConnection(
+									event_name.to_owned(),
+									trigger_name.to_owned(),
+									i.to_owned()
+								)
+							))
+						}
+					}
+				}
+			}
+
+			if old_entity_data.input_copying.is_none() {
+				old_entity_data.input_copying = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.input_copying.is_none() {
+				new_entity_data.input_copying = Some(LinkedHashMap::new());
+			}
+
+			for event_name in old_entity_data.input_copying.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.input_copying
+					.as_ref()
+					.unwrap()
+					.contains_key(event_name)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemoveAllInputCopyConnectionsForInput(
+							event_name.to_owned()
+						)
+					));
+				}
+			}
+
+			for (event_name, new_input_copying_data) in
+				new_entity_data.input_copying.as_ref().unwrap()
+			{
+				if let Some(old_input_copying_data) = old_entity_data
+					.input_copying
+					.as_ref()
+					.unwrap()
+					.get(event_name)
+				{
+					for trigger_name in old_input_copying_data.keys() {
+						if !new_input_copying_data.contains_key(trigger_name) {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::RemoveAllInputCopyConnectionsForTrigger(
+									event_name.to_owned(),
+									trigger_name.to_owned()
+								)
+							));
+						}
+					}
+
+					for (trigger_name, new_refs_data) in new_input_copying_data {
+						if let Some(old_refs_data) = old_input_copying_data.get(trigger_name) {
+							for i in old_refs_data {
+								if !new_refs_data.contains(i) {
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::RemoveInputCopyConnection(
+											event_name.to_owned(),
+											trigger_name.to_owned(),
+											i.to_owned()
+										)
+									))
+								}
+							}
+
+							for i in new_refs_data {
+								if !old_refs_data.contains(i) {
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::AddInputCopyConnection(
+											event_name.to_owned(),
+											trigger_name.to_owned(),
+											i.to_owned()
+										)
+									))
+								}
+							}
+						} else {
+							for i in new_refs_data {
+								patch.push(PatchOperation::SubEntityOperation(
+									entity_id.to_owned(),
+									SubEntityOperation::AddInputCopyConnection(
+										event_name.to_owned(),
+										trigger_name.to_owned(),
+										i.to_owned()
+									)
+								))
+							}
+						}
+					}
+				} else {
+					for (trigger_name, new_refs_data) in new_input_copying_data {
+						for i in new_refs_data {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::AddInputCopyConnection(
+									event_name.to_owned(),
+									trigger_name.to_owned(),
+									i.to_owned()
+								)
+							))
+						}
+					}
+				}
+			}
+
+			if old_entity_data.output_copying.is_none() {
+				old_entity_data.output_copying = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.output_copying.is_none() {
+				new_entity_data.output_copying = Some(LinkedHashMap::new());
+			}
+
+			for event_name in old_entity_data.output_copying.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.output_copying
+					.as_ref()
+					.unwrap()
+					.contains_key(event_name)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(
+							event_name.to_owned()
+						)
+					));
+				}
+			}
+
+			for (event_name, new_output_copying_data) in
+				new_entity_data.output_copying.as_ref().unwrap()
+			{
+				if let Some(old_output_copying_data) = old_entity_data
+					.output_copying
+					.as_ref()
+					.unwrap()
+					.get(event_name)
+				{
+					for trigger_name in old_output_copying_data.keys() {
+						if !new_output_copying_data.contains_key(trigger_name) {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::RemoveAllOutputCopyConnectionsForPropagate(
+									event_name.to_owned(),
+									trigger_name.to_owned()
+								)
+							));
+						}
+					}
+
+					for (trigger_name, new_refs_data) in new_output_copying_data {
+						if let Some(old_refs_data) = old_output_copying_data.get(trigger_name) {
+							for i in old_refs_data {
+								if !new_refs_data.contains(i) {
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::RemoveOutputCopyConnection(
+											event_name.to_owned(),
+											trigger_name.to_owned(),
+											i.to_owned()
+										)
+									));
+								}
+							}
+
+							for i in new_refs_data {
+								if !old_refs_data.contains(i) {
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::AddOutputCopyConnection(
+											event_name.to_owned(),
+											trigger_name.to_owned(),
+											i.to_owned()
+										)
+									));
+								}
+							}
+						} else {
+							for i in new_refs_data {
+								patch.push(PatchOperation::SubEntityOperation(
+									entity_id.to_owned(),
+									SubEntityOperation::AddOutputCopyConnection(
+										event_name.to_owned(),
+										trigger_name.to_owned(),
+										i.to_owned()
+									)
+								));
+							}
+						}
+					}
+				} else {
+					for (trigger_name, new_refs_data) in new_output_copying_data {
+						for i in new_refs_data {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::AddOutputCopyConnection(
+									event_name.to_owned(),
+									trigger_name.to_owned(),
+									i.to_owned()
+								)
+							));
+						}
+					}
+				}
+			}
+
+			if old_entity_data.property_aliases.is_none() {
+				old_entity_data.property_aliases = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.property_aliases.is_none() {
+				new_entity_data.property_aliases = Some(LinkedHashMap::new());
+			}
+
+			for alias_name in old_entity_data.property_aliases.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.property_aliases
+					.as_ref()
+					.unwrap()
+					.contains_key(alias_name)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemovePropertyAlias(alias_name.to_owned())
+					));
+				}
+			}
+
+			for (alias_name, new_alias_connections) in
+				new_entity_data.property_aliases.as_ref().unwrap()
+			{
+				if let Some(old_alias_connections) = old_entity_data
+					.property_aliases
+					.as_ref()
+					.unwrap()
+					.get(alias_name)
+				{
+					for connection in new_alias_connections {
+						if !old_alias_connections.contains(connection) {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::AddPropertyAliasConnection(
+									alias_name.to_owned(),
+									connection.to_owned()
+								)
+							));
+						}
+					}
+
+					for connection in old_alias_connections {
+						if !new_alias_connections.contains(connection) {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::RemoveConnectionForPropertyAlias(
+									alias_name.to_owned(),
+									connection.to_owned()
+								)
+							));
+						}
+					}
+				} else {
+					for connection in new_alias_connections {
+						patch.push(PatchOperation::SubEntityOperation(
+							entity_id.to_owned(),
+							SubEntityOperation::AddPropertyAliasConnection(
+								alias_name.to_owned(),
+								connection.to_owned()
+							)
+						));
+					}
+				}
+			}
+
+			if old_entity_data.exposed_entities.is_none() {
+				old_entity_data.exposed_entities = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.exposed_entities.is_none() {
+				new_entity_data.exposed_entities = Some(LinkedHashMap::new());
+			}
+
+			for exposed_entity in old_entity_data.exposed_entities.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.exposed_entities
+					.as_ref()
+					.unwrap()
+					.contains_key(exposed_entity)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemoveExposedEntity(exposed_entity.to_owned())
+					));
+				}
+			}
+
+			for (exposed_entity, data) in new_entity_data.exposed_entities.as_ref().unwrap() {
+				if !old_entity_data
+					.exposed_entities
+					.as_ref()
+					.unwrap()
+					.contains_key(exposed_entity)
+					|| old_entity_data
+						.exposed_entities
+						.as_ref()
+						.unwrap()
+						.get(exposed_entity)
+						.unwrap() != data
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::SetExposedEntity(
+							exposed_entity.to_owned(),
+							data.to_owned()
+						)
+					));
+				}
+			}
+
+			if old_entity_data.exposed_interfaces.is_none() {
+				old_entity_data.exposed_interfaces = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.exposed_interfaces.is_none() {
+				new_entity_data.exposed_interfaces = Some(LinkedHashMap::new());
+			}
+
+			for exposed_interface in old_entity_data.exposed_interfaces.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.exposed_interfaces
+					.as_ref()
+					.unwrap()
+					.contains_key(exposed_interface)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemoveExposedInterface(exposed_interface.to_owned())
+					));
+				}
+			}
+
+			for (exposed_interface, data) in new_entity_data.exposed_interfaces.as_ref().unwrap() {
+				if !old_entity_data
+					.exposed_interfaces
+					.as_ref()
+					.unwrap()
+					.contains_key(exposed_interface)
+					|| old_entity_data
+						.exposed_interfaces
+						.as_ref()
+						.unwrap()
+						.get(exposed_interface)
+						.unwrap() != data
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::SetExposedInterface(
+							exposed_interface.to_owned(),
+							data.to_owned()
+						)
+					));
+				}
+			}
+
+			if old_entity_data.subsets.is_none() {
+				old_entity_data.subsets = Some(LinkedHashMap::new());
+			}
+
+			if new_entity_data.subsets.is_none() {
+				new_entity_data.subsets = Some(LinkedHashMap::new());
+			}
+
+			for subset_name in old_entity_data.subsets.as_ref().unwrap().keys() {
+				if !new_entity_data
+					.subsets
+					.as_ref()
+					.unwrap()
+					.contains_key(subset_name)
+				{
+					patch.push(PatchOperation::SubEntityOperation(
+						entity_id.to_owned(),
+						SubEntityOperation::RemoveAllSubsetsFor(subset_name.to_owned())
+					));
+				}
+			}
+
+			for (subset_name, new_refs_data) in new_entity_data.subsets.as_ref().unwrap() {
+				if let Some(old_refs_data) =
+					old_entity_data.subsets.as_ref().unwrap().get(subset_name)
+				{
+					for i in old_refs_data {
+						if !new_refs_data.contains(i) {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::RemoveSubset(
+									subset_name.to_owned(),
+									i.to_owned()
+								)
+							));
+						}
+					}
+
+					for i in new_refs_data {
+						if !old_refs_data.contains(i) {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::AddSubset(subset_name.to_owned(), i.to_owned())
+							));
+						}
+					}
+				} else {
+					for i in new_refs_data {
+						patch.push(PatchOperation::SubEntityOperation(
+							entity_id.to_owned(),
+							SubEntityOperation::AddSubset(subset_name.to_owned(), i.to_owned())
+						));
+					}
+				}
+			}
+		} else {
+			patch.push(PatchOperation::AddEntity(
+				entity_id.to_owned(),
+				Box::new(new_entity_data.to_owned())
+			));
+		}
+	}
+
+	for x in &original.property_overrides {
+		if !modified.property_overrides.contains(x) {
+			patch.push(PatchOperation::RemovePropertyOverride(x.to_owned()))
+		}
+	}
+
+	for x in &modified.property_overrides {
+		if !original.property_overrides.contains(x) {
+			patch.push(PatchOperation::AddPropertyOverride(x.to_owned()))
+		}
+	}
+
+	for x in &original.override_deletes {
+		if !modified.override_deletes.contains(x) {
+			patch.push(PatchOperation::RemoveOverrideDelete(x.to_owned()))
+		}
+	}
+
+	for x in &modified.override_deletes {
+		if !original.override_deletes.contains(x) {
+			patch.push(PatchOperation::AddOverrideDelete(x.to_owned()))
+		}
+	}
+
+	for x in &original.pin_connection_overrides {
+		if !modified.pin_connection_overrides.contains(x) {
+			patch.push(PatchOperation::RemovePinConnectionOverride(x.to_owned()))
+		}
+	}
+
+	for x in &modified.pin_connection_overrides {
+		if !original.pin_connection_overrides.contains(x) {
+			patch.push(PatchOperation::AddPinConnectionOverride(x.to_owned()))
+		}
+	}
+
+	for x in &original.pin_connection_override_deletes {
+		if !modified.pin_connection_override_deletes.contains(x) {
+			patch.push(PatchOperation::RemovePinConnectionOverrideDelete(
+				x.to_owned()
+			))
+		}
+	}
+
+	for x in &modified.pin_connection_override_deletes {
+		if !original.pin_connection_override_deletes.contains(x) {
+			patch.push(PatchOperation::AddPinConnectionOverrideDelete(x.to_owned()))
+		}
+	}
+
+	for x in &original.external_scenes {
+		if !modified.external_scenes.contains(x) {
+			patch.push(PatchOperation::RemoveExternalScene(x.to_owned()))
+		}
+	}
+
+	for x in &modified.external_scenes {
+		if !original.external_scenes.contains(x) {
+			patch.push(PatchOperation::AddExternalScene(x.to_owned()))
+		}
+	}
+
+	for x in &original.extra_factory_dependencies {
+		if !modified.extra_factory_dependencies.contains(x) {
+			patch.push(PatchOperation::RemoveExtraFactoryDependency(x.to_owned()))
+		}
+	}
+
+	for x in &modified.extra_factory_dependencies {
+		if !original.extra_factory_dependencies.contains(x) {
+			patch.push(PatchOperation::AddExtraFactoryDependency(x.to_owned()))
+		}
+	}
+
+	for x in &original.extra_blueprint_dependencies {
+		if !modified.extra_blueprint_dependencies.contains(x) {
+			patch.push(PatchOperation::RemoveExtraBlueprintDependency(x.to_owned()))
+		}
+	}
+
+	for x in &modified.extra_blueprint_dependencies {
+		if !original.extra_blueprint_dependencies.contains(x) {
+			patch.push(PatchOperation::AddExtraBlueprintDependency(x.to_owned()))
+		}
+	}
+
+	for x in &original.comments {
+		if !modified.comments.contains(x) {
+			patch.push(PatchOperation::RemoveComment(x.to_owned()))
+		}
+	}
+
+	for x in &modified.comments {
+		if !original.comments.contains(x) {
+			patch.push(PatchOperation::AddComment(x.to_owned()))
+		}
 	}
 
 	json!({
-		"tempHash": modified.get("tempHash").expect("Failed to get tempHash"),
-		"tbluHash": modified.get("tbluHash").expect("Failed to get tbluHash"),
-		"patch": rfcpatch,
-		"patchVersion": 5
+		"tempHash": modified.factory_hash,
+		"tbluHash": modified.blueprint_hash,
+		"patch": patch,
+		"patchVersion": 6
 	})
 }
 
@@ -1388,7 +3120,7 @@ pub fn convert_to_qn(
 				0 => SubType::Template,
 				_ => panic!("Invalid subtype")
 			},
-			quick_entity_version: 3.0,
+			quick_entity_version: 3.1,
 			extra_factory_dependencies: vec![],
 			extra_blueprint_dependencies: vec![],
 			comments: vec![]
