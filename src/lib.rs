@@ -873,7 +873,26 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value) {
 					entity
 						.external_scenes
 						.par_iter()
-						.position_any(|x| *x == value)
+						.position_any(|x| {
+							*x == value
+								|| value
+									== format!(
+										"00{}",
+										format!("{:X}", md5::compute(x))
+											.chars()
+											.skip(2)
+											.take(14)
+											.collect::<String>()
+									) || *x
+								== format!(
+									"00{}",
+									format!("{:X}", md5::compute(&value))
+										.chars()
+										.skip(2)
+										.take(14)
+										.collect::<String>()
+								)
+						})
 						.expect("RemoveExternalScene couldn't find expected value!")
 				);
 			}
@@ -3163,6 +3182,7 @@ pub fn convert_to_qn(
 
 	{
 		let depends = get_blueprint_dependencies(&entity);
+
 		entity.extra_blueprint_dependencies = blueprint_meta
 			.hash_reference_data
 			.iter()
