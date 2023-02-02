@@ -8,6 +8,8 @@ use quickentity_rs::{
 	convert_to_rt, generate_patch
 };
 
+use serde_json::from_slice;
+
 use io_utils::*;
 
 #[derive(Parser)]
@@ -115,7 +117,11 @@ enum PatchCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
+		profile: bool,
+
+		/// Mitigate a serde-json issue where numbers are sometimes not considered equal by parsing JSON files twice.
+		#[clap(long, action)]
+		format_fix: bool
 	},
 
 	/// Apply a patch JSON to an entity JSON file.
@@ -240,15 +246,24 @@ fn main() {
 					input1,
 					input2,
 					output,
-					profile
+					profile,
+					format_fix
 				}
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
 			}
 
-			let entity1 = read_as_entity(&input1);
-			let entity2 = read_as_entity(&input2);
+			let mut entity1 = read_as_entity(&input1);
+			let mut entity2 = read_as_entity(&input2);
+
+			if format_fix {
+				entity1 = from_slice(&to_vec_float_format(&entity1))
+					.expect("Failed to re-open file as JSON");
+
+				entity2 = from_slice(&to_vec_float_format(&entity2))
+					.expect("Failed to re-open file as JSON");
+			}
 
 			let patch = generate_patch(&entity1, &entity2);
 
