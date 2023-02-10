@@ -15,7 +15,7 @@ fn main() {
 	eframe::run_native(
 		"QuickEntity GUI",
 		eframe::NativeOptions::default(),
-		Box::new(|cc| Box::new(App::new(cc)))
+		Box::new(|cc| Box::new(App::new(cc))),
 	);
 }
 pub struct App {}
@@ -131,7 +131,7 @@ impl eframe::App for App {
 
 					fs::write(
 						&output_factory_meta,
-						to_vec_float_format(&converted_fac_meta)
+						to_vec_float_format(&converted_fac_meta),
 					)
 					.unwrap();
 
@@ -139,7 +139,7 @@ impl eframe::App for App {
 
 					fs::write(
 						&output_blueprint_meta,
-						to_vec_float_format(&converted_blu_meta)
+						to_vec_float_format(&converted_blu_meta),
 					)
 					.unwrap();
 				});

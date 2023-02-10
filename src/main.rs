@@ -5,7 +5,7 @@ use std::fs;
 
 use quickentity_rs::{
 	apply_patch, convert_modern_blueprint_to_2016, convert_modern_factory_to_2016, convert_to_qn,
-	convert_to_rt, generate_patch
+	convert_to_rt, generate_patch,
 };
 
 use serde_json::from_slice;
@@ -16,7 +16,7 @@ use io_utils::*;
 #[clap(author = "Atampy26", version, about = "A tool for parsing ResourceTool/RPKG entity JSON files into a more readable format and back again.", long_about = None)]
 struct Args {
 	#[clap(subcommand)]
-	command: Command
+	command: Command,
 }
 
 #[derive(Subcommand)]
@@ -24,14 +24,14 @@ enum Command {
 	// Convert between RT/RPKG source files and QuickEntity entity JSON files.
 	Entity {
 		#[clap(subcommand)]
-		subcommand: EntityCommand
+		subcommand: EntityCommand,
 	},
 
 	// Generate or apply a QuickEntity patch JSON.
 	Patch {
 		#[clap(subcommand)]
-		subcommand: PatchCommand
-	}
+		subcommand: PatchCommand,
+	},
 }
 
 #[derive(Subcommand)]
@@ -64,7 +64,7 @@ enum EntityCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
+		profile: bool,
 	},
 
 	/// Generate a set of JSON files from a QuickEntity JSON file.
@@ -95,8 +95,8 @@ enum EntityCommand {
 
 		/// Output RT JSON files compatible with HITMAN (2016).
 		#[clap(long, action)]
-		h1: bool
-	}
+		h1: bool,
+	},
 }
 
 #[derive(Subcommand)]
@@ -121,7 +121,7 @@ enum PatchCommand {
 
 		/// Mitigate a serde-json issue where numbers are sometimes not considered equal by parsing JSON files twice.
 		#[clap(long, action)]
-		format_fix: bool
+		format_fix: bool,
 	},
 
 	/// Apply a patch JSON to an entity JSON file.
@@ -144,8 +144,8 @@ enum PatchCommand {
 
 		/// Be more permissive with certain unexpected scenarios, such as properties that should be removed already being gone.
 		#[clap(long, action)]
-		permissive: bool
-	}
+		permissive: bool,
+	},
 }
 
 fn main() {
@@ -161,8 +161,8 @@ fn main() {
 					input_blueprint_meta,
 					output,
 					lossless,
-					profile
-				}
+					profile,
+				},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -178,7 +178,7 @@ fn main() {
 				&factory_meta,
 				&blueprint,
 				&blueprint_meta,
-				lossless
+				lossless,
 			);
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
@@ -197,8 +197,8 @@ fn main() {
 					output_blueprint,
 					output_blueprint_meta,
 					profile,
-					h1
-				}
+					h1,
+				},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -220,7 +220,7 @@ fn main() {
 
 			fs::write(
 				&output_factory_meta,
-				to_vec_float_format(&converted_fac_meta)
+				to_vec_float_format(&converted_fac_meta),
 			)
 			.unwrap();
 
@@ -235,7 +235,7 @@ fn main() {
 
 			fs::write(
 				&output_blueprint_meta,
-				to_vec_float_format(&converted_blu_meta)
+				to_vec_float_format(&converted_blu_meta),
 			)
 			.unwrap();
 
@@ -251,8 +251,8 @@ fn main() {
 					input2,
 					output,
 					profile,
-					format_fix
-				}
+					format_fix,
+				},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -285,8 +285,8 @@ fn main() {
 					patch,
 					output,
 					profile,
-					permissive
-				}
+					permissive,
+				},
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
