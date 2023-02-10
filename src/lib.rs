@@ -36,7 +36,7 @@ const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
 
 #[time_graph::instrument]
-pub fn apply_patch(entity: &mut Entity, patch: &Value) {
+pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 	let patch: Vec<PatchOperation> = from_value(
 		patch
 			.get("patch")
@@ -56,7 +56,17 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value) {
 			}
 
 			PatchOperation::RemoveEntityByID(value) => {
-				entity.entities.remove(&value);
+				if entity.entities.remove(&value).is_none() {
+					if permissive {
+						println!(
+							"QuickEntity warning: couldn't remove entity by ID because entity did not exist in target"
+						);
+					} else {
+						panic!(
+							"Couldn't remove entity by ID because entity did not exist in target!"
+						);
+					}
+				}
 			}
 
 			PatchOperation::AddEntity(id, data) => {
@@ -102,12 +112,19 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value) {
 					}
 
 					SubEntityOperation::RemovePropertyByName(name) => {
-						entity
+						if entity
 							.properties
 							.as_mut()
 							.expect("RemovePropertyByName couldn't find properties!")
 							.remove(&name)
-							.expect("RemovePropertyByName couldn't find expected property!");
+							.is_none()
+						{
+							if permissive {
+								println!("QuickEntity warning: RemovePropertyByName couldn't find expected property");
+							} else {
+								panic!("RemovePropertyByName couldn't find expected property!");
+							}
+						}
 
 						if entity.properties.as_ref().unwrap().is_empty() {
 							entity.properties = None;
@@ -154,14 +171,19 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value) {
 					}
 
 					SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
-						entity
+						if entity
 							.platform_specific_properties
 							.as_mut()
 							.expect("RemovePSPropertiesForPlatform couldn't find properties!")
 							.remove(&name)
-							.expect(
-								"RemovePSPropertiesForPlatform couldn't find platform to remove!"
-							);
+							.is_none()
+						{
+							if permissive {
+								println!("QuickEntity warning: RemovePSPropertiesForPlatform couldn't find platform to remove");
+							} else {
+								panic!("RemovePSPropertiesForPlatform couldn't find platform to remove!");
+							}
+						}
 
 						if entity
 							.platform_specific_properties
@@ -174,13 +196,21 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value) {
 					}
 
 					SubEntityOperation::RemovePlatformSpecificPropertyByName(platform, name) => {
-						entity
+						if entity
 							.platform_specific_properties
 							.as_mut()
 							.expect("RemovePSPropertyByName couldn't find properties!")
 							.get_mut(&platform)
 							.expect("RemovePSPropertyByName couldn't find platform!")
-							.remove(&name);
+							.remove(&name)
+							.is_none()
+						{
+							if permissive {
+								println!("QuickEntity warning: RemovePSPropertyByName couldn't find property to remove");
+							} else {
+								panic!("RemovePSPropertyByName couldn't find property to remove!");
+							}
+						}
 
 						if entity
 							.platform_specific_properties

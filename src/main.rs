@@ -140,7 +140,11 @@ enum PatchCommand {
 
 		/// Display performance data once finished.
 		#[clap(long, action)]
-		profile: bool
+		profile: bool,
+
+		/// Be more permissive with certain unexpected scenarios, such as properties that should be removed already being gone.
+		#[clap(long, action)]
+		permissive: bool
 	}
 }
 
@@ -275,12 +279,14 @@ fn main() {
 		}
 
 		Command::Patch {
-			subcommand: PatchCommand::Apply {
-				input,
-				patch,
-				output,
-				profile
-			}
+			subcommand:
+				PatchCommand::Apply {
+					input,
+					patch,
+					output,
+					profile,
+					permissive
+				}
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -289,7 +295,7 @@ fn main() {
 			let mut entity = read_as_entity(&input);
 			let patch = read_as_value(&patch);
 
-			apply_patch(&mut entity, &patch);
+			apply_patch(&mut entity, &patch, permissive);
 
 			fs::write(&output, to_vec_float_format(&entity)).unwrap();
 

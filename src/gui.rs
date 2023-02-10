@@ -215,7 +215,7 @@ impl eframe::App for App {
 					let mut entity = read_as_entity(&input);
 					let patch = read_as_value(&patch);
 
-					apply_patch(&mut entity, &patch);
+					apply_patch(&mut entity, &patch, false);
 
 					fs::write(&output, to_vec_float_format(&entity)).unwrap();
 				});
