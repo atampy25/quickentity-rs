@@ -24,6 +24,7 @@ egui_extras = { version = "0.19.0", features = ["image"] }
 image = { version = "0.24", features = ["png"] }
 eframe = "0.19.0"
 rfd = "0.10.0"
+similar = "2.2.1"
 
 [dev-dependencies]
 criterion = "0.4.0"

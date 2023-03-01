@@ -60,6 +60,7 @@ pub enum SubEntityOperation {
 		#[ts(type = "any")]
 		value: Value
 	},
+	PatchArrayPropertyValue(String, Vec<ArrayPatchOperation>),
 	SetPropertyPostInit(String, bool),
 	RemovePropertyByName(String),
 
@@ -73,6 +74,7 @@ pub enum SubEntityOperation {
 		#[ts(type = "any")]
 		value: Value
 	},
+	PatchPlatformSpecificArrayPropertyValue(String, String, Vec<ArrayPatchOperation>),
 	SetPlatformSpecificPropertyPostInit(String, String, bool),
 	RemovePlatformSpecificPropertyByName(String, String),
 	RemovePlatformSpecificPropertiesForPlatform(String),
@@ -105,4 +107,13 @@ pub enum SubEntityOperation {
 	AddSubset(String, String),
 	RemoveSubset(String, String),
 	RemoveAllSubsetsFor(String)
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
+#[ts(export)]
+pub enum ArrayPatchOperation {
+	RemoveItemByValue(#[ts(type = "any")] Value),
+	AddItemAfter(#[ts(type = "any")] Value, #[ts(type = "any")] Value),
+	AddItemBefore(#[ts(type = "any")] Value, #[ts(type = "any")] Value),
+	AddItem(#[ts(type = "any")] Value)
 }

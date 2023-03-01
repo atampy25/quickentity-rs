@@ -6,17 +6,20 @@ pub mod rt_structs;
 pub mod util_structs;
 
 use linked_hash_map::LinkedHashMap;
-use patch_structs::{PatchOperation, SubEntityOperation};
+use patch_structs::{ArrayPatchOperation, PatchOperation, SubEntityOperation};
 use rt_2016_structs::{
 	RTBlueprint2016, RTFactory2016, SEntityTemplatePinConnection2016, STemplateSubEntity,
 	STemplateSubEntityBlueprint
 };
+use serde::{Deserialize, Serialize};
+use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::collections::HashMap;
 
 use itertools::Itertools;
 use rayon::prelude::*;
-use serde_json::{from_value, json, to_value, Value};
+use serde_json::{from_value, json, to_string, to_value, Value};
 
+use core::hash::Hash;
 use qn_structs::{
 	Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty,
 	PinConnectionOverride, PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride,
@@ -34,6 +37,66 @@ use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceI
 
 const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
+
+// A frankly terrible implementation of Hash and PartialOrd/Ord for Value
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct DiffableValue(Value);
+
+impl Hash for DiffableValue {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		to_string(&self.0)
+			.expect("Couldn't serialise DiffableValue!")
+			.hash(state);
+	}
+}
+
+impl PartialEq for DiffableValue {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
+	}
+}
+
+impl Eq for DiffableValue {}
+
+impl PartialOrd for DiffableValue {
+	fn ge(&self, other: &Self) -> bool {
+		to_string(&self.0)
+			.expect("Couldn't serialise DiffableValue 1!")
+			.ge(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+	}
+
+	fn le(&self, other: &Self) -> bool {
+		to_string(&self.0)
+			.expect("Couldn't serialise DiffableValue 1!")
+			.le(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+	}
+
+	fn gt(&self, other: &Self) -> bool {
+		to_string(&self.0)
+			.expect("Couldn't serialise DiffableValue 1!")
+			.gt(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+	}
+
+	fn lt(&self, other: &Self) -> bool {
+		to_string(&self.0)
+			.expect("Couldn't serialise DiffableValue 1!")
+			.lt(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+	}
+
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		to_string(&self.0)
+			.expect("Couldn't serialise DiffableValue 1!")
+			.partial_cmp(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+	}
+}
+
+impl Ord for DiffableValue {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		to_string(&self.0)
+			.expect("Couldn't serialise DiffableValue 1!")
+			.cmp(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+	}
+}
 
 #[time_graph::instrument]
 pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
@@ -152,6 +215,16 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 							.value = value;
 					}
 
+					SubEntityOperation::PatchArrayPropertyValue(property_name, array_patch) => {
+						let item_to_patch = entity
+							.properties
+							.get_or_insert(Default::default())
+							.get_mut(&property_name)
+							.expect("PatchArrayPropertyValue couldn't find expected property!");
+
+						apply_array_patch(&mut item_to_patch.value, array_patch, permissive);
+					}
+
 					SubEntityOperation::SetPropertyPostInit(name, value) => {
 						entity
 							.properties
@@ -263,6 +336,23 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 							.get_mut(&property_name)
 							.expect("SetPSPropertyValue couldn't find expected property!")
 							.value = value;
+					}
+
+					SubEntityOperation::PatchPlatformSpecificArrayPropertyValue(
+						platform,
+						property_name,
+						array_patch
+					) => {
+						let item_to_patch = entity
+							.platform_specific_properties
+							.as_mut()
+							.expect("PatchPSArrayPropertyValue couldn't find properties!")
+							.get_mut(&platform)
+							.expect("PatchPSArrayPropertyValue couldn't find expected platform!")
+							.get_mut(&property_name)
+							.expect("PatchPSArrayPropertyValue couldn't find expected property!");
+
+						apply_array_patch(&mut item_to_patch.value, array_patch, permissive);
 					}
 
 					SubEntityOperation::SetPlatformSpecificPropertyPostInit(
@@ -973,6 +1063,55 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 }
 
 #[time_graph::instrument]
+pub fn apply_array_patch(arr: &mut Value, patch: Vec<ArrayPatchOperation>, permissive: bool) {
+	let arr = arr
+		.as_array_mut()
+		.expect("Array patch was given a non-array value to patch!");
+
+	for op in patch {
+		match op {
+			ArrayPatchOperation::RemoveItemByValue(val) => {
+				arr.retain(|x| *x != val);
+			}
+
+			ArrayPatchOperation::AddItemAfter(val, new) => {
+				let new = new.to_owned();
+
+				if let Some(pos) = arr.iter().position(|x| *x == val) {
+					arr.insert(pos + 1, new);
+				} else if permissive {
+					println!(
+						"QuickEntity warning: couldn't find value to add after in array patch"
+					);
+					arr.push(new);
+				} else {
+					panic!("Couldn't find value to add after in array patch!");
+				}
+			}
+
+			ArrayPatchOperation::AddItemBefore(val, new) => {
+				let new = new.to_owned();
+
+				if let Some(pos) = arr.iter().position(|x| *x == val) {
+					arr.insert(pos, new);
+				} else if permissive {
+					println!(
+						"QuickEntity warning: couldn't find value to add before in array patch"
+					);
+					arr.push(new);
+				} else {
+					panic!("Couldn't find value to add before in array patch!");
+				}
+			}
+
+			ArrayPatchOperation::AddItem(val) => {
+				arr.push(val);
+			}
+		}
+	}
+}
+
+#[time_graph::instrument]
 pub fn generate_patch(original: &Entity, modified: &Entity) -> Value {
 	if original.quick_entity_version != modified.quick_entity_version {
 		panic!("Can't create patches between differing QuickEntity versions!")
@@ -1083,13 +1222,109 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Value {
 					}
 
 					if old_property_data.value != new_property_data.value {
-						patch.push(PatchOperation::SubEntityOperation(
-							entity_id.to_owned(),
-							SubEntityOperation::SetPropertyValue {
-								property_name: property_name.to_owned(),
-								value: new_property_data.value.to_owned()
+						if old_property_data.value.is_array()
+							&& new_property_data.value.is_array()
+							&& old_property_data.property_type != "ZCurve"
+							&& new_property_data.property_type != "ZCurve"
+						{
+							let old_value = old_property_data
+								.value
+								.as_array()
+								.unwrap()
+								.iter()
+								.map(|x| DiffableValue(x.to_owned()))
+								.collect::<Vec<_>>();
+
+							let new_value = new_property_data
+								.value
+								.as_array()
+								.unwrap()
+								.iter()
+								.map(|x| DiffableValue(x.to_owned()))
+								.collect::<Vec<_>>();
+
+							let mut ops = vec![];
+
+							for diff_result in
+								capture_diff_slices(Algorithm::Patience, &old_value, &new_value)
+							{
+								match diff_result {
+									DiffOp::Replace {
+										old_index,
+										new_index,
+										..
+									} => {
+										ops.push(ArrayPatchOperation::RemoveItemByValue(
+											old_value[old_index].0.to_owned()
+										));
+
+										if let Some(prev) = old_value.get(old_index - 1) {
+											ops.push(ArrayPatchOperation::AddItemAfter(
+												prev.0.to_owned(),
+												new_value[new_index].0.to_owned()
+											));
+										} else if let Some(next) = old_value.get(old_index + 1) {
+											ops.push(ArrayPatchOperation::AddItemBefore(
+												next.0.to_owned(),
+												new_value[new_index].0.to_owned()
+											));
+										} else {
+											ops.push(ArrayPatchOperation::AddItem(
+												new_value[new_index].0.to_owned()
+											));
+										}
+									}
+
+									DiffOp::Delete {
+										old_index, old_len, ..
+									} => {
+										ops.push(ArrayPatchOperation::RemoveItemByValue(
+											old_value[old_index].0.to_owned()
+										));
+									}
+
+									DiffOp::Insert {
+										old_index,
+										new_index,
+										..
+									} => {
+										if let Some(prev) = old_value.get(old_index - 1) {
+											ops.push(ArrayPatchOperation::AddItemAfter(
+												prev.0.to_owned(),
+												new_value[new_index].0.to_owned()
+											));
+										} else if let Some(next) = old_value.get(0) {
+											ops.push(ArrayPatchOperation::AddItemBefore(
+												next.0.to_owned(),
+												new_value[new_index].0.to_owned()
+											));
+										} else {
+											ops.push(ArrayPatchOperation::AddItem(
+												new_value[new_index].0.to_owned()
+											));
+										}
+									}
+
+									DiffOp::Equal { .. } => {}
+								}
 							}
-						));
+
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::PatchArrayPropertyValue(
+									property_name.to_owned(),
+									ops
+								)
+							));
+						} else {
+							patch.push(PatchOperation::SubEntityOperation(
+								entity_id.to_owned(),
+								SubEntityOperation::SetPropertyValue {
+									property_name: property_name.to_owned(),
+									value: new_property_data.value.to_owned()
+								}
+							));
+						}
 					}
 
 					if old_property_data.post_init != new_property_data.post_init {
