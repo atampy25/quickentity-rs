@@ -1252,56 +1252,66 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Value {
 									DiffOp::Replace {
 										old_index,
 										new_index,
-										..
+										old_len,
+										new_len
 									} => {
-										ops.push(ArrayPatchOperation::RemoveItemByValue(
-											old_value[old_index].0.to_owned()
-										));
+										for i in 0..old_len {
+											ops.push(ArrayPatchOperation::RemoveItemByValue(
+												old_value[old_index + i].0.to_owned()
+											));
+										}
 
-										if let Some(prev) = old_value.get(old_index - 1) {
-											ops.push(ArrayPatchOperation::AddItemAfter(
-												prev.0.to_owned(),
-												new_value[new_index].0.to_owned()
-											));
-										} else if let Some(next) = old_value.get(old_index + 1) {
-											ops.push(ArrayPatchOperation::AddItemBefore(
-												next.0.to_owned(),
-												new_value[new_index].0.to_owned()
-											));
-										} else {
-											ops.push(ArrayPatchOperation::AddItem(
-												new_value[new_index].0.to_owned()
-											));
+										for i in (0..new_len).rev() {
+											if let Some(prev) = old_value.get(old_index - 1) {
+												ops.push(ArrayPatchOperation::AddItemAfter(
+													prev.0.to_owned(),
+													new_value[new_index + i].0.to_owned()
+												));
+											} else if let Some(next) = old_value.get(old_index + 1)
+											{
+												ops.push(ArrayPatchOperation::AddItemBefore(
+													next.0.to_owned(),
+													new_value[new_index + i].0.to_owned()
+												));
+											} else {
+												ops.push(ArrayPatchOperation::AddItem(
+													new_value[new_index + i].0.to_owned()
+												));
+											}
 										}
 									}
 
 									DiffOp::Delete {
 										old_index, old_len, ..
 									} => {
-										ops.push(ArrayPatchOperation::RemoveItemByValue(
-											old_value[old_index].0.to_owned()
-										));
+										for i in 0..old_len {
+											ops.push(ArrayPatchOperation::RemoveItemByValue(
+												old_value[old_index + i].0.to_owned()
+											));
+										}
 									}
 
 									DiffOp::Insert {
 										old_index,
 										new_index,
-										..
+										new_len
 									} => {
-										if let Some(prev) = old_value.get(old_index - 1) {
-											ops.push(ArrayPatchOperation::AddItemAfter(
-												prev.0.to_owned(),
-												new_value[new_index].0.to_owned()
-											));
-										} else if let Some(next) = old_value.get(0) {
-											ops.push(ArrayPatchOperation::AddItemBefore(
-												next.0.to_owned(),
-												new_value[new_index].0.to_owned()
-											));
-										} else {
-											ops.push(ArrayPatchOperation::AddItem(
-												new_value[new_index].0.to_owned()
-											));
+										for i in (0..new_len).rev() {
+											if let Some(prev) = old_value.get(old_index - 1) {
+												ops.push(ArrayPatchOperation::AddItemAfter(
+													prev.0.to_owned(),
+													new_value[new_index + i].0.to_owned()
+												));
+											} else if let Some(next) = old_value.get(0) {
+												ops.push(ArrayPatchOperation::AddItemBefore(
+													next.0.to_owned(),
+													new_value[new_index + i].0.to_owned()
+												));
+											} else {
+												ops.push(ArrayPatchOperation::AddItem(
+													new_value[new_index + i].0.to_owned()
+												));
+											}
 										}
 									}
 
