@@ -6,7 +6,9 @@ pub mod rt_structs;
 pub mod util_structs;
 
 use linked_hash_map::LinkedHashMap;
-use patch_structs::{ArrayPatchOperation, PatchOperation, SubEntityOperation};
+use patch_structs::{
+	ArrayPatchOperation, PatchOperation, PropertyOverrideConnection, SubEntityOperation
+};
 use rt_2016_structs::{
 	RTBlueprint2016, RTFactory2016, SEntityTemplatePinConnection2016, STemplateSubEntity,
 	STemplateSubEntityBlueprint
@@ -95,6 +97,48 @@ impl Ord for DiffableValue {
 		to_string(&self.0)
 			.expect("Couldn't serialise DiffableValue 1!")
 			.cmp(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+	}
+}
+
+#[time_graph::instrument]
+fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenProperty) -> bool {
+	p1.property_type == p2.property_type && {
+		if p1.property_type == "SMatrix43" {
+			let p1 = p1.value.as_object().unwrap();
+			let p2 = p2.value.as_object().unwrap();
+
+			// scale X, Y and Z have the same values (to 2 decimal places) or if either scale doesn't exist assume they're the same
+			let scales_roughly_identical = if p1.get("scale").is_some() && p2.get("scale").is_some()
+			{
+				format!(
+					"{:.2}",
+					p1.get("scale").unwrap().get("x").unwrap().as_f64().unwrap()
+				) == format!(
+					"{:.2}",
+					p2.get("scale").unwrap().get("x").unwrap().as_f64().unwrap()
+				) && format!(
+					"{:.2}",
+					p1.get("scale").unwrap().get("y").unwrap().as_f64().unwrap()
+				) == format!(
+					"{:.2}",
+					p2.get("scale").unwrap().get("y").unwrap().as_f64().unwrap()
+				) && format!(
+					"{:.2}",
+					p1.get("scale").unwrap().get("z").unwrap().as_f64().unwrap()
+				) == format!(
+					"{:.2}",
+					p2.get("scale").unwrap().get("z").unwrap().as_f64().unwrap()
+				)
+			} else {
+				true
+			};
+
+			p1.get("rotation").unwrap() == p2.get("rotation").unwrap()
+				&& p1.get("position").unwrap() == p2.get("position").unwrap()
+				&& scales_roughly_identical
+		} else {
+			p1.value == p2.value
+		}
 	}
 }
 
@@ -940,6 +984,180 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 						.position_any(|x| *x == value)
 						.expect("RemovePropertyOverride couldn't find expected value!")
 				);
+			}
+
+			PatchOperation::AddPropertyOverrideConnection(value) => {
+				let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
+
+				for property_override in &entity.property_overrides {
+					for ent in &property_override.entities {
+						for (prop_name, prop_override) in &property_override.properties {
+							unravelled_overrides.push(PropertyOverride {
+								entities: vec![ent.to_owned()],
+								properties: {
+									let mut x = LinkedHashMap::new();
+									x.insert(prop_name.to_owned(), prop_override.to_owned());
+									x
+								}
+							});
+						}
+					}
+				}
+
+				unravelled_overrides.push(PropertyOverride {
+					entities: vec![value.entity],
+					properties: {
+						let mut x = LinkedHashMap::new();
+						x.insert(
+							value.property_name.to_owned(),
+							value.property_override.to_owned()
+						);
+						x
+					}
+				});
+
+				let mut merged_overrides: Vec<PropertyOverride> = vec![];
+
+				let mut pass1: Vec<PropertyOverride> = Vec::default();
+
+				for property_override in unravelled_overrides {
+					// if same entity being overridden, merge props
+					if let Some(found) = pass1
+						.iter_mut()
+						.find(|x| x.entities == property_override.entities)
+					{
+						found.properties.extend(property_override.properties);
+					} else {
+						pass1.push(PropertyOverride {
+							entities: property_override.entities,
+							properties: property_override.properties
+						});
+					}
+				}
+
+				// merge entities when same props being overridden
+				for property_override in pass1 {
+					if let Some(found) = merged_overrides.iter_mut().find(|x| {
+						let contain_same_keys = x
+							.properties
+							.iter()
+							.all(|(y, _)| property_override.properties.contains_key(y))
+							&& property_override
+								.properties
+								.iter()
+								.all(|(y, _)| x.properties.contains_key(y));
+
+						// short-circuit
+						if !contain_same_keys {
+							return false;
+						}
+
+						let values_are_identical =
+							x.properties.iter().all(|(prop_name, prop_val)| {
+								property_is_roughly_identical(
+									prop_val,
+									&property_override.properties[prop_name]
+								)
+							});
+
+						// Properties are identical when they contain the same properties and each property's value is roughly identical
+						values_are_identical
+					}) {
+						found.entities.extend(property_override.entities);
+					} else {
+						merged_overrides.push(property_override);
+					}
+				}
+
+				entity.property_overrides = merged_overrides;
+			}
+
+			PatchOperation::RemovePropertyOverrideConnection(value) => {
+				let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
+
+				for property_override in &entity.property_overrides {
+					for ent in &property_override.entities {
+						for (prop_name, prop_override) in &property_override.properties {
+							unravelled_overrides.push(PropertyOverride {
+								entities: vec![ent.to_owned()],
+								properties: {
+									let mut x = LinkedHashMap::new();
+									x.insert(prop_name.to_owned(), prop_override.to_owned());
+									x
+								}
+							});
+						}
+					}
+				}
+
+				let search = PropertyOverride {
+					entities: vec![value.entity.to_owned()],
+					properties: {
+						let mut x = LinkedHashMap::new();
+						x.insert(
+							value.property_name.to_owned(),
+							value.property_override.to_owned()
+						);
+						x
+					}
+				};
+
+				unravelled_overrides.retain(|x| *x != search);
+
+				let mut merged_overrides: Vec<PropertyOverride> = vec![];
+
+				let mut pass1: Vec<PropertyOverride> = Vec::default();
+
+				for property_override in unravelled_overrides {
+					// if same entity being overridden, merge props
+					if let Some(found) = pass1
+						.iter_mut()
+						.find(|x| x.entities == property_override.entities)
+					{
+						found.properties.extend(property_override.properties);
+					} else {
+						pass1.push(PropertyOverride {
+							entities: property_override.entities,
+							properties: property_override.properties
+						});
+					}
+				}
+
+				// merge entities when same props being overridden
+				for property_override in pass1 {
+					if let Some(found) = merged_overrides.iter_mut().find(|x| {
+						let contain_same_keys = x
+							.properties
+							.iter()
+							.all(|(y, _)| property_override.properties.contains_key(y))
+							&& property_override
+								.properties
+								.iter()
+								.all(|(y, _)| x.properties.contains_key(y));
+
+						// short-circuit
+						if !contain_same_keys {
+							return false;
+						}
+
+						let values_are_identical =
+							x.properties.iter().all(|(prop_name, prop_val)| {
+								property_is_roughly_identical(
+									prop_val,
+									&property_override.properties[prop_name]
+								)
+							});
+
+						// Properties are identical when they contain the same properties and each property's value is roughly identical
+						values_are_identical
+					}) {
+						found.entities.extend(property_override.entities);
+					} else {
+						merged_overrides.push(property_override);
+					}
+				}
+
+				entity.property_overrides = merged_overrides;
 			}
 
 			PatchOperation::AddOverrideDelete(value) => {
@@ -1993,15 +2211,69 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Value {
 		}
 	}
 
-	for x in &original.property_overrides {
-		if !modified.property_overrides.contains(x) {
-			patch.push(PatchOperation::RemovePropertyOverride(x.to_owned()))
+	let original_unravelled_overrides: Vec<PropertyOverrideConnection> = original
+		.property_overrides
+		.iter()
+		.flat_map(|property_override| {
+			property_override
+				.entities
+				.iter()
+				.flat_map(|ent| {
+					property_override
+						.properties
+						.iter()
+						.map(|(prop_name, prop_val)| PropertyOverrideConnection {
+							entity: ent.to_owned(),
+							property_name: prop_name.to_owned(),
+							property_override: prop_val.to_owned()
+						})
+						.collect_vec()
+				})
+				.collect_vec()
+		})
+		.collect();
+
+	let modified_unravelled_overrides: Vec<PropertyOverrideConnection> = modified
+		.property_overrides
+		.iter()
+		.flat_map(|property_override| {
+			property_override
+				.entities
+				.iter()
+				.flat_map(|ent| {
+					property_override
+						.properties
+						.iter()
+						.map(|(prop_name, prop_val)| PropertyOverrideConnection {
+							entity: ent.to_owned(),
+							property_name: prop_name.to_owned(),
+							property_override: prop_val.to_owned()
+						})
+						.collect_vec()
+				})
+				.collect_vec()
+		})
+		.collect();
+
+	for x in &original_unravelled_overrides {
+		if !modified_unravelled_overrides.iter().any(|val| {
+			val.entity == x.entity
+				&& val.property_name == x.property_name
+				&& property_is_roughly_identical(&val.property_override, &x.property_override)
+		}) {
+			patch.push(PatchOperation::RemovePropertyOverrideConnection(
+				x.to_owned()
+			))
 		}
 	}
 
-	for x in &modified.property_overrides {
-		if !original.property_overrides.contains(x) {
-			patch.push(PatchOperation::AddPropertyOverride(x.to_owned()))
+	for x in &modified_unravelled_overrides {
+		if !original_unravelled_overrides.iter().any(|val| {
+			val.entity == x.entity
+				&& val.property_name == x.property_name
+				&& property_is_roughly_identical(&val.property_override, &x.property_override)
+		}) {
+			patch.push(PatchOperation::AddPropertyOverrideConnection(x.to_owned()))
 		}
 	}
 
@@ -3737,64 +4009,61 @@ pub fn convert_to_qn(
 		});
 	}
 
-	// to clean up pass1
-	{
-		let mut pass1: Vec<PropertyOverride> = Vec::default();
+	let mut pass1: Vec<PropertyOverride> = Vec::default();
 
-		for property_override in &factory.property_overrides {
-			let ents = vec![convert_rt_reference_to_qn(
-				&property_override.property_owner,
-				factory,
-				blueprint,
-				factory_meta
-			)];
+	for property_override in &factory.property_overrides {
+		let ents = vec![convert_rt_reference_to_qn(
+			&property_override.property_owner,
+			factory,
+			blueprint,
+			factory_meta
+		)];
 
-			let props = [(
-				match &property_override.property_value.n_property_id {
-					PropertyID::Int(id) => id.to_string(),
-					PropertyID::String(id) => id.to_owned()
-				},
-				{
-					let prop = convert_rt_property_to_qn(
-						&property_override.property_value,
-						false,
-						factory,
-						factory_meta,
-						blueprint,
-						convert_lossless
-					);
-
-					OverriddenProperty {
-						value: prop.value,
-						property_type: prop.property_type
-					} // no post-init
-				}
-			)]
-			.into_iter()
-			.collect();
-
-			// if same entity being overridden, merge props
-			if let Some(found) = pass1.iter_mut().find(|x| x.entities == ents) {
-				found.properties.extend(props);
-			} else {
-				pass1.push(PropertyOverride {
-					entities: ents,
-					properties: props
-				});
-			}
-		}
-
-		// merge entities when same props being overridden
-		for property_override in pass1 {
-			if let Some(found) = entity
-				.property_overrides
-				.iter_mut()
-				.find(|x| x.properties == property_override.properties)
+		let props = [(
+			match &property_override.property_value.n_property_id {
+				PropertyID::Int(id) => id.to_string(),
+				PropertyID::String(id) => id.to_owned()
+			},
 			{
-				found.entities.extend(property_override.entities);
-			} else {
-				entity.property_overrides.push(property_override);
+				let prop = convert_rt_property_to_qn(
+					&property_override.property_value,
+					false,
+					factory,
+					factory_meta,
+					blueprint,
+					convert_lossless
+				);
+
+				OverriddenProperty {
+					value: prop.value,
+					property_type: prop.property_type
+				} // no post-init
 			}
+		)]
+		.into_iter()
+		.collect();
+
+		// if same entity being overridden, merge props
+		if let Some(found) = pass1.iter_mut().find(|x| x.entities == ents) {
+			found.properties.extend(props);
+		} else {
+			pass1.push(PropertyOverride {
+				entities: ents,
+				properties: props
+			});
+		}
+	}
+
+	// merge entities when same props being overridden
+	for property_override in pass1 {
+		if let Some(found) = entity
+			.property_overrides
+			.iter_mut()
+			.find(|x| x.properties == property_override.properties)
+		{
+			found.entities.extend(property_override.entities);
+		} else {
+			entity.property_overrides.push(property_override);
 		}
 	}
 

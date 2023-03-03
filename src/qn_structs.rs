@@ -302,7 +302,7 @@ pub struct PropertyOverride {
 	#[serde(rename = "entities")]
 	pub entities: Vec<Ref>,
 
-	/// An array of references to the entities to override the properties of.
+	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
 	#[ts(type = "Record<string, OverriddenProperty>")]
 	pub properties: LinkedHashMap<String, OverriddenProperty>

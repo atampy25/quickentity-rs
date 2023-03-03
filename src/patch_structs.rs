@@ -3,8 +3,9 @@ use serde_json::Value;
 use ts_rs::TS;
 
 use crate::qn_structs::{
-	CommentEntity, Dependency, ExposedEntity, PinConnectionOverride, PinConnectionOverrideDelete,
-	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SubEntity, SubType
+	CommentEntity, Dependency, ExposedEntity, OverriddenProperty, PinConnectionOverride,
+	PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref,
+	RefMaybeConstantValue, SubEntity, SubType
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
@@ -17,8 +18,14 @@ pub enum PatchOperation {
 	RemoveEntityByID(String),
 	SubEntityOperation(String, SubEntityOperation),
 
+	#[deprecated]
 	AddPropertyOverride(PropertyOverride),
+
+	#[deprecated]
 	RemovePropertyOverride(PropertyOverride),
+
+	AddPropertyOverrideConnection(PropertyOverrideConnection),
+	RemovePropertyOverrideConnection(PropertyOverrideConnection),
 
 	AddOverrideDelete(Ref),
 	RemoveOverrideDelete(Ref),
@@ -116,4 +123,21 @@ pub enum ArrayPatchOperation {
 	AddItemAfter(#[ts(type = "any")] Value, #[ts(type = "any")] Value),
 	AddItemBefore(#[ts(type = "any")] Value, #[ts(type = "any")] Value),
 	AddItem(#[ts(type = "any")] Value)
+}
+
+/// A single entity-property override.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
+#[ts(export)]
+pub struct PropertyOverrideConnection {
+	/// A reference to an entity to override a property on.
+	#[serde(rename = "entity")]
+	pub entity: Ref,
+
+	/// The property to override.
+	#[serde(rename = "propertyName")]
+	pub property_name: String,
+
+	/// The overridden property.
+	#[serde(rename = "propertyOverride")]
+	pub property_override: OverriddenProperty
 }
