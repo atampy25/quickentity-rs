@@ -184,7 +184,7 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 				let entity = entity
 					.entities
 					.get_mut(&entity_id)
-					.expect("SubEntityOperation couldn't find entity ID!");
+					.expect(format!("SubEntityOperation couldn't find entity ID: {}!", &entity_id).as_str());
 
 				match op {
 					SubEntityOperation::SetParent(value) => {
@@ -2451,7 +2451,7 @@ fn convert_qn_reference_to_rt(
 			external_scene_index: -1,
 			entity_index: entity_id_to_index_mapping
 				.get(ent)
-				.expect("Short ref referred to a nonexistent entity ID")
+				.expect(format!("Short ref referred to a nonexistent entity ID: {}", ent).as_str())
 				.to_owned() as i32,
 			exposed_entity: "".to_string()
 		},
@@ -2459,7 +2459,7 @@ fn convert_qn_reference_to_rt(
 			entity_id: match &fullref.external_scene {
 				None => 18446744073709551615,
 				Some(_) => u64::from_str_radix(fullref.entity_ref.as_str(), 16)
-					.expect("Full ref had invalid hex ref")
+					.expect(format!("Full ref had invalid hex ref: {}", fullref.entity_ref).as_str())
 			},
 			external_scene_index: match &fullref.external_scene {
 				None => -1,
@@ -2480,7 +2480,7 @@ fn convert_qn_reference_to_rt(
 			entity_index: match &fullref.external_scene {
 				None => entity_id_to_index_mapping
 					.get(&fullref.entity_ref)
-					.expect("Full ref referred to a nonexistent entity ID")
+ 					.expect(format!("Full ref referred to a nonexistent entity ID: {}", fullref.entity_ref).as_str())
 					.to_owned() as i32,
 				Some(_) => -2
 			},
@@ -4500,14 +4500,14 @@ pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, 
 								entity_id: match &alias.original_entity {
 									Ref::Short(r) => match r {
 										Some(r) => entity_id_to_index_mapping.get(r).expect(
-											"Property alias short ref referred to nonexistent entity ID"
+											format!("Property alias short ref referred to nonexistent entity ID: {}", r.as_str()).as_str()
 										).to_owned(),
 
-										_ => panic!("Null references are not permitted in property aliases")
+										_ => panic!("Null references are not permitted in property aliases ({}: {})", &entity_id, sub_entity.name.to_owned())
 									},
 
 									_ => panic!(
-										"External references are not permitted in property aliases"
+										"External references are not permitted in property aliases ({}: {})", &entity_id, sub_entity.name.to_owned()
 									)
 								},
 								s_alias_name: alias.original_property.to_owned(),
