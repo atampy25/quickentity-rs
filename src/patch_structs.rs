@@ -18,10 +18,10 @@ pub enum PatchOperation {
 	RemoveEntityByID(String),
 	SubEntityOperation(String, SubEntityOperation),
 
-	#[deprecated]
+	/// Should no longer be emitted by patch generators.
 	AddPropertyOverride(PropertyOverride),
 
-	#[deprecated]
+	/// Should no longer be emitted by patch generators.
 	RemovePropertyOverride(PropertyOverride),
 
 	AddPropertyOverrideConnection(PropertyOverrideConnection),

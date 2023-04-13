@@ -971,10 +971,12 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 				}
 			}
 
+			#[allow(deprecated)]
 			PatchOperation::AddPropertyOverride(value) => {
 				entity.property_overrides.push(value);
 			}
 
+			#[allow(deprecated)]
 			PatchOperation::RemovePropertyOverride(value) => {
 				entity.property_overrides.remove(
 					entity
@@ -3355,13 +3357,13 @@ pub fn convert_to_qn(
 	blueprint_meta: &ResourceMeta,
 	convert_lossless: bool
 ) -> Entity {
-	if {
+	{
 		let mut unique = blueprint.sub_entities.to_owned();
 		unique.dedup_by_key(|x| x.entity_id);
 
-		unique.len() != blueprint.sub_entities.len()
-	} {
-		panic!("Cannot convert entity with duplicate IDs");
+		if unique.len() != blueprint.sub_entities.len() {
+			panic!("Cannot convert entity with duplicate IDs");
+		}
 	}
 
 	let mut entity =
@@ -3590,7 +3592,7 @@ pub fn convert_to_qn(
                                     "{:x}",
                                     blueprint
                                         .sub_entities
-                                        .get(*entity_index as usize)
+                                        .get(*entity_index)
                                         .expect(
                                             "Exposed interface referred to nonexistent sub-entity"
                                         )
@@ -3776,7 +3778,7 @@ pub fn convert_to_qn(
 				"{:x}",
 				blueprint
 					.sub_entities
-					.get(pin.from_id as usize)
+					.get(pin.from_id)
 					.expect("Pin referred to nonexistent sub-entity")
 					.entity_id
 			))
@@ -3791,15 +3793,15 @@ pub fn convert_to_qn(
 			.as_mut()
 			.unwrap()
 			.entry(pin.from_pin_name.to_owned())
-			.or_insert(LinkedHashMap::default())
+			.or_default()
 			.entry(pin.to_pin_name.to_owned())
-			.or_insert(Vec::default())
+			.or_default()
 			.push(if pin.constant_pin_value.property_type == "void" {
 				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
 					"{:x}",
 					blueprint
 						.sub_entities
-						.get(pin.to_id as usize)
+						.get(pin.to_id)
 						.expect("Pin referred to nonexistent sub-entity")
 						.entity_id
 				))))
@@ -3809,7 +3811,7 @@ pub fn convert_to_qn(
 						"{:x}",
 						blueprint
 							.sub_entities
-							.get(pin.to_id as usize)
+							.get(pin.to_id)
 							.expect("Pin referred to nonexistent sub-entity")
 							.entity_id
 					))),
@@ -3847,9 +3849,9 @@ pub fn convert_to_qn(
 			.as_mut()
 			.unwrap()
 			.entry(pin_connection_override.from_pin_name.to_owned())
-			.or_insert(LinkedHashMap::default())
+			.or_default()
 			.entry(pin_connection_override.to_pin_name.to_owned())
-			.or_insert(Vec::default())
+			.or_default()
 			.push(
 				if pin_connection_override.constant_pin_value.property_type == "void" {
 					RefMaybeConstantValue::Ref(convert_rt_reference_to_qn(
@@ -3889,7 +3891,7 @@ pub fn convert_to_qn(
 				"{:x}",
 				blueprint
 					.sub_entities
-					.get(forwarding.from_id as usize)
+					.get(forwarding.from_id)
 					.expect("Pin referred to nonexistent sub-entity")
 					.entity_id
 			))
@@ -3904,15 +3906,15 @@ pub fn convert_to_qn(
 			.as_mut()
 			.unwrap()
 			.entry(forwarding.from_pin_name.to_owned())
-			.or_insert(LinkedHashMap::default())
+			.or_default()
 			.entry(forwarding.to_pin_name.to_owned())
-			.or_insert(Vec::default())
+			.or_default()
 			.push(if forwarding.constant_pin_value.property_type == "void" {
 				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
 					"{:x}",
 					blueprint
 						.sub_entities
-						.get(forwarding.to_id as usize)
+						.get(forwarding.to_id)
 						.expect("Pin referred to nonexistent sub-entity")
 						.entity_id
 				))))
@@ -3922,7 +3924,7 @@ pub fn convert_to_qn(
 						"{:x}",
 						blueprint
 							.sub_entities
-							.get(forwarding.to_id as usize)
+							.get(forwarding.to_id)
 							.expect("Pin referred to nonexistent sub-entity")
 							.entity_id
 					))),
@@ -3941,7 +3943,7 @@ pub fn convert_to_qn(
 				"{:x}",
 				blueprint
 					.sub_entities
-					.get(forwarding.from_id as usize)
+					.get(forwarding.from_id)
 					.expect("Pin referred to nonexistent sub-entity")
 					.entity_id
 			))
@@ -3956,15 +3958,15 @@ pub fn convert_to_qn(
 			.as_mut()
 			.unwrap()
 			.entry(forwarding.from_pin_name.to_owned())
-			.or_insert(LinkedHashMap::default())
+			.or_default()
 			.entry(forwarding.to_pin_name.to_owned())
-			.or_insert(Vec::default())
+			.or_default()
 			.push(if forwarding.constant_pin_value.property_type == "void" {
 				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
 					"{:x}",
 					blueprint
 						.sub_entities
-						.get(forwarding.to_id as usize)
+						.get(forwarding.to_id)
 						.expect("Pin referred to nonexistent sub-entity")
 						.entity_id
 				))))
@@ -3974,7 +3976,7 @@ pub fn convert_to_qn(
 						"{:x}",
 						blueprint
 							.sub_entities
-							.get(forwarding.to_id as usize)
+							.get(forwarding.to_id)
 							.expect("Pin referred to nonexistent sub-entity")
 							.entity_id
 					))),
@@ -3995,7 +3997,7 @@ pub fn convert_to_qn(
 						"{:x}",
 						blueprint
 							.sub_entities
-							.get(*subset_entity as usize)
+							.get(*subset_entity)
 							.expect("Entity subset referred to nonexistent sub-entity")
 							.entity_id
 					))
@@ -4010,7 +4012,7 @@ pub fn convert_to_qn(
 					.as_mut()
 					.unwrap()
 					.entry(subset.to_owned())
-					.or_insert(Vec::default())
+					.or_default()
 					.push(format!("{:x}", sub_entity.entity_id));
 			});
 		});

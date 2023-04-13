@@ -21,7 +21,7 @@ fn main() {
 pub struct App {}
 
 impl App {
-	pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+	pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
 		App {}
 	}
 }
@@ -127,18 +127,18 @@ impl eframe::App for App {
 					let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
 						convert_to_rt(&entity);
 
-					fs::write(&output_factory, to_vec_float_format(&converted_fac)).unwrap();
+					fs::write(output_factory, to_vec_float_format(&converted_fac)).unwrap();
 
 					fs::write(
-						&output_factory_meta,
+						output_factory_meta,
 						to_vec_float_format(&converted_fac_meta)
 					)
 					.unwrap();
 
-					fs::write(&output_blueprint, to_vec_float_format(&converted_blu)).unwrap();
+					fs::write(output_blueprint, to_vec_float_format(&converted_blu)).unwrap();
 
 					fs::write(
-						&output_blueprint_meta,
+						output_blueprint_meta,
 						to_vec_float_format(&converted_blu_meta)
 					)
 					.unwrap();
@@ -180,7 +180,7 @@ impl eframe::App for App {
 
 					let patch = generate_patch(&entity1, &entity2);
 
-					fs::write(&output, to_vec_float_format(&patch)).unwrap();
+					fs::write(output, to_vec_float_format(&patch)).unwrap();
 				});
 			}
 
@@ -217,7 +217,7 @@ impl eframe::App for App {
 
 					apply_patch(&mut entity, &patch, false);
 
-					fs::write(&output, to_vec_float_format(&entity)).unwrap();
+					fs::write(output, to_vec_float_format(&entity)).unwrap();
 				});
 			}
 		});

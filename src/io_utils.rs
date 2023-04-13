@@ -3,7 +3,6 @@ use quickentity_rs::rpkg_structs::ResourceMeta;
 use quickentity_rs::rt_structs::{RTBlueprint, RTFactory};
 use quickentity_rs::{convert_2016_blueprint_to_modern, convert_2016_factory_to_modern};
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::ser::Formatter;
 use serde_json::{from_slice, from_value, Serializer, Value};

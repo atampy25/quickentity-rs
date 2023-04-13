@@ -1,17 +1,9 @@
 mod io_utils;
 
-use std::{fs, io::Read};
-
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use io_utils::*;
-use quickentity_rs::{
-	apply_patch, convert_to_qn, convert_to_rt, generate_patch,
-	qn_structs::Entity,
-	rpkg_structs::ResourceMeta,
-	rt_structs::{RTBlueprint, RTFactory}
-};
-use serde_json::{from_slice, Value};
+use quickentity_rs::convert_to_qn;
 
 fn benchmark(c: &mut Criterion) {
 	let factory_ic = read_as_rtfactory("corpus\\items colombia\\0086A9F758D6E876.TEMP.json");

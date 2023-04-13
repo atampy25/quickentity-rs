@@ -209,7 +209,7 @@ fn main() {
 			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
 				convert_to_rt(&entity);
 
-			fs::write(&output_factory, {
+			fs::write(output_factory, {
 				if h1 {
 					to_vec_float_format(&convert_modern_factory_to_2016(&converted_fac))
 				} else {
@@ -219,12 +219,12 @@ fn main() {
 			.unwrap();
 
 			fs::write(
-				&output_factory_meta,
+				output_factory_meta,
 				to_vec_float_format(&converted_fac_meta)
 			)
 			.unwrap();
 
-			fs::write(&output_blueprint, {
+			fs::write(output_blueprint, {
 				if h1 {
 					to_vec_float_format(&convert_modern_blueprint_to_2016(&converted_blu))
 				} else {
@@ -234,7 +234,7 @@ fn main() {
 			.unwrap();
 
 			fs::write(
-				&output_blueprint_meta,
+				output_blueprint_meta,
 				to_vec_float_format(&converted_blu_meta)
 			)
 			.unwrap();
@@ -271,7 +271,7 @@ fn main() {
 
 			let patch = generate_patch(&entity1, &entity2);
 
-			fs::write(&output, to_vec_float_format(&patch)).unwrap();
+			fs::write(output, to_vec_float_format(&patch)).unwrap();
 
 			if profile {
 				println!("{}", time_graph::get_full_graph().as_table());
@@ -297,7 +297,7 @@ fn main() {
 
 			apply_patch(&mut entity, &patch, permissive);
 
-			fs::write(&output, to_vec_float_format(&entity)).unwrap();
+			fs::write(output, to_vec_float_format(&entity)).unwrap();
 
 			if profile {
 				println!("{}", time_graph::get_full_graph().as_table());
