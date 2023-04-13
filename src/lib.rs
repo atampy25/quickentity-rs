@@ -181,10 +181,9 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) {
 			}
 
 			PatchOperation::SubEntityOperation(entity_id, op) => {
-				let entity = entity
-					.entities
-					.get_mut(&entity_id)
-					.expect(format!("SubEntityOperation couldn't find entity ID: {}!", &entity_id).as_str());
+				let entity = entity.entities.get_mut(&entity_id).unwrap_or_else(|| {
+					panic!("SubEntityOperation couldn't find entity ID: {}!", entity_id)
+				});
 
 				match op {
 					SubEntityOperation::SetParent(value) => {
@@ -2451,15 +2450,18 @@ fn convert_qn_reference_to_rt(
 			external_scene_index: -1,
 			entity_index: entity_id_to_index_mapping
 				.get(ent)
-				.expect(format!("Short ref referred to a nonexistent entity ID: {}", ent).as_str())
+				.unwrap_or_else(|| panic!("Short ref referred to a nonexistent entity ID: {}", ent))
 				.to_owned() as i32,
 			exposed_entity: "".to_string()
 		},
 		Ref::Full(fullref) => SEntityTemplateReference {
 			entity_id: match &fullref.external_scene {
 				None => 18446744073709551615,
-				Some(_) => u64::from_str_radix(fullref.entity_ref.as_str(), 16)
-					.expect(format!("Full ref had invalid hex ref: {}", fullref.entity_ref).as_str())
+				Some(_) => {
+					u64::from_str_radix(fullref.entity_ref.as_str(), 16).unwrap_or_else(|_| {
+						panic!("Full ref had invalid hex ref: {}", fullref.entity_ref)
+					})
+				}
 			},
 			external_scene_index: match &fullref.external_scene {
 				None => -1,
@@ -2480,7 +2482,12 @@ fn convert_qn_reference_to_rt(
 			entity_index: match &fullref.external_scene {
 				None => entity_id_to_index_mapping
 					.get(&fullref.entity_ref)
- 					.expect(format!("Full ref referred to a nonexistent entity ID: {}", fullref.entity_ref).as_str())
+					.unwrap_or_else(|| {
+						panic!(
+							"Full ref referred to a nonexistent entity ID: {}",
+							fullref.entity_ref
+						)
+					})
 					.to_owned() as i32,
 				Some(_) => -2
 			},
@@ -4499,15 +4506,13 @@ pub fn convert_to_rt(entity: &Entity) -> (RTFactory, ResourceMeta, RTBlueprint, 
 							SEntityTemplatePropertyAlias {
 								entity_id: match &alias.original_entity {
 									Ref::Short(r) => match r {
-										Some(r) => entity_id_to_index_mapping.get(r).expect(
-											format!("Property alias short ref referred to nonexistent entity ID: {}", r.as_str()).as_str()
-										).to_owned(),
+										Some(r) => entity_id_to_index_mapping.get(r).unwrap_or_else(|| panic!("Property alias short ref referred to nonexistent entity ID: {}", r.as_str())).to_owned(),
 
-										_ => panic!("Null references are not permitted in property aliases ({}: {})", &entity_id, sub_entity.name.to_owned())
+										_ => panic!("Null references are not permitted in property aliases ({}: {})", entity_id, sub_entity.name)
 									},
 
 									_ => panic!(
-										"External references are not permitted in property aliases ({}: {})", &entity_id, sub_entity.name.to_owned()
+										"External references are not permitted in property aliases ({}: {})", entity_id, sub_entity.name
 									)
 								},
 								s_alias_name: alias.original_property.to_owned(),
