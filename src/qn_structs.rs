@@ -124,8 +124,7 @@ pub struct SubEntity {
 	/// Properties to apply conditionally to the entity based on platform.
 	#[serde(rename = "platformSpecificProperties")]
 	#[ts(type = "Record<string, Record<string, Property>>")]
-	pub platform_specific_properties:
-		Option<LinkedHashMap<String, LinkedHashMap<String, Property>>>,
+	pub platform_specific_properties: Option<LinkedHashMap<String, LinkedHashMap<String, Property>>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
@@ -135,14 +134,12 @@ pub struct SubEntity {
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
 	#[ts(type = "Record<string, Record<string, Array<RefMaybeConstantValue>>>")]
-	pub input_copying:
-		Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub input_copying: Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
 	#[ts(type = "Record<string, Record<string, Array<RefMaybeConstantValue>>>")]
-	pub output_copying:
-		Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub output_copying: Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]

@@ -63,9 +63,7 @@ pub fn read_as_rtblueprint(path: &str) -> RTBlueprint {
 	.expect("Failed to open file as JSON");
 
 	if val.get("entityTemplates").is_some() {
-		convert_2016_blueprint_to_modern(
-			&from_value(val).expect("Failed to read file as RT struct")
-		)
+		convert_2016_blueprint_to_modern(&from_value(val).expect("Failed to read file as RT struct"))
 	} else {
 		from_value(val).expect("Failed to read file as RT struct")
 	}
@@ -123,9 +121,7 @@ impl Formatter for FloatFormatter {
 	{
 		let x = value.parse::<f64>();
 		if let Ok(y) = x {
-			if value.parse::<u64>().is_err()
-				|| y.to_string() == value.parse::<u64>().unwrap().to_string()
-			{
+			if value.parse::<u64>().is_err() || y.to_string() == value.parse::<u64>().unwrap().to_string() {
 				writer
 					.write_all(
 						if y.to_string() == "-0" {

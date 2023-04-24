@@ -82,8 +82,7 @@ impl eframe::App for App {
 					let blueprint = read_as_rtblueprint(&input_blueprint);
 					let blueprint_meta = read_as_meta(&input_blueprint_meta);
 
-					let entity =
-						convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, false);
+					let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, false).unwrap();
 
 					fs::write(output, to_vec_float_format(&entity)).unwrap();
 				});
@@ -125,23 +124,15 @@ impl eframe::App for App {
 					let entity = read_as_entity(&input);
 
 					let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
-						convert_to_rt(&entity);
+						convert_to_rt(&entity).unwrap();
 
 					fs::write(output_factory, to_vec_float_format(&converted_fac)).unwrap();
 
-					fs::write(
-						output_factory_meta,
-						to_vec_float_format(&converted_fac_meta)
-					)
-					.unwrap();
+					fs::write(output_factory_meta, to_vec_float_format(&converted_fac_meta)).unwrap();
 
 					fs::write(output_blueprint, to_vec_float_format(&converted_blu)).unwrap();
 
-					fs::write(
-						output_blueprint_meta,
-						to_vec_float_format(&converted_blu_meta)
-					)
-					.unwrap();
+					fs::write(output_blueprint_meta, to_vec_float_format(&converted_blu_meta)).unwrap();
 				});
 			}
 
@@ -178,7 +169,7 @@ impl eframe::App for App {
 					let entity1 = read_as_entity(&input1);
 					let entity2 = read_as_entity(&input2);
 
-					let patch = generate_patch(&entity1, &entity2);
+					let patch = generate_patch(&entity1, &entity2).unwrap();
 
 					fs::write(output, to_vec_float_format(&patch)).unwrap();
 				});
@@ -215,7 +206,7 @@ impl eframe::App for App {
 					let mut entity = read_as_entity(&input);
 					let patch = read_as_value(&patch);
 
-					apply_patch(&mut entity, &patch, false);
+					apply_patch(&mut entity, &patch, false).unwrap();
 
 					fs::write(output, to_vec_float_format(&entity)).unwrap();
 				});

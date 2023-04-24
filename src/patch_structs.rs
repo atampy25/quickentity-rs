@@ -3,9 +3,8 @@ use serde_json::Value;
 use ts_rs::TS;
 
 use crate::qn_structs::{
-	CommentEntity, Dependency, ExposedEntity, OverriddenProperty, PinConnectionOverride,
-	PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref,
-	RefMaybeConstantValue, SubEntity, SubType
+	CommentEntity, Dependency, ExposedEntity, OverriddenProperty, PinConnectionOverride, PinConnectionOverrideDelete,
+	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SubEntity, SubType
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]

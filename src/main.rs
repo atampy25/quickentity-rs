@@ -2,12 +2,14 @@ mod io_utils;
 
 use clap::{Parser, Subcommand};
 use std::fs;
+use tryvial::try_fn;
 
 use quickentity_rs::{
-	apply_patch, convert_modern_blueprint_to_2016, convert_modern_factory_to_2016, convert_to_qn,
-	convert_to_rt, generate_patch
+	apply_patch, convert_modern_blueprint_to_2016, convert_modern_factory_to_2016, convert_to_qn, convert_to_rt,
+	generate_patch
 };
 
+use anyhow::Result;
 use serde_json::from_slice;
 
 use io_utils::*;
@@ -148,7 +150,8 @@ enum PatchCommand {
 	}
 }
 
-fn main() {
+#[try_fn]
+fn main() -> Result<()> {
 	let args = Args::parse();
 
 	match args.command {
@@ -173,13 +176,7 @@ fn main() {
 			let blueprint = read_as_rtblueprint(&input_blueprint);
 			let blueprint_meta = read_as_meta(&input_blueprint_meta);
 
-			let entity = convert_to_qn(
-				&factory,
-				&factory_meta,
-				&blueprint,
-				&blueprint_meta,
-				lossless
-			);
+			let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 
@@ -206,8 +203,7 @@ fn main() {
 
 			let entity = read_as_entity(&input);
 
-			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
-				convert_to_rt(&entity);
+			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rt(&entity)?;
 
 			fs::write(output_factory, {
 				if h1 {
@@ -218,11 +214,7 @@ fn main() {
 			})
 			.unwrap();
 
-			fs::write(
-				output_factory_meta,
-				to_vec_float_format(&converted_fac_meta)
-			)
-			.unwrap();
+			fs::write(output_factory_meta, to_vec_float_format(&converted_fac_meta)).unwrap();
 
 			fs::write(output_blueprint, {
 				if h1 {
@@ -233,11 +225,7 @@ fn main() {
 			})
 			.unwrap();
 
-			fs::write(
-				output_blueprint_meta,
-				to_vec_float_format(&converted_blu_meta)
-			)
-			.unwrap();
+			fs::write(output_blueprint_meta, to_vec_float_format(&converted_blu_meta)).unwrap();
 
 			if profile {
 				println!("{}", time_graph::get_full_graph().as_table());
@@ -245,14 +233,13 @@ fn main() {
 		}
 
 		Command::Patch {
-			subcommand:
-				PatchCommand::Generate {
-					input1,
-					input2,
-					output,
-					profile,
-					format_fix
-				}
+			subcommand: PatchCommand::Generate {
+				input1,
+				input2,
+				output,
+				profile,
+				format_fix
+			}
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -262,14 +249,12 @@ fn main() {
 			let mut entity2 = read_as_entity(&input2);
 
 			if format_fix {
-				entity1 = from_slice(&to_vec_float_format(&entity1))
-					.expect("Failed to re-open file as JSON");
+				entity1 = from_slice(&to_vec_float_format(&entity1))?;
 
-				entity2 = from_slice(&to_vec_float_format(&entity2))
-					.expect("Failed to re-open file as JSON");
+				entity2 = from_slice(&to_vec_float_format(&entity2))?;
 			}
 
-			let patch = generate_patch(&entity1, &entity2);
+			let patch = generate_patch(&entity1, &entity2)?;
 
 			fs::write(output, to_vec_float_format(&patch)).unwrap();
 
@@ -279,14 +264,13 @@ fn main() {
 		}
 
 		Command::Patch {
-			subcommand:
-				PatchCommand::Apply {
-					input,
-					patch,
-					output,
-					profile,
-					permissive
-				}
+			subcommand: PatchCommand::Apply {
+				input,
+				patch,
+				output,
+				profile,
+				permissive
+			}
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -295,7 +279,7 @@ fn main() {
 			let mut entity = read_as_entity(&input);
 			let patch = read_as_value(&patch);
 
-			apply_patch(&mut entity, &patch, permissive);
+			apply_patch(&mut entity, &patch, permissive)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 

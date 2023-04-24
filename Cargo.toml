@@ -25,13 +25,10 @@ image = { version = "0.24", features = ["png"] }
 eframe = "0.19.0"
 rfd = "0.10.0"
 similar = "2.2.1"
-
-[dev-dependencies]
-criterion = "0.4.0"
-
-[[bench]]
-name = "conversion"
-harness = false
+anyhow = "1.0.70"
+tryvial = "0.2.0"
+fn-error-context = "0.2.1"
+auto_context = { path = "auto_context" }
 
 [[bin]]
 name = "quickentity-rs"
