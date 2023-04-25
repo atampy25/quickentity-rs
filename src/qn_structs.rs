@@ -1,6 +1,5 @@
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-
 use ts_rs::TS;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
@@ -29,15 +28,18 @@ pub struct Entity {
 
 	/// The sub-entities of this entity.
 	#[serde(rename = "entities")]
-	#[ts(type = "Record<string, SubEntity>")]
-	pub entities: LinkedHashMap<String, SubEntity>,
+	pub entities: IndexMap<String, SubEntity>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
+	///
+	/// Overriding a local entity would be a rather pointless maneuver given that you could just actually change it in the entity instead of using an override.
 	#[serde(rename = "propertyOverrides")]
 	pub property_overrides: Vec<PropertyOverride>,
 
 	/// Entities (external or local) to delete (including their organisational children) when
 	/// this entity is loaded.
+	///
+	/// Deleting a local entity would be a rather pointless maneuver given that you could just actually remove it from this entity instead of using an override.
 	#[serde(rename = "overrideDeletes")]
 	pub override_deletes: Vec<Ref>,
 
@@ -63,16 +65,24 @@ pub struct Entity {
 	#[serde(rename = "quickEntityVersion")]
 	pub quick_entity_version: f64,
 
+	/// Extra resource dependencies that should be added to the entity's factory when converted to the game's format.
 	#[serde(rename = "extraFactoryDependencies")]
 	pub extra_factory_dependencies: Vec<Dependency>,
 
+	/// Extra resource dependencies that should be added to the entity's blueprint when converted to the game's format.
 	#[serde(rename = "extraBlueprintDependencies")]
 	pub extra_blueprint_dependencies: Vec<Dependency>,
 
+	/// Comments to be attached to sub-entities.
+	///
+	/// Will be displayed in QuickEntity Editor as tree items with a sticky note icon.
 	#[serde(rename = "comments")]
 	pub comments: Vec<CommentEntity>
 }
 
+/// A comment entity.
+///
+/// Will be displayed in QuickEntity Editor as a tree item with a sticky note icon.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
 pub struct CommentEntity {
@@ -90,7 +100,9 @@ pub struct CommentEntity {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
 pub struct SubEntity {
-	/// The "logical" parent of the entity.
+	/// The "logical" or "organisational" parent of the entity, used for tree organisation in graphical editors.
+	///
+	/// Has no effect on the entity in game.
 	#[serde(rename = "parent")]
 	pub parent: Ref,
 
@@ -104,6 +116,8 @@ pub struct SubEntity {
 	pub factory: String,
 
 	/// The factory's flag.
+	///
+	/// You can leave this out if it's 1F.
 	#[serde(rename = "factoryFlag")]
 	#[serde(alias = "templateFlag")]
 	pub factory_flag: Option<String>,
@@ -113,53 +127,46 @@ pub struct SubEntity {
 	pub blueprint: String,
 
 	/// Whether the entity is only loaded in IO's editor.
+	///
+	/// Setting this to true will remove the entity from the game as well as all of its organisational (but not coordinate) children.
 	#[serde(rename = "editorOnly")]
 	pub editor_only: Option<bool>,
 
 	/// Properties of the entity.
 	#[serde(rename = "properties")]
-	#[ts(type = "Record<string, Property>")]
-	pub properties: Option<LinkedHashMap<String, Property>>,
+	pub properties: Option<IndexMap<String, Property>>,
 
 	/// Properties to apply conditionally to the entity based on platform.
 	#[serde(rename = "platformSpecificProperties")]
-	#[ts(type = "Record<string, Record<string, Property>>")]
-	pub platform_specific_properties: Option<LinkedHashMap<String, LinkedHashMap<String, Property>>>,
+	pub platform_specific_properties: Option<IndexMap<String, IndexMap<String, Property>>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
-	#[ts(type = "Record<string, Record<string, Array<RefMaybeConstantValue>>>")]
-	pub events: Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub events: Option<IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
-	#[ts(type = "Record<string, Record<string, Array<RefMaybeConstantValue>>>")]
-	pub input_copying: Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub input_copying: Option<IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
-	#[ts(type = "Record<string, Record<string, Array<RefMaybeConstantValue>>>")]
-	pub output_copying: Option<LinkedHashMap<String, LinkedHashMap<String, Vec<RefMaybeConstantValue>>>>,
+	pub output_copying: Option<IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
-	#[ts(type = "Record<string, PropertyAlias>")]
-	pub property_aliases: Option<LinkedHashMap<String, Vec<PropertyAlias>>>,
+	pub property_aliases: Option<IndexMap<String, Vec<PropertyAlias>>>,
 
 	/// Entities that can be accessed from this entity.
 	#[serde(rename = "exposedEntities")]
-	#[ts(type = "Record<string, ExposedEntity>")]
-	pub exposed_entities: Option<LinkedHashMap<String, ExposedEntity>>,
+	pub exposed_entities: Option<IndexMap<String, ExposedEntity>>,
 
 	/// Interfaces implemented by other entities that can be accessed from this entity.
 	#[serde(rename = "exposedInterfaces")]
-	#[ts(type = "Record<string, String>")]
-	pub exposed_interfaces: Option<LinkedHashMap<String, String>>,
+	pub exposed_interfaces: Option<IndexMap<String, String>>,
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
-	#[ts(type = "Record<string, Array<String>>")]
-	pub subsets: Option<LinkedHashMap<String, Vec<String>>>
+	pub subsets: Option<IndexMap<String, Vec<String>>>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
@@ -170,6 +177,7 @@ pub enum RefMaybeConstantValue {
 	Ref(Ref)
 }
 
+/// A reference accompanied by a constant value.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
 pub struct RefWithConstantValue {
@@ -177,11 +185,12 @@ pub struct RefWithConstantValue {
 	#[serde(rename = "ref")]
 	pub entity_ref: Ref,
 
-	/// The external scene the referenced entity resides in.
+	/// The constant value accompanying this reference.
 	#[serde(rename = "value")]
 	pub value: SimpleProperty
 }
 
+/// A property with a type and a value. Can be marked as post-init.
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
@@ -200,6 +209,9 @@ pub struct Property {
 	pub post_init: Option<bool>
 }
 
+/// A simple property.
+///
+/// Simple properties cannot be marked as post-init. They are used by pin connection overrides, events and input/output copying.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
 pub struct SimpleProperty {
@@ -213,6 +225,9 @@ pub struct SimpleProperty {
 	pub value: serde_json::Value
 }
 
+/// An exposed entity.
+///
+/// Exposed entities are accessible when referencing this entity through a property on long-form references.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
 pub struct ExposedEntity {
@@ -225,6 +240,9 @@ pub struct ExposedEntity {
 	pub refers_to: Vec<Ref>
 }
 
+/// A property alias.
+///
+/// Property aliases are used to access properties of other entities through a single entity.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
 pub struct PropertyAlias {
@@ -242,6 +260,8 @@ pub struct PropertyAlias {
 #[ts(export)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
+	///
+	/// If this references a local entity, you can simply use an event on the entity itself.
 	#[serde(rename = "fromEntity")]
 	pub from_entity: Ref,
 
@@ -260,7 +280,6 @@ pub struct PinConnectionOverride {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	#[ts(type = "any")]
 	pub value: Option<SimpleProperty>
 }
 
@@ -301,8 +320,7 @@ pub struct PropertyOverride {
 
 	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
-	#[ts(type = "Record<string, OverriddenProperty>")]
-	pub properties: LinkedHashMap<String, OverriddenProperty>
+	pub properties: IndexMap<String, OverriddenProperty>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
@@ -318,7 +336,7 @@ pub struct OverriddenProperty {
 	pub value: serde_json::Value
 }
 
-/// A full reference.
+/// A long-form reference to an entity, allowing for the specification of external scenes and/or an exposed entity.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
 #[ts(export)]
 pub struct FullRef {
@@ -342,6 +360,8 @@ pub struct FullRef {
 #[serde(untagged)]
 pub enum Ref {
 	Full(FullRef),
+
+	/// A short-form reference represents either a local reference with no exposed entity or a null reference.
 	Short(Option<String>)
 }
 
@@ -351,6 +371,8 @@ pub enum Ref {
 #[serde(untagged)]
 pub enum Dependency {
 	Full(DependencyWithFlag),
+
+	/// A dependency which is flagged as "1F".
 	Short(String)
 }
 

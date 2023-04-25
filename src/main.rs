@@ -23,13 +23,13 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-	// Convert between RT/RPKG source files and QuickEntity entity JSON files.
+	/// Convert between RT/RPKG source files and QuickEntity entity JSON files.
 	Entity {
 		#[clap(subcommand)]
 		subcommand: EntityCommand
 	},
 
-	// Generate or apply a QuickEntity patch JSON.
+	/// Generate or apply a QuickEntity patch JSON.
 	Patch {
 		#[clap(subcommand)]
 		subcommand: PatchCommand
