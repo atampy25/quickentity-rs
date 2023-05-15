@@ -39,6 +39,8 @@ pub struct STemplateFactorySubEntity {
 	pub entity_type_resource_index: usize,
 	pub property_values: Vec<SEntityTemplateProperty>,
 	pub post_init_property_values: Vec<SEntityTemplateProperty>,
+
+	#[serde(default = "Vec::new")] // H2 does not have this property
 	pub platform_specific_property_values: Vec<SEntityTemplatePlatformSpecificProperty>
 }
 
