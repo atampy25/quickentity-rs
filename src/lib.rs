@@ -188,6 +188,21 @@ impl Ord for DiffableValue {
 
 #[time_graph::instrument]
 #[try_fn]
+#[context("Failure normalising entity ID")]
+#[auto_context]
+fn normalise_entity_id(entity_id: &str) -> Result<String> {
+	if entity_id.chars().count() != 16 {
+		format!(
+			"{:0>16x}",
+			u64::from_str_radix(entity_id, 16).context("entity_id must be valid hex")?
+		)
+	} else {
+		entity_id.to_owned()
+	}
+}
+
+#[time_graph::instrument]
+#[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
 fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenProperty) -> Result<bool> {
@@ -252,10 +267,7 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 			PatchOperation::SubEntityOperation(entity_id, op) => {
 				let entity = entity
 					.entities
-					.get_mut(&format!(
-						"{:0>16x}",
-						u64::from_str_radix(&entity_id, 16).context("entity_id must be valid hex")?
-					))
+					.get_mut(&normalise_entity_id(&entity_id)?)
 					.with_context(|| format!("SubEntityOperation couldn't find entity ID: {}!", entity_id))?;
 
 				match op {
@@ -2292,7 +2304,7 @@ fn convert_qn_reference_to_rt(
 			entity_id: 18446744073709551615,
 			external_scene_index: -1,
 			entity_index: entity_id_to_index_mapping
-				.get(ent)
+				.get(&normalise_entity_id(ent)?)
 				.with_context(|| format!("Short ref referred to a nonexistent entity ID: {}", ent))?
 				.to_owned() as i32,
 			exposed_entity: "".to_string()
@@ -2323,7 +2335,7 @@ fn convert_qn_reference_to_rt(
 			},
 			entity_index: match &fullref.external_scene {
 				None => entity_id_to_index_mapping
-					.get(&fullref.entity_ref)
+					.get(&normalise_entity_id(&fullref.entity_ref)?)
 					.with_context(|| format!("Full ref referred to a nonexistent entity ID: {}", fullref.entity_ref))?
 					.to_owned() as i32,
 				Some(_) => -2
@@ -3861,7 +3873,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 		},
 		blueprint_index_in_resource_header: 0,
 		root_entity_index: *entity_id_to_index_mapping
-			.get(&entity.root_entity)
+			.get(&normalise_entity_id(&entity.root_entity)?)
 			.context("Root entity was non-existent")?,
 		sub_entities: vec![],
 		property_overrides: vec![],
@@ -3905,7 +3917,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 			SubType::Template => 0
 		},
 		root_entity_index: *entity_id_to_index_mapping
-			.get(&entity.root_entity)
+			.get(&normalise_entity_id(&entity.root_entity)?)
 			.context("Root entity was non-existent")?,
 		sub_entities: vec![],
 		pin_connections: vec![],
@@ -4287,7 +4299,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 										entity_id: match &alias.original_entity {
 											Ref::Short(r) => match r {
 												Some(r) => entity_id_to_index_mapping
-													.get(r)
+													.get(&normalise_entity_id(r)?)
 													.with_context(|| {
 														format!(
 															"Property alias short ref referred to nonexistent entity \
@@ -4383,7 +4395,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 						.sub_entities
 						.get_mut(
 							*entity_id_to_index_mapping
-								.get(ent)
+								.get(&normalise_entity_id(ent)?)
 								.context("Entity subset referenced nonexistent local entity")?
 						)
 						.ctx?
@@ -4701,9 +4713,9 @@ fn pin_connections_for_event(
 				})
 				.map(|trigger_entity| -> Result<_> {
 					Ok(SEntityTemplatePinConnection {
-						from_id: *entity_id_to_index_mapping.get(entity_id).ctx?,
+						from_id: *entity_id_to_index_mapping.get(&normalise_entity_id(entity_id)?).ctx?,
 						to_id: *entity_id_to_index_mapping
-							.get(match &trigger_entity {
+							.get(&normalise_entity_id(match &trigger_entity {
 								RefMaybeConstantValue::Ref(Ref::Short(Some(id))) => id,
 
 								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
@@ -4712,7 +4724,7 @@ fn pin_connections_for_event(
 								}) => id,
 
 								_ => bail!("Invalid to_id for trigger on events")
-							})
+							})?)
 							.ctx?,
 						from_pin_name: event.to_owned(),
 						to_pin_name: trigger.to_owned(),
