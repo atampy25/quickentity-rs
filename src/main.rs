@@ -54,7 +54,7 @@ enum Command {
 		input_blueprint_meta: String,
 
 		/// Patch JSON path.
-		#[arg(short = 'u', long, value_parser, num_args = 1.., value_delimiter = ' ')]
+		#[arg(short = 'u', long, value_parser, num_args = 1.., value_delimiter = ';')]
 		patches: Vec<String>,
 
 		/// Output factory (TEMP) JSON path.
