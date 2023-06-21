@@ -252,7 +252,10 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 			PatchOperation::SubEntityOperation(entity_id, op) => {
 				let entity = entity
 					.entities
-					.get_mut(&entity_id)
+					.get_mut(&format!(
+						"{:0>16x}",
+						u64::from_str_radix(&entity_id, 16).context("entity_id must be valid hex")?
+					))
 					.with_context(|| format!("SubEntityOperation couldn't find entity ID: {}!", entity_id))?;
 
 				match op {
@@ -2215,10 +2218,10 @@ fn convert_rt_reference_to_qn(
 	if !reference.exposed_entity.is_empty() || reference.external_scene_index != -1 {
 		Ref::Full(FullRef {
 			entity_ref: match reference.entity_index {
-				-2 => format!("{:x}", reference.entity_id),
+				-2 => format!("{:0>16x}", reference.entity_id),
 				index if index >= 0 => {
 					format!(
-						"{:x}",
+						"{:0>16x}",
 						blueprint
 							.sub_entities
 							.get(index as usize)
@@ -2256,7 +2259,7 @@ fn convert_rt_reference_to_qn(
 		Ref::Short(match reference.entity_index {
 			-1 => None,
 			index if index >= 0 => Some(format!(
-				"{:x}",
+				"{:0>16x}",
 				blueprint
 					.sub_entities
 					.get(index as usize)
@@ -2603,175 +2606,154 @@ fn convert_qn_property_value_to_rt(
 	factory_dependencies_index_mapping: &HashMap<String, usize>
 ) -> Result<Value> {
 	match property.property_type.as_str() {
-        "SEntityTemplateReference" => to_value(convert_qn_reference_to_rt(
-            &from_value::<Ref>(property.value.to_owned())
-                .context("Converting RT ref to QN in property value returned error in parsing")?,
-            factory,
-            factory_meta,
-            entity_id_to_index_mapping
-        )?)
-        .context("Converting RT ref to QN in property value returned error in serialisation")?,
+		"SEntityTemplateReference" => to_value(convert_qn_reference_to_rt(
+			&from_value::<Ref>(property.value.to_owned())
+				.context("Converting RT ref to QN in property value returned error in parsing")?,
+			factory,
+			factory_meta,
+			entity_id_to_index_mapping
+		)?)
+		.context("Converting RT ref to QN in property value returned error in serialisation")?,
 
-        "ZRuntimeResourceID" => {
-            if property.value.is_null() {
-                json!({
-                    "m_IDHigh": 4294967295u32,
-                    "m_IDLow": 4294967295u32
-                })
-            } else if property.value.is_string() {
-                json!({
-                    "m_IDHigh": 0, // I doubt we'll ever have that many dependencies
-                    "m_IDLow": factory_dependencies_index_mapping.get(property.value.as_str().ctx?).ctx?
-                })
-            } else if property.value.is_object() {
-                json!({
-                    "m_IDHigh": 0,
-                    "m_IDLow": factory_dependencies_index_mapping.get(property.value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?).ctx?
-                })
-            } else {
-                bail!("ZRuntimeResourceID was not of a valid type")
-            }
-        }
+		"ZRuntimeResourceID" => {
+			if property.value.is_null() {
+				json!({
+					"m_IDHigh": 4294967295u32,
+					"m_IDLow": 4294967295u32
+				})
+			} else if property.value.is_string() {
+				json!({
+					"m_IDHigh": 0, // I doubt we'll ever have that many dependencies
+					"m_IDLow": factory_dependencies_index_mapping.get(property.value.as_str().ctx?).ctx?
+				})
+			} else if property.value.is_object() {
+				json!({
+					"m_IDHigh": 0,
+					"m_IDLow": factory_dependencies_index_mapping.get(property.value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?).ctx?
+				})
+			} else {
+				bail!("ZRuntimeResourceID was not of a valid type")
+			}
+		}
 
-        "SMatrix43" => {
-            // this is from three.js
+		"SMatrix43" => {
+			// this is from three.js
 
-            let obj = property
-                .value
-                .as_object()
-                .context("SMatrix43 must be object")?;
+			let obj = property.value.as_object().context("SMatrix43 must be object")?;
 
-            let x = obj
-                .get("rotation")
-                .ctx?
-                .get("x")
-                .ctx?
-                .as_f64()
-                .ctx? * DEG2RAD;
-            let y = obj
-                .get("rotation")
-                .ctx?
-                .get("y")
-                .ctx?
-                .as_f64()
-                .ctx? * DEG2RAD;
-            let z = obj
-                .get("rotation")
-                .ctx?
-                .get("z")
-                .ctx?
-                .as_f64()
-                .ctx? * DEG2RAD;
+			let x = obj.get("rotation").ctx?.get("x").ctx?.as_f64().ctx? * DEG2RAD;
+			let y = obj.get("rotation").ctx?.get("y").ctx?.as_f64().ctx? * DEG2RAD;
+			let z = obj.get("rotation").ctx?.get("z").ctx?.as_f64().ctx? * DEG2RAD;
 
-            let c1 = (x / 2.0).cos();
-            let c2 = (y / 2.0).cos();
-            let c3 = (z / 2.0).cos();
+			let c1 = (x / 2.0).cos();
+			let c2 = (y / 2.0).cos();
+			let c3 = (z / 2.0).cos();
 
-            let s1 = (x / 2.0).sin();
-            let s2 = (y / 2.0).sin();
-            let s3 = (z / 2.0).sin();
+			let s1 = (x / 2.0).sin();
+			let s2 = (y / 2.0).sin();
+			let s3 = (z / 2.0).sin();
 
-            let quat_x = s1 * c2 * c3 + c1 * s2 * s3;
-            let quat_y = c1 * s2 * c3 - s1 * c2 * s3;
-            let quat_z = c1 * c2 * s3 + s1 * s2 * c3;
-            let quat_w = c1 * c2 * c3 - s1 * s2 * s3;
+			let quat_x = s1 * c2 * c3 + c1 * s2 * s3;
+			let quat_y = c1 * s2 * c3 - s1 * c2 * s3;
+			let quat_z = c1 * c2 * s3 + s1 * s2 * c3;
+			let quat_w = c1 * c2 * c3 - s1 * s2 * s3;
 
-            let x2 = quat_x + quat_x;
-            let y2 = quat_y + quat_y;
-            let z2 = quat_z + quat_z;
-            let xx = quat_x * x2;
-            let xy = quat_x * y2;
-            let xz = quat_x * z2;
-            let yy = quat_y * y2;
-            let yz = quat_y * z2;
-            let zz = quat_z * z2;
-            let wx = quat_w * x2;
-            let wy = quat_w * y2;
-            let wz = quat_w * z2;
+			let x2 = quat_x + quat_x;
+			let y2 = quat_y + quat_y;
+			let z2 = quat_z + quat_z;
+			let xx = quat_x * x2;
+			let xy = quat_x * y2;
+			let xz = quat_x * z2;
+			let yy = quat_y * y2;
+			let yz = quat_y * z2;
+			let zz = quat_z * z2;
+			let wx = quat_w * x2;
+			let wy = quat_w * y2;
+			let wz = quat_w * z2;
 
-            let sx = if let Some(scale) = obj.get("scale") {
-                scale
-                    .get("x")
-                    .context("Scale must have x value")?
-                    .as_f64()
-                    .context("Scale must be number")?
-            } else {
-                1.0
-            };
+			let sx = if let Some(scale) = obj.get("scale") {
+				scale
+					.get("x")
+					.context("Scale must have x value")?
+					.as_f64()
+					.context("Scale must be number")?
+			} else {
+				1.0
+			};
 
-            let sy = if let Some(scale) = obj.get("scale") {
-                scale
-                    .get("y")
-                    .context("Scale must have y value")?
-                    .as_f64()
-                    .context("Scale must be number")?
-            } else {
-                1.0
-            };
+			let sy = if let Some(scale) = obj.get("scale") {
+				scale
+					.get("y")
+					.context("Scale must have y value")?
+					.as_f64()
+					.context("Scale must be number")?
+			} else {
+				1.0
+			};
 
-            let sz = if let Some(scale) = obj.get("scale") {
-                scale
-                    .get("z")
-                    .context("Scale must have z value")?
-                    .as_f64()
-                    .context("Scale must be number")?
-            } else {
-                1.0
-            };
+			let sz = if let Some(scale) = obj.get("scale") {
+				scale
+					.get("z")
+					.context("Scale must have z value")?
+					.as_f64()
+					.context("Scale must be number")?
+			} else {
+				1.0
+			};
 
-            json!({
-                "XAxis": {
-                    "x": (1.0 - (yy + zz)) * sx,
-                    "y": (xy - wz) * sy,
-                    "z": (xz + wy) * sz
-                },
-                "YAxis": {
-                    "x": (xy + wz) * sx,
-                    "y": (1.0 - (xx + zz)) * sy,
-                    "z": (yz - wx) * sz
-                },
-                "ZAxis": {
-                    "x": (xz - wy) * sx,
-                    "y": (yz + wx) * sy,
-                    "z": (1.0 - (xx + yy)) * sz
-                },
-                "Trans": {
-                    "x": obj.get("position").ctx?.get("x").ctx?.as_f64().ctx?,
-                    "y": obj.get("position").ctx?.get("y").ctx?.as_f64().ctx?,
-                    "z": obj.get("position").ctx?.get("z").ctx?.as_f64().ctx?
-                }
-            })
-        }
+			json!({
+				"XAxis": {
+					"x": (1.0 - (yy + zz)) * sx,
+					"y": (xy - wz) * sy,
+					"z": (xz + wy) * sz
+				},
+				"YAxis": {
+					"x": (xy + wz) * sx,
+					"y": (1.0 - (xx + zz)) * sy,
+					"z": (yz - wx) * sz
+				},
+				"ZAxis": {
+					"x": (xz - wy) * sx,
+					"y": (yz + wx) * sy,
+					"z": (1.0 - (xx + yy)) * sz
+				},
+				"Trans": {
+					"x": obj.get("position").ctx?.get("x").ctx?.as_f64().ctx?,
+					"y": obj.get("position").ctx?.get("y").ctx?.as_f64().ctx?,
+					"z": obj.get("position").ctx?.get("z").ctx?.as_f64().ctx?
+				}
+			})
+		}
 
-        "ZGuid" => json!({
-            "_a": i64::from_str_radix(property.value.as_str().ctx?.split('-').next().ctx?, 16).ctx?,
-            "_b": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(1).ctx?, 16).ctx?,
-            "_c": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(2).ctx?, 16).ctx?,
-            "_d": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(0).take(2).collect::<String>(), 16).ctx?,
-            "_e": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
-            "_f": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(0).take(2).collect::<String>(), 16).ctx?,
-            "_g": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
-            "_h": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(4).take(2).collect::<String>(), 16).ctx?,
-            "_i": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(6).take(2).collect::<String>(), 16).ctx?,
-            "_j": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(8).take(2).collect::<String>(), 16).ctx?,
-            "_k": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(10).take(2).collect::<String>(), 16).ctx?
-        }),
+		"ZGuid" => json!({
+			"_a": i64::from_str_radix(property.value.as_str().ctx?.split('-').next().ctx?, 16).ctx?,
+			"_b": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(1).ctx?, 16).ctx?,
+			"_c": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(2).ctx?, 16).ctx?,
+			"_d": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(0).take(2).collect::<String>(), 16).ctx?,
+			"_e": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
+			"_f": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(0).take(2).collect::<String>(), 16).ctx?,
+			"_g": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
+			"_h": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(4).take(2).collect::<String>(), 16).ctx?,
+			"_i": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(6).take(2).collect::<String>(), 16).ctx?,
+			"_j": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(8).take(2).collect::<String>(), 16).ctx?,
+			"_k": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(10).take(2).collect::<String>(), 16).ctx?
+		}),
 
-        "SColorRGB" => json!({
-            "r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(0).take(2).collect::<String>(), 16).ctx?) / 255.0,
-            "g": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(2).take(2).collect::<String>(), 16).ctx?) / 255.0,
-            "b": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(4).take(2).collect::<String>(), 16).ctx?) / 255.0
-        }),
+		"SColorRGB" => json!({
+			"r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(0).take(2).collect::<String>(), 16).ctx?) / 255.0,
+			"g": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(2).take(2).collect::<String>(), 16).ctx?) / 255.0,
+			"b": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(4).take(2).collect::<String>(), 16).ctx?) / 255.0
+		}),
 
-        "SColorRGBA" => json!({
-            "r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(0).take(2).collect::<String>(), 16).ctx?) / 255.0,
-            "g": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(2).take(2).collect::<String>(), 16).ctx?) / 255.0,
-            "b": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(4).take(2).collect::<String>(), 16).ctx?) / 255.0,
-            "a": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(6).take(2).collect::<String>(), 16).ctx?) / 255.0
-        }),
+		"SColorRGBA" => json!({
+			"r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(0).take(2).collect::<String>(), 16).ctx?) / 255.0,
+			"g": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(2).take(2).collect::<String>(), 16).ctx?) / 255.0,
+			"b": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(4).take(2).collect::<String>(), 16).ctx?) / 255.0,
+			"a": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(6).take(2).collect::<String>(), 16).ctx?) / 255.0
+		}),
 
-        _ => property.value.to_owned()
-    }
+		_ => property.value.to_owned()
+	}
 }
 
 #[time_graph::instrument]
@@ -3197,7 +3179,7 @@ pub fn convert_to_qn(
 		factory_hash: factory_meta.hash_value.to_owned(),
 		blueprint_hash: blueprint_meta.hash_value.to_owned(),
 		root_entity: format!(
-			"{:x}",
+			"{:0>16x}",
 			blueprint
 				.sub_entities
 				.get(blueprint.root_entity_index)
@@ -3220,7 +3202,7 @@ pub fn convert_to_qn(
 					.context("Entity resource index referred to nonexistent dependency")?;
 
 				Ok((
-					format!("{:x}", sub_entity_blueprint.entity_id),
+					format!("{:0>16x}", sub_entity_blueprint.entity_id),
 					SubEntity {
 						name: sub_entity_blueprint.entity_name.to_owned(),
 						factory: factory_dependency.hash.to_owned(),
@@ -3297,6 +3279,7 @@ pub fn convert_to_qn(
 							let x: IndexMap<String, IndexMap<String, Property>> = sub_entity_factory
 								.platform_specific_property_values
 								.iter()
+								.sorted_by_key(|property| &property.platform)
 								.group_by(|property| property.platform.to_owned())
 								.into_iter()
 								.map(|(platform, properties)| -> Result<_> {
@@ -3338,6 +3321,7 @@ pub fn convert_to_qn(
 							let x: IndexMap<String, Vec<PropertyAlias>> = sub_entity_blueprint
 								.property_aliases
 								.iter()
+								.sorted_by_key(|alias| &alias.s_property_name)
 								.group_by(|alias| alias.s_property_name.to_owned())
 								.into_iter()
 								.map(|(property_name, aliases)| {
@@ -3349,7 +3333,7 @@ pub fn convert_to_qn(
 													Ok(PropertyAlias {
 														original_property: alias.s_alias_name.to_owned(),
 														original_entity: Ref::Short(Some(format!(
-															"{:x}",
+															"{:0>16x}",
 															blueprint
 																.sub_entities
 																.get(alias.entity_id)
@@ -3407,7 +3391,7 @@ pub fn convert_to_qn(
 									Ok((
 										interface.to_owned(),
 										format!(
-											"{:x}",
+											"{:0>16x}",
 											blueprint
 												.sub_entities
 												.get(*entity_index)
@@ -3558,10 +3542,10 @@ pub fn convert_to_qn(
 	}
 
 	for pin in &blueprint.pin_connections {
-		let mut relevant_sub_entity = entity
+		let relevant_sub_entity = entity
 			.entities
 			.get_mut(&format!(
-				"{:x}",
+				"{:0>16x}",
 				blueprint
 					.sub_entities
 					.get(pin.from_id)
@@ -3584,7 +3568,7 @@ pub fn convert_to_qn(
 			.or_default()
 			.push(if pin.constant_pin_value.property_type == "void" {
 				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
-					"{:x}",
+					"{:0>16x}",
 					blueprint
 						.sub_entities
 						.get(pin.to_id)
@@ -3594,7 +3578,7 @@ pub fn convert_to_qn(
 			} else {
 				RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
 					entity_ref: Ref::Short(Some(format!(
-						"{:x}",
+						"{:0>16x}",
 						blueprint
 							.sub_entities
 							.get(pin.to_id)
@@ -3617,7 +3601,7 @@ pub fn convert_to_qn(
 		let relevant_sub_entity = entity
 			.entities
 			.get_mut(&format!(
-				"{:x}",
+				"{:0>16x}",
 				blueprint
 					.sub_entities
 					.get(pin_connection_override.from_entity.entity_index as usize)
@@ -3663,10 +3647,10 @@ pub fn convert_to_qn(
 
 	// cheeky bit of code duplication right here
 	for forwarding in &blueprint.input_pin_forwardings {
-		let mut relevant_sub_entity = entity
+		let relevant_sub_entity = entity
 			.entities
 			.get_mut(&format!(
-				"{:x}",
+				"{:0>16x}",
 				blueprint
 					.sub_entities
 					.get(forwarding.from_id)
@@ -3689,7 +3673,7 @@ pub fn convert_to_qn(
 			.or_default()
 			.push(if forwarding.constant_pin_value.property_type == "void" {
 				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
-					"{:x}",
+					"{:0>16x}",
 					blueprint
 						.sub_entities
 						.get(forwarding.to_id)
@@ -3699,7 +3683,7 @@ pub fn convert_to_qn(
 			} else {
 				RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
 					entity_ref: Ref::Short(Some(format!(
-						"{:x}",
+						"{:0>16x}",
 						blueprint
 							.sub_entities
 							.get(forwarding.to_id)
@@ -3715,10 +3699,10 @@ pub fn convert_to_qn(
 	}
 
 	for forwarding in &blueprint.output_pin_forwardings {
-		let mut relevant_sub_entity = entity
+		let relevant_sub_entity = entity
 			.entities
 			.get_mut(&format!(
-				"{:x}",
+				"{:0>16x}",
 				blueprint
 					.sub_entities
 					.get(forwarding.from_id)
@@ -3741,7 +3725,7 @@ pub fn convert_to_qn(
 			.or_default()
 			.push(if forwarding.constant_pin_value.property_type == "void" {
 				RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
-					"{:x}",
+					"{:0>16x}",
 					blueprint
 						.sub_entities
 						.get(forwarding.to_id)
@@ -3751,7 +3735,7 @@ pub fn convert_to_qn(
 			} else {
 				RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
 					entity_ref: Ref::Short(Some(format!(
-						"{:x}",
+						"{:0>16x}",
 						blueprint
 							.sub_entities
 							.get(forwarding.to_id)
@@ -3769,10 +3753,10 @@ pub fn convert_to_qn(
 	for sub_entity in &blueprint.sub_entities {
 		for (subset, data) in &sub_entity.entity_subsets {
 			for subset_entity in &data.entities {
-				let mut relevant_qn = entity
+				let relevant_qn = entity
 					.entities
 					.get_mut(&format!(
-						"{:x}",
+						"{:0>16x}",
 						blueprint
 							.sub_entities
 							.get(*subset_entity)
@@ -3791,7 +3775,7 @@ pub fn convert_to_qn(
 					.ctx?
 					.entry(subset.to_owned())
 					.or_default()
-					.push(format!("{:x}", sub_entity.entity_id));
+					.push(format!("{:0>16x}", sub_entity.entity_id));
 			}
 		}
 	}
