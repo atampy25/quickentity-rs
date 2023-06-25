@@ -54,7 +54,7 @@ enum Command {
 		input_blueprint_meta: String,
 
 		/// Patch JSON path.
-		#[arg(short = 'u', long, value_parser, num_args = 1.., value_delimiter = ';')]
+		#[arg(num_args = 1..)]
 		patches: Vec<String>,
 
 		/// Output factory (TEMP) JSON path.
@@ -153,6 +153,21 @@ enum EntityCommand {
 		/// Output RT JSON files compatible with HITMAN (2016).
 		#[arg(long, action)]
 		h1: bool
+	},
+
+	/// Output the same QuickEntity JSON in standard form, including consistent entity ID lengths and sorted JSON keys.
+	Normalise {
+		/// Input QuickEntity JSON path.
+		#[arg(short = 'i', long)]
+		input: String,
+
+		/// Output QuickEntity JSON path.
+		#[arg(short = 'o', long)]
+		output: String,
+
+		/// Display performance data once finished.
+		#[arg(long, action)]
+		profile: bool
 	}
 }
 
@@ -201,7 +216,11 @@ enum PatchCommand {
 
 		/// Be more permissive with certain unexpected scenarios, such as properties that should be removed already being gone.
 		#[arg(long, action)]
-		permissive: bool
+		permissive: bool,
+
+		/// Ensure the resulting QuickEntity JSON is valid and output the JSON in standard form, including consistent entity ID lengths and sorted JSON keys.
+		#[arg(long, action)]
+		normalise: bool
 	}
 }
 
@@ -287,6 +306,25 @@ fn main() -> Result<()> {
 			}
 		}
 
+		Command::Entity {
+			subcommand: EntityCommand::Normalise { input, output, profile }
+		} => {
+			if profile {
+				time_graph::enable_data_collection(true);
+			}
+
+			let mut entity = read_as_entity(&input);
+
+			let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
+			entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
+
+			fs::write(output, to_vec_float_format(&entity)).unwrap();
+
+			if profile {
+				println!("{}", time_graph::get_full_graph().as_table());
+			}
+		}
+
 		Command::Patch {
 			subcommand: PatchCommand::Generate {
 				input1,
@@ -319,13 +357,15 @@ fn main() -> Result<()> {
 		}
 
 		Command::Patch {
-			subcommand: PatchCommand::Apply {
-				input,
-				patch,
-				output,
-				profile,
-				permissive
-			}
+			subcommand:
+				PatchCommand::Apply {
+					input,
+					patch,
+					output,
+					profile,
+					permissive,
+					normalise
+				}
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -335,6 +375,11 @@ fn main() -> Result<()> {
 			let patch = read_as_value(&patch);
 
 			apply_patch(&mut entity, &patch, permissive)?;
+
+			if normalise {
+				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
+				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
+			}
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 
