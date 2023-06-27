@@ -3862,8 +3862,8 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 		.entities
 		.keys()
 		.enumerate()
-		.map(|(x, y)| (y.to_owned(), x))
-		.collect();
+		.map(|(x, y)| -> Result<_> { Ok((normalise_entity_id(y)?, x)) })
+		.collect::<Result<_>>()?;
 
 	let mut factory = RTFactory {
 		sub_type: match entity.sub_type {

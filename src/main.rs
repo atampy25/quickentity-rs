@@ -53,7 +53,7 @@ enum Command {
 		#[arg(short = 'l', long)]
 		input_blueprint_meta: String,
 
-		/// Patch JSON path.
+		/// Patch JSON paths.
 		#[arg(num_args = 1..)]
 		patches: Vec<String>,
 
@@ -164,6 +164,10 @@ enum EntityCommand {
 		/// Output QuickEntity JSON path.
 		#[arg(short = 'o', long)]
 		output: String,
+
+		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.).
+		#[arg(short = 's', long, action)]
+		lossless: bool,
 
 		/// Display performance data once finished.
 		#[arg(long, action)]
@@ -307,7 +311,12 @@ fn main() -> Result<()> {
 		}
 
 		Command::Entity {
-			subcommand: EntityCommand::Normalise { input, output, profile }
+			subcommand: EntityCommand::Normalise {
+				input,
+				output,
+				lossless,
+				profile
+			}
 		} => {
 			if profile {
 				time_graph::enable_data_collection(true);
@@ -316,7 +325,7 @@ fn main() -> Result<()> {
 			let mut entity = read_as_entity(&input);
 
 			let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
-			entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
+			entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 
