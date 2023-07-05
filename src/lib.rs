@@ -4373,7 +4373,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 							Ok((
 								interface.to_owned(),
 								entity_id_to_index_mapping
-									.get(implementor)
+									.get(&normalise_entity_id(implementor)?)
 									.context("Exposed interface referenced nonexistent local entity")?
 									.to_owned()
 							))
