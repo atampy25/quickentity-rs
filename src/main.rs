@@ -383,6 +383,11 @@ fn main() -> Result<()> {
 			let mut entity = read_as_entity(&input);
 			let patch = read_as_value(&patch);
 
+			if normalise {
+				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
+				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
+			}
+
 			apply_patch(&mut entity, &patch, permissive)?;
 
 			if normalise {

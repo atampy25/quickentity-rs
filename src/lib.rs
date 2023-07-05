@@ -203,6 +203,26 @@ fn normalise_entity_id(entity_id: &str) -> Result<String> {
 
 #[time_graph::instrument]
 #[try_fn]
+#[context("Failure normalising ref")]
+#[auto_context]
+fn normalise_ref(reference: &Ref) -> Result<Ref> {
+	match reference {
+		Ref::Full(FullRef {
+			entity_ref,
+			external_scene,
+			exposed_entity
+		}) => Ref::Full(FullRef {
+			entity_ref: normalise_entity_id(entity_ref)?,
+			exposed_entity: exposed_entity.to_owned(),
+			external_scene: external_scene.to_owned()
+		}),
+		Ref::Short(Some(x)) => Ref::Short(Some(normalise_entity_id(x)?)),
+		Ref::Short(None) => Ref::Short(None)
+	}
+}
+
+#[time_graph::instrument]
+#[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
 fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenProperty) -> Result<bool> {
@@ -254,7 +274,7 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 			}
 
 			PatchOperation::RemoveEntityByID(value) => {
-				entity.entities.shift_remove(&value).permit(
+				entity.entities.shift_remove(&normalise_entity_id(&value)?).permit(
 					permissive,
 					"Couldn't remove entity by ID because entity did not exist in target!"
 				)?;
@@ -494,6 +514,16 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 					}
 
 					SubEntityOperation::RemoveEventConnection(event, trigger, reference) => {
+						let reference = match reference {
+							RefMaybeConstantValue::Ref(x) => RefMaybeConstantValue::Ref(normalise_ref(&x)?),
+							RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue { entity_ref, value }) => {
+								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
+									entity_ref: normalise_ref(&entity_ref)?,
+									value
+								})
+							}
+						};
+
 						let ind = entity
 							.events
 							.as_ref()
@@ -601,6 +631,16 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 					}
 
 					SubEntityOperation::RemoveInputCopyConnection(event, trigger, reference) => {
+						let reference = match reference {
+							RefMaybeConstantValue::Ref(x) => RefMaybeConstantValue::Ref(normalise_ref(&x)?),
+							RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue { entity_ref, value }) => {
+								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
+									entity_ref: normalise_ref(&entity_ref)?,
+									value
+								})
+							}
+						};
+
 						let ind = entity
 							.input_copying
 							.as_ref()
@@ -726,6 +766,16 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 					}
 
 					SubEntityOperation::RemoveOutputCopyConnection(event, trigger, reference) => {
+						let reference = match reference {
+							RefMaybeConstantValue::Ref(x) => RefMaybeConstantValue::Ref(normalise_ref(&x)?),
+							RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue { entity_ref, value }) => {
+								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
+									entity_ref: normalise_ref(&entity_ref)?,
+									value
+								})
+							}
+						};
+
 						let ind = entity
 							.output_copying
 							.as_ref()
@@ -840,6 +890,11 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 					}
 
 					SubEntityOperation::RemoveConnectionForPropertyAlias(alias, data) => {
+						let data = PropertyAlias {
+							original_property: data.original_property,
+							original_entity: normalise_ref(&data.original_entity)?
+						};
+
 						let connection = entity
 							.property_aliases
 							.as_ref()
@@ -909,6 +964,8 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 					}
 
 					SubEntityOperation::RemoveSubset(name, ent) => {
+						let ent = normalise_entity_id(&ent)?;
+
 						let ind = entity
 							.subsets
 							.as_ref()
@@ -949,8 +1006,10 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 				);
 			}
 
-			PatchOperation::AddPropertyOverrideConnection(value) => {
+			PatchOperation::AddPropertyOverrideConnection(mut value) => {
 				let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
+
+				value.entity = normalise_ref(&value.entity)?;
 
 				for property_override in &entity.property_overrides {
 					for ent in &property_override.entities {
@@ -1026,8 +1085,10 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 				entity.property_overrides = merged_overrides;
 			}
 
-			PatchOperation::RemovePropertyOverrideConnection(value) => {
+			PatchOperation::RemovePropertyOverrideConnection(mut value) => {
 				let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
+
+				value.entity = normalise_ref(&value.entity)?;
 
 				for property_override in &entity.property_overrides {
 					for ent in &property_override.entities {
@@ -1112,10 +1173,14 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 			}
 
 			PatchOperation::AddOverrideDelete(value) => {
+				let value = normalise_ref(&value)?;
+
 				entity.override_deletes.push(value);
 			}
 
 			PatchOperation::RemoveOverrideDelete(value) => {
+				let value = normalise_ref(&value)?;
+
 				entity.override_deletes.remove(
 					entity
 						.override_deletes
@@ -1125,11 +1190,17 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 				);
 			}
 
-			PatchOperation::AddPinConnectionOverride(value) => {
+			PatchOperation::AddPinConnectionOverride(mut value) => {
+				value.to_entity = normalise_ref(&value.to_entity)?;
+				value.from_entity = normalise_ref(&value.from_entity)?;
+
 				entity.pin_connection_overrides.push(value);
 			}
 
-			PatchOperation::RemovePinConnectionOverride(value) => {
+			PatchOperation::RemovePinConnectionOverride(mut value) => {
+				value.to_entity = normalise_ref(&value.to_entity)?;
+				value.from_entity = normalise_ref(&value.from_entity)?;
+
 				entity.pin_connection_overrides.remove(
 					entity
 						.pin_connection_overrides
@@ -1139,11 +1210,17 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 				);
 			}
 
-			PatchOperation::AddPinConnectionOverrideDelete(value) => {
+			PatchOperation::AddPinConnectionOverrideDelete(mut value) => {
+				value.to_entity = normalise_ref(&value.to_entity)?;
+				value.from_entity = normalise_ref(&value.from_entity)?;
+
 				entity.pin_connection_override_deletes.push(value);
 			}
 
-			PatchOperation::RemovePinConnectionOverrideDelete(value) => {
+			PatchOperation::RemovePinConnectionOverrideDelete(mut value) => {
+				value.to_entity = normalise_ref(&value.to_entity)?;
+				value.from_entity = normalise_ref(&value.from_entity)?;
+
 				entity.pin_connection_override_deletes.remove(
 					entity
 						.pin_connection_override_deletes
@@ -1214,11 +1291,15 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 				);
 			}
 
-			PatchOperation::AddComment(value) => {
+			PatchOperation::AddComment(mut value) => {
+				value.parent = normalise_ref(&value.parent)?;
+
 				entity.comments.push(value);
 			}
 
-			PatchOperation::RemoveComment(value) => {
+			PatchOperation::RemoveComment(mut value) => {
+				value.parent = normalise_ref(&value.parent)?;
+
 				entity.comments.remove(
 					entity
 						.comments
