@@ -357,7 +357,12 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 							.get_mut(&property_name)
 							.context("PatchArrayPropertyValue couldn't find expected property!")?;
 
-						apply_array_patch(&mut item_to_patch.value, array_patch, permissive)?;
+						apply_array_patch(
+							&mut item_to_patch.value,
+							array_patch,
+							permissive,
+							item_to_patch.property_type == "TArray<SEntityTemplateReference>"
+						)?;
 					}
 
 					SubEntityOperation::SetPropertyPostInit(name, value) => {
@@ -466,7 +471,12 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 							.get_mut(&property_name)
 							.context("PatchPSArrayPropertyValue couldn't find expected property!")?;
 
-						apply_array_patch(&mut item_to_patch.value, array_patch, permissive)?;
+						apply_array_patch(
+							&mut item_to_patch.value,
+							array_patch,
+							permissive,
+							item_to_patch.property_type == "TArray<SEntityTemplateReference>"
+						)?;
 					}
 
 					SubEntityOperation::SetPlatformSpecificPropertyPostInit(platform, name, value) => {
@@ -1315,18 +1325,40 @@ pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Resu
 #[time_graph::instrument]
 #[try_fn]
 #[context("Failure applying array patch")]
-pub fn apply_array_patch(arr: &mut Value, patch: Vec<ArrayPatchOperation>, permissive: bool) -> Result<()> {
+pub fn apply_array_patch(
+	arr: &mut Value,
+	patch: Vec<ArrayPatchOperation>,
+	permissive: bool,
+	is_ref_array: bool
+) -> Result<()> {
 	let arr = arr
 		.as_array_mut()
 		.context("Array patch was given a non-array value to patch!")?;
 
+	if is_ref_array {
+		// It's not unnecessary because what Clippy suggests causes an error due to the borrow from .iter().cloned()
+		#[allow(clippy::unnecessary_to_owned)]
+		for (index, elem) in arr.to_owned().into_iter().enumerate() {
+			arr[index] = to_value(normalise_ref(&from_value::<Ref>(elem)?)?)?;
+		}
+	}
+
 	for op in patch {
 		match op {
-			ArrayPatchOperation::RemoveItemByValue(val) => {
+			ArrayPatchOperation::RemoveItemByValue(mut val) => {
+				if is_ref_array {
+					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
+				}
+
 				arr.retain(|x| *x != val);
 			}
 
-			ArrayPatchOperation::AddItemAfter(val, new) => {
+			ArrayPatchOperation::AddItemAfter(mut val, mut new) => {
+				if is_ref_array {
+					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
+					new = to_value(normalise_ref(&from_value::<Ref>(new)?)?)?;
+				}
+
 				let new = new.to_owned();
 
 				if let Some(pos) = arr.iter().position(|x| *x == val) {
@@ -1339,7 +1371,12 @@ pub fn apply_array_patch(arr: &mut Value, patch: Vec<ArrayPatchOperation>, permi
 				}
 			}
 
-			ArrayPatchOperation::AddItemBefore(val, new) => {
+			ArrayPatchOperation::AddItemBefore(mut val, mut new) => {
+				if is_ref_array {
+					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
+					new = to_value(normalise_ref(&from_value::<Ref>(new)?)?)?;
+				}
+
 				let new = new.to_owned();
 
 				if let Some(pos) = arr.iter().position(|x| *x == val) {
@@ -1352,7 +1389,11 @@ pub fn apply_array_patch(arr: &mut Value, patch: Vec<ArrayPatchOperation>, permi
 				}
 			}
 
-			ArrayPatchOperation::AddItem(val) => {
+			ArrayPatchOperation::AddItem(mut val) => {
+				if is_ref_array {
+					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
+				}
+
 				arr.push(val);
 			}
 		}
