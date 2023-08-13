@@ -17,7 +17,7 @@ pub struct STemplateBlueprintSubEntity {
 	pub entity_subsets: Vec<(String, SEntityTemplateEntitySubset)>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RTBlueprint {
 	pub sub_type: i8,
@@ -44,7 +44,7 @@ pub struct STemplateFactorySubEntity {
 	pub platform_specific_property_values: Vec<SEntityTemplatePlatformSpecificProperty>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RTFactory {
 	pub sub_type: i8,
