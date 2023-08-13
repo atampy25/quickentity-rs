@@ -2471,7 +2471,7 @@ fn convert_qn_reference_to_rt(
 #[try_fn]
 #[context("Failure converting RT property value to QN")]
 #[auto_context]
-fn convert_rt_property_value_to_qn(
+pub fn convert_rt_property_value_to_qn(
 	property: &SEntityTemplatePropertyValue,
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
@@ -2732,7 +2732,7 @@ fn convert_rt_property_to_qn(
 #[try_fn]
 #[context("Failure converting QN property value to RT")]
 #[auto_context]
-fn convert_qn_property_value_to_rt(
+pub fn convert_qn_property_value_to_rt(
 	property: &Property,
 	factory: &RTFactory,
 	factory_meta: &ResourceMeta,
