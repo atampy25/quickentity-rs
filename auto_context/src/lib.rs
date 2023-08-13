@@ -139,7 +139,7 @@ fn process_tokentree(prev: [Option<TokenTree>; 12], tree: TokenTree) -> Vec<Toke
 									.file_name()
 									.unwrap_or(OsStr::new("unknown"))
 									.to_string_lossy(),
-								func_name.span().start().line
+								func_name.span().start().line()
 							)));
 
 							quote!(context($msg)).into_iter().collect()
@@ -183,7 +183,7 @@ fn process_tokentree(prev: [Option<TokenTree>; 12], tree: TokenTree) -> Vec<Toke
 								.file_name()
 								.unwrap_or(OsStr::new("unknown"))
 								.to_string_lossy(),
-							func_name.span().start().line
+							func_name.span().start().line()
 						)));
 
 						quote!(context($msg)).into_iter().collect()
