@@ -172,9 +172,7 @@ impl PartialOrd for DiffableValue {
 	}
 
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		to_string(&self.0)
-			.expect("Couldn't serialise DiffableValue 1!")
-			.partial_cmp(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+		Some(self.cmp(other))
 	}
 }
 
@@ -2863,9 +2861,9 @@ pub fn convert_qn_property_value_to_rt(
 			"_a": i64::from_str_radix(property.value.as_str().ctx?.split('-').next().ctx?, 16).ctx?,
 			"_b": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(1).ctx?, 16).ctx?,
 			"_c": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(2).ctx?, 16).ctx?,
-			"_d": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(0).take(2).collect::<String>(), 16).ctx?,
+			"_d": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().take(2).collect::<String>(), 16).ctx?,
 			"_e": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
-			"_f": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(0).take(2).collect::<String>(), 16).ctx?,
+			"_f": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().take(2).collect::<String>(), 16).ctx?,
 			"_g": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
 			"_h": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(4).take(2).collect::<String>(), 16).ctx?,
 			"_i": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(6).take(2).collect::<String>(), 16).ctx?,
@@ -2874,13 +2872,13 @@ pub fn convert_qn_property_value_to_rt(
 		}),
 
 		"SColorRGB" => json!({
-			"r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(0).take(2).collect::<String>(), 16).ctx?) / 255.0,
+			"r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).take(2).collect::<String>(), 16).ctx?) / 255.0,
 			"g": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(2).take(2).collect::<String>(), 16).ctx?) / 255.0,
 			"b": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(4).take(2).collect::<String>(), 16).ctx?) / 255.0
 		}),
 
 		"SColorRGBA" => json!({
-			"r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(0).take(2).collect::<String>(), 16).ctx?) / 255.0,
+			"r": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).take(2).collect::<String>(), 16).ctx?) / 255.0,
 			"g": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(2).take(2).collect::<String>(), 16).ctx?) / 255.0,
 			"b": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(4).take(2).collect::<String>(), 16).ctx?) / 255.0,
 			"a": f64::from(u8::from_str_radix(&property.value.as_str().ctx?.chars().skip(1).skip(6).take(2).collect::<String>(), 16).ctx?) / 255.0
@@ -3008,7 +3006,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 			.map(|(_, sub_entity)| -> Result<_> {
 				Ok(vec![
 					if let Some(props) = &sub_entity.properties {
-						vec![
+						[
 							props
 								.iter()
 								.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
@@ -3076,7 +3074,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 								.collect::<Result<Vec<_>>>()?
 								.into_iter()
 								.flatten()
-								.collect(),
+								.collect()
 						]
 						.concat()
 					} else {
@@ -3086,7 +3084,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 						platforms
 							.iter()
 							.map(|(_, props)| -> Result<_> {
-								Ok(vec![
+								Ok([
 									props
 										.iter()
 										.filter(|(_, prop)| {
@@ -3156,7 +3154,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 										.collect::<Result<Vec<_>>>()?
 										.into_iter()
 										.flatten()
-										.collect(),
+										.collect()
 								]
 								.concat())
 							})
@@ -3180,7 +3178,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 			.property_overrides
 			.par_iter()
 			.map(|PropertyOverride { properties, .. }| -> Result<_> {
-				Ok(vec![
+				Ok([
 					properties
 						.iter()
 						.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
@@ -3246,7 +3244,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 						.collect::<Result<Vec<_>>>()?
 						.into_iter()
 						.flatten()
-						.collect(),
+						.collect()
 				]
 				.concat())
 			})
@@ -4004,7 +4002,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 
 	let factory_meta = ResourceMeta {
 		hash_offset: 1367, // none of this data actually matters except for dependencies and resource type
-		hash_reference_data: vec![
+		hash_reference_data: [
 			get_factory_dependencies(entity)?,
 			entity
 				.extra_factory_dependencies
@@ -4019,7 +4017,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 						flag: flag.to_owned()
 					}
 				})
-				.collect(),
+				.collect()
 		]
 		.concat(),
 		hash_reference_table_dummy: 0,
@@ -4052,7 +4050,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 				convert_qn_reference_to_rt(override_delete, &factory, &factory_meta, &entity_id_to_index_mapping)
 			})
 			.collect::<Result<_>>()?,
-		pin_connection_overrides: vec![
+		pin_connection_overrides: [
 			entity
 				.pin_connection_overrides
 				.par_iter()
@@ -4173,7 +4171,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 				.collect::<Result<Vec<_>>>()?
 				.into_iter()
 				.flatten()
-				.collect::<Vec<SExternalEntityTemplatePinConnection>>(),
+				.collect::<Vec<SExternalEntityTemplatePinConnection>>()
 		]
 		.concat(),
 		pin_connection_override_deletes: entity
@@ -4216,7 +4214,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 
 	let blueprint_meta = ResourceMeta {
 		hash_offset: 1367,
-		hash_reference_data: vec![
+		hash_reference_data: [
 			get_blueprint_dependencies(entity),
 			entity
 				.extra_blueprint_dependencies
@@ -4231,7 +4229,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 						flag: flag.to_owned()
 					}
 				})
-				.collect(),
+				.collect()
 		]
 		.concat(),
 		hash_reference_table_dummy: 0,

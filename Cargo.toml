@@ -30,6 +30,7 @@ tryvial = "0.2.0"
 fn-error-context = "0.2.1"
 auto_context = { path = "auto_context" }
 indexmap = { version = "1.9.1", features = ["serde", "rayon"] }
+serde_path_to_error = "0.1.14"
 
 [[bin]]
 name = "quickentity-rs"
