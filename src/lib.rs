@@ -20,7 +20,7 @@ use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::collections::HashMap;
 use tryvial::try_fn;
 
-use patch_structs::{ArrayPatchOperation, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
+use patch_structs::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
 use qn_structs::{
 	Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride,
 	PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue,
@@ -257,9 +257,8 @@ fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenPropert
 #[try_fn]
 #[context("Failure applying patch to entity")]
 #[auto_context]
-pub fn apply_patch(entity: &mut Entity, patch: &Value, permissive: bool) -> Result<()> {
-	let patch: Vec<PatchOperation> =
-		from_value(patch.get("patch").context("Patch didn't define a patch!")?.to_owned())?;
+pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Result<()> {
+	let patch: Vec<PatchOperation> = patch.patch;
 
 	for operation in patch {
 		match operation {
@@ -1402,7 +1401,7 @@ pub fn apply_array_patch(
 #[try_fn]
 #[context("Failure generating patch from two entities")]
 #[auto_context]
-pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Value> {
+pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	if original.quick_entity_version != modified.quick_entity_version {
 		bail!("Can't create patches between differing QuickEntity versions!")
 	}
@@ -2330,12 +2329,12 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Value> {
 		}
 	}
 
-	json!({
-		"tempHash": modified.factory_hash,
-		"tbluHash": modified.blueprint_hash,
-		"patch": patch,
-		"patchVersion": 6
-	})
+	Patch {
+		factory_hash: modified.factory_hash,
+		blueprint_hash: modified.blueprint_hash,
+		patch,
+		patch_version: 6
+	}
 }
 
 #[time_graph::instrument]

@@ -9,6 +9,25 @@ use crate::qn_structs::{
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
 #[ts(export)]
+pub struct Patch {
+	/// The hash of the TEMP file of this entity.
+	#[serde(rename = "tempHash")]
+	pub factory_hash: String,
+
+	/// The hash of the TBLU file of this entity.
+	#[serde(rename = "tbluHash")]
+	pub blueprint_hash: String,
+
+	/// The patch operations to apply.
+	pub patch: Vec<PatchOperation>,
+
+	/// The patch version. The current version is 6.
+	#[serde(rename = "patchVersion")]
+	pub patch_version: u8
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
+#[ts(export)]
 pub enum PatchOperation {
 	SetRootEntity(String),
 	SetSubType(SubType),

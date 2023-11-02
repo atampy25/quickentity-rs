@@ -61,7 +61,7 @@ pub struct Entity {
 	#[serde(rename = "subType")]
 	pub sub_type: SubType,
 
-	/// The QuickEntity format version of this entity.
+	/// The QuickEntity format version of this entity. The current version is 3.1.
 	#[serde(rename = "quickEntityVersion")]
 	pub quick_entity_version: f64,
 

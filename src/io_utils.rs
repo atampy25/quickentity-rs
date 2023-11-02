@@ -1,3 +1,4 @@
+use quickentity_rs::patch_structs::Patch;
 use quickentity_rs::qn_structs::Entity;
 use quickentity_rs::rpkg_structs::ResourceMeta;
 use quickentity_rs::rt_structs::{RTBlueprint, RTFactory};
@@ -8,18 +9,6 @@ use serde_json::ser::Formatter;
 use serde_json::{from_value, Serializer, Value};
 use std::io;
 use std::{fs, io::Read};
-
-pub fn read_as_value(path: &str) -> Value {
-	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	}))
-	.unwrap_or_else(|x| panic!("Failed to parse file: {}", x))
-}
 
 pub fn read_as_entity(path: &str) -> Entity {
 	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
@@ -70,6 +59,18 @@ pub fn read_as_rtblueprint(path: &str) -> RTBlueprint {
 }
 
 pub fn read_as_meta(path: &str) -> ResourceMeta {
+	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
+		let mut vec = Vec::new();
+		fs::File::open(path)
+			.expect("Failed to open file")
+			.read_to_end(&mut vec)
+			.expect("Failed to read file");
+		vec
+	}))
+	.unwrap_or_else(|x| panic!("Failed to parse file: {}", x))
+}
+
+pub fn read_as_patch(path: &str) -> Patch {
 	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
 		let mut vec = Vec::new();
 		fs::File::open(path)

@@ -381,14 +381,14 @@ fn main() -> Result<()> {
 			}
 
 			let mut entity = read_as_entity(&input);
-			let patch = read_as_value(&patch);
+			let patch = read_as_patch(&patch);
 
 			if normalise {
 				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
 				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
-			apply_patch(&mut entity, &patch, permissive)?;
+			apply_patch(&mut entity, patch, permissive)?;
 
 			if normalise {
 				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
@@ -429,9 +429,9 @@ fn main() -> Result<()> {
 			let mut entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			for patch in patches {
-				let patch = read_as_value(&patch);
+				let patch = read_as_patch(&patch);
 
-				apply_patch(&mut entity, &patch, permissive)?;
+				apply_patch(&mut entity, patch, permissive)?;
 			}
 
 			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rt(&entity)?;
