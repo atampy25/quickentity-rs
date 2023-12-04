@@ -10,7 +10,7 @@ license = "LGPL-3.0-only"
 clap = { version = "4.2.4", features = ["derive"] }
 itertools = "0.10.3"
 md5 = "0.7.0"
-rayon = "1.5.3"
+rayon = "1.8.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = { version = "1.0.81", features = [
     "arbitrary_precision",
