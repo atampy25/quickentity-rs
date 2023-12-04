@@ -77,10 +77,6 @@ enum Command {
 		#[arg(short = 's', long, action)]
 		lossless: bool,
 
-		/// Display performance data once finished.
-		#[arg(long, action)]
-		profile: bool,
-
 		/// Be more permissive with certain unexpected scenarios in patching, such as properties that should be removed already being gone.
 		#[arg(long, action)]
 		permissive: bool,
@@ -117,11 +113,7 @@ enum EntityCommand {
 
 		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.).
 		#[arg(short = 's', long, action)]
-		lossless: bool,
-
-		/// Display performance data once finished.
-		#[arg(long, action)]
-		profile: bool
+		lossless: bool
 	},
 
 	/// Generate a set of JSON files from a QuickEntity JSON file.
@@ -146,10 +138,6 @@ enum EntityCommand {
 		#[arg(short = 'r', long)]
 		output_blueprint_meta: String,
 
-		/// Display performance data once finished.
-		#[arg(long, action)]
-		profile: bool,
-
 		/// Output RT JSON files compatible with HITMAN (2016).
 		#[arg(long, action)]
 		h1: bool
@@ -167,11 +155,7 @@ enum EntityCommand {
 
 		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.).
 		#[arg(short = 's', long, action)]
-		lossless: bool,
-
-		/// Display performance data once finished.
-		#[arg(long, action)]
-		profile: bool
+		lossless: bool
 	}
 }
 
@@ -190,10 +174,6 @@ enum PatchCommand {
 		/// Output patch JSON path.
 		#[arg(short = 'o', long)]
 		output: String,
-
-		/// Display performance data once finished.
-		#[arg(long, action)]
-		profile: bool,
 
 		/// Mitigate a serde-json issue where numbers are sometimes not considered equal by parsing JSON files twice.
 		#[arg(long, action)]
@@ -214,10 +194,6 @@ enum PatchCommand {
 		#[arg(short = 'o', long)]
 		output: String,
 
-		/// Display performance data once finished.
-		#[arg(long, action)]
-		profile: bool,
-
 		/// Be more permissive with certain unexpected scenarios, such as properties that should be removed already being gone.
 		#[arg(long, action)]
 		permissive: bool,
@@ -230,6 +206,12 @@ enum PatchCommand {
 
 #[try_fn]
 fn main() -> Result<()> {
+	if std::env::var("RUST_LOG").is_err() {
+		std::env::set_var("RUST_LOG", "info")
+	}
+
+	env_logger::init();
+
 	let args = Args::parse();
 
 	match args.command {
@@ -241,14 +223,9 @@ fn main() -> Result<()> {
 					input_blueprint,
 					input_blueprint_meta,
 					output,
-					lossless,
-					profile
+					lossless
 				}
 		} => {
-			if profile {
-				time_graph::enable_data_collection(true);
-			}
-
 			let factory = read_as_rtfactory(&input_factory);
 			let factory_meta = read_as_meta(&input_factory_meta);
 			let blueprint = read_as_rtblueprint(&input_blueprint);
@@ -257,10 +234,6 @@ fn main() -> Result<()> {
 			let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
-
-			if profile {
-				println!("{}", time_graph::get_full_graph().as_table());
-			}
 		}
 
 		Command::Entity {
@@ -271,14 +244,9 @@ fn main() -> Result<()> {
 					output_factory_meta,
 					output_blueprint,
 					output_blueprint_meta,
-					profile,
 					h1
 				}
 		} => {
-			if profile {
-				time_graph::enable_data_collection(true);
-			}
-
 			let entity = read_as_entity(&input);
 
 			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rt(&entity)?;
@@ -304,34 +272,21 @@ fn main() -> Result<()> {
 			.unwrap();
 
 			fs::write(output_blueprint_meta, to_vec_float_format(&converted_blu_meta)).unwrap();
-
-			if profile {
-				println!("{}", time_graph::get_full_graph().as_table());
-			}
 		}
 
 		Command::Entity {
 			subcommand: EntityCommand::Normalise {
 				input,
 				output,
-				lossless,
-				profile
+				lossless
 			}
 		} => {
-			if profile {
-				time_graph::enable_data_collection(true);
-			}
-
 			let mut entity = read_as_entity(&input);
 
 			let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
 			entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
-
-			if profile {
-				println!("{}", time_graph::get_full_graph().as_table());
-			}
 		}
 
 		Command::Patch {
@@ -339,14 +294,9 @@ fn main() -> Result<()> {
 				input1,
 				input2,
 				output,
-				profile,
 				format_fix
 			}
 		} => {
-			if profile {
-				time_graph::enable_data_collection(true);
-			}
-
 			let mut entity1 = read_as_entity(&input1);
 			let mut entity2 = read_as_entity(&input2);
 
@@ -359,27 +309,17 @@ fn main() -> Result<()> {
 			let patch = generate_patch(&entity1, &entity2)?;
 
 			fs::write(output, to_vec_float_format(&patch)).unwrap();
-
-			if profile {
-				println!("{}", time_graph::get_full_graph().as_table());
-			}
 		}
 
 		Command::Patch {
-			subcommand:
-				PatchCommand::Apply {
-					input,
-					patch,
-					output,
-					profile,
-					permissive,
-					normalise
-				}
-		} => {
-			if profile {
-				time_graph::enable_data_collection(true);
+			subcommand: PatchCommand::Apply {
+				input,
+				patch,
+				output,
+				permissive,
+				normalise
 			}
-
+		} => {
 			let mut entity = read_as_entity(&input);
 			let patch = read_as_patch(&patch);
 
@@ -396,10 +336,6 @@ fn main() -> Result<()> {
 			}
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
-
-			if profile {
-				println!("{}", time_graph::get_full_graph().as_table());
-			}
 		}
 
 		Command::ConvertPatchGenerate {
@@ -414,13 +350,8 @@ fn main() -> Result<()> {
 			patches,
 			h1,
 			lossless,
-			profile,
 			permissive
 		} => {
-			if profile {
-				time_graph::enable_data_collection(true);
-			}
-
 			let factory = read_as_rtfactory(&input_factory);
 			let factory_meta = read_as_meta(&input_factory_meta);
 			let blueprint = read_as_rtblueprint(&input_blueprint);
@@ -457,10 +388,6 @@ fn main() -> Result<()> {
 			.unwrap();
 
 			fs::write(output_blueprint_meta, to_vec_float_format(&converted_blu_meta)).unwrap();
-
-			if profile {
-				println!("{}", time_graph::get_full_graph().as_table());
-			}
 		}
 	}
 }

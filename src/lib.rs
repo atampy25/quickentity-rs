@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_string, to_value, Value};
 use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::collections::HashMap;
+use tracing::instrument;
 use tryvial::try_fn;
 
 use patch_structs::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
@@ -114,7 +115,7 @@ impl<T> PermissiveUnwrap for Option<T> {
 	fn permit(&self, permissive: bool, message: &str) -> Result<()> {
 		if self.is_none() {
 			if permissive {
-				println!("QuickEntity warning: {}", message);
+				log::warn!("QuickEntity warning: {}", message);
 
 				Ok(())
 			} else {
@@ -184,7 +185,7 @@ impl Ord for DiffableValue {
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure normalising entity ID")]
 #[auto_context]
@@ -199,7 +200,7 @@ fn normalise_entity_id(entity_id: &str) -> Result<String> {
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure normalising ref")]
 #[auto_context]
@@ -219,7 +220,7 @@ fn normalise_ref(reference: &Ref) -> Result<Ref> {
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
@@ -253,7 +254,7 @@ fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenPropert
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure applying patch to entity")]
 #[auto_context]
@@ -1264,7 +1265,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				}) {
 					entity.external_scenes.remove(x);
 				} else if permissive {
-					println!("QuickEntity warning: RemoveExternalScene couldn't find expected value!");
+					log::warn!("QuickEntity warning: RemoveExternalScene couldn't find expected value!");
 				} else {
 					bail!("RemoveExternalScene couldn't find expected value!");
 				}
@@ -1319,7 +1320,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure applying array patch")]
 pub fn apply_array_patch(
@@ -1361,7 +1362,7 @@ pub fn apply_array_patch(
 				if let Some(pos) = arr.iter().position(|x| *x == val) {
 					arr.insert(pos + 1, new);
 				} else if permissive {
-					println!("QuickEntity warning: couldn't find value to add after in array patch");
+					log::warn!("QuickEntity warning: couldn't find value to add after in array patch");
 					arr.push(new);
 				} else {
 					bail!("Couldn't find value to add after in array patch!");
@@ -1379,7 +1380,7 @@ pub fn apply_array_patch(
 				if let Some(pos) = arr.iter().position(|x| *x == val) {
 					arr.insert(pos, new);
 				} else if permissive {
-					println!("QuickEntity warning: couldn't find value to add before in array patch");
+					log::warn!("QuickEntity warning: couldn't find value to add before in array patch");
 					arr.push(new);
 				} else {
 					bail!("Couldn't find value to add before in array patch!");
@@ -1397,7 +1398,7 @@ pub fn apply_array_patch(
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure generating patch from two entities")]
 #[auto_context]
@@ -2337,7 +2338,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting RT reference to QN")]
 fn convert_rt_reference_to_qn(
@@ -2402,7 +2403,7 @@ fn convert_rt_reference_to_qn(
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting QN reference to RT")]
 #[auto_context]
@@ -2464,7 +2465,7 @@ fn convert_qn_reference_to_rt(
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting RT property value to QN")]
 #[auto_context]
@@ -2677,7 +2678,7 @@ pub fn convert_rt_property_value_to_qn(
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting RT property to QN")]
 #[auto_context]
@@ -2725,7 +2726,7 @@ fn convert_rt_property_to_qn(
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting QN property value to RT")]
 #[auto_context]
@@ -2887,7 +2888,7 @@ pub fn convert_qn_property_value_to_rt(
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting QN property to RT")]
 #[auto_context]
@@ -2943,7 +2944,7 @@ fn convert_qn_property_to_rt(
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting string property name to RT id")]
 #[auto_context]
@@ -2965,7 +2966,7 @@ fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<Property
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure getting factory dependencies")]
 #[auto_context]
@@ -3259,7 +3260,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 	.collect()
 }
 
-#[time_graph::instrument]
+#[instrument]
 fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 	vec![
 		entity
@@ -3286,7 +3287,7 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 	.collect()
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting RT entity to QN")]
 #[auto_context]
@@ -3972,7 +3973,7 @@ pub fn convert_to_qn(
 	entity
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure converting QN entity to RT")]
 #[auto_context]
@@ -4805,7 +4806,7 @@ pub fn convert_modern_blueprint_to_2016(blueprint: &RTBlueprint) -> RTBlueprint2
 	}
 }
 
-#[time_graph::instrument]
+#[instrument]
 #[try_fn]
 #[context("Failure getting pin connections for event")]
 #[auto_context]

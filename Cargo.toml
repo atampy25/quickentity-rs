@@ -18,7 +18,6 @@ serde_json = { version = "1.0.81", features = [
 ] }
 serde_with = "2.0.1"
 ts-rs = { version = "6.2.0", features = ["indexmap-impl"] }
-time-graph = { version = "0.1.3", features = ["table"] }
 egui = "0.19.0"
 egui_extras = { version = "0.19.0", features = ["image"] }
 image = { version = "0.24", features = ["png"] }
@@ -31,6 +30,9 @@ fn-error-context = "0.2.1"
 auto_context = { path = "auto_context" }
 indexmap = { version = "1.9.1", features = ["serde", "rayon"] }
 serde_path_to_error = "0.1.14"
+env_logger = "0.10.1"
+tracing = "0.1.40"
+log = "0.4.20"
 
 [[bin]]
 name = "quickentity-rs"
