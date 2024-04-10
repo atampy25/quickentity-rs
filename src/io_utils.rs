@@ -19,42 +19,28 @@ pub fn read_as_entity(path: &str) -> Entity {
 			.expect("Failed to read file");
 		vec
 	}))
-	.unwrap_or_else(|x| panic!("Failed to parse file: {}", x))
+	.expect("Failed to parse file")
 }
 
 pub fn read_as_rtfactory(path: &str) -> RTFactory {
-	let val: Value = serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	}))
-	.unwrap_or_else(|x| panic!("Failed to parse file: {}", x));
+	let x = fs::read(path).expect("Failed to read file");
+	let val: Value = serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
 
 	if val.get("entityTemplates").is_some() {
 		convert_2016_factory_to_modern(&from_value(val).expect("Failed to read file as RT struct"))
 	} else {
-		from_value(val).expect("Failed to read file as RT struct")
+		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to read file as RT struct")
 	}
 }
 
 pub fn read_as_rtblueprint(path: &str) -> RTBlueprint {
-	let val: Value = serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	}))
-	.unwrap_or_else(|x| panic!("Failed to parse file: {}", x));
+	let x = fs::read(path).expect("Failed to read file");
+	let val: Value = serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
 
 	if val.get("entityTemplates").is_some() {
 		convert_2016_blueprint_to_modern(&from_value(val).expect("Failed to read file as RT struct"))
 	} else {
-		from_value(val).expect("Failed to read file as RT struct")
+		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to read file as RT struct")
 	}
 }
 
@@ -67,7 +53,7 @@ pub fn read_as_meta(path: &str) -> ResourceMeta {
 			.expect("Failed to read file");
 		vec
 	}))
-	.unwrap_or_else(|x| panic!("Failed to parse file: {}", x))
+	.expect("Failed to parse file")
 }
 
 pub fn read_as_patch(path: &str) -> Patch {
@@ -79,7 +65,7 @@ pub fn read_as_patch(path: &str) -> Patch {
 			.expect("Failed to read file");
 		vec
 	}))
-	.unwrap_or_else(|x| panic!("Failed to parse file: {}", x))
+	.expect("Failed to parse file")
 }
 
 pub fn to_vec_float_format<W>(contents: &W) -> Vec<u8>

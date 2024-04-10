@@ -26,14 +26,14 @@ pub struct Vector3 {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ZGuidPropertyValue {
 	pub _a: u32,
-	pub _b: u32,
-	pub _c: u32,
-	pub _d: u32,
-	pub _e: u32,
-	pub _f: u32,
-	pub _g: u32,
-	pub _h: u32,
-	pub _i: u32,
-	pub _j: u32,
-	pub _k: u32
+	pub _b: u16,
+	pub _c: u16,
+	pub _d: u8,
+	pub _e: u8,
+	pub _f: u8,
+	pub _g: u8,
+	pub _h: u8,
+	pub _i: u8,
+	pub _j: u8,
+	pub _k: u8
 }

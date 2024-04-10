@@ -40,8 +40,8 @@ use rt_structs::{
 };
 use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue};
 
-const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
-const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
+pub const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
+pub const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
 
 // Why is this not in the standard library
 trait TryAllTryAny: Iterator {
@@ -2866,17 +2866,17 @@ pub fn convert_qn_property_value_to_rt(
 		}
 
 		"ZGuid" => json!({
-			"_a": i64::from_str_radix(property.value.as_str().ctx?.split('-').next().ctx?, 16).ctx?,
-			"_b": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(1).ctx?, 16).ctx?,
-			"_c": i64::from_str_radix(property.value.as_str().ctx?.split('-').nth(2).ctx?, 16).ctx?,
-			"_d": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().take(2).collect::<String>(), 16).ctx?,
-			"_e": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
-			"_f": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().take(2).collect::<String>(), 16).ctx?,
-			"_g": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
-			"_h": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(4).take(2).collect::<String>(), 16).ctx?,
-			"_i": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(6).take(2).collect::<String>(), 16).ctx?,
-			"_j": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(8).take(2).collect::<String>(), 16).ctx?,
-			"_k": i64::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(10).take(2).collect::<String>(), 16).ctx?
+			"_a": u32::from_str_radix(property.value.as_str().ctx?.split('-').next().ctx?, 16).ctx?,
+			"_b": u16::from_str_radix(property.value.as_str().ctx?.split('-').nth(1).ctx?, 16).ctx?,
+			"_c": u16::from_str_radix(property.value.as_str().ctx?.split('-').nth(2).ctx?, 16).ctx?,
+			"_d": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().take(2).collect::<String>(), 16).ctx?,
+			"_e": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(3).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
+			"_f": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().take(2).collect::<String>(), 16).ctx?,
+			"_g": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(2).take(2).collect::<String>(), 16).ctx?,
+			"_h": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(4).take(2).collect::<String>(), 16).ctx?,
+			"_i": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(6).take(2).collect::<String>(), 16).ctx?,
+			"_j": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(8).take(2).collect::<String>(), 16).ctx?,
+			"_k": u8::from_str_radix(&property.value.as_str().ctx?.split('-').nth(4).ctx?.chars().skip(10).take(2).collect::<String>(), 16).ctx?
 		}),
 
 		"SColorRGB" => json!({

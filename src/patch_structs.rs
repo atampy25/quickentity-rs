@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use ts_rs::TS;
+use specta::Type;
 
 use crate::qn_structs::{
 	CommentEntity, Dependency, ExposedEntity, OverriddenProperty, PinConnectionOverride, PinConnectionOverrideDelete,
 	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SubEntity, SubType
 };
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
 pub struct Patch {
 	/// The hash of the TEMP file of this entity.
 	#[serde(rename = "tempHash")]
@@ -26,8 +25,7 @@ pub struct Patch {
 	pub patch_version: u8
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
 pub enum PatchOperation {
 	SetRootEntity(String),
 	SetSubType(SubType),
@@ -67,8 +65,7 @@ pub enum PatchOperation {
 	RemoveComment(CommentEntity)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
 pub enum SubEntityOperation {
 	SetParent(Ref),
 	SetName(String),
@@ -82,7 +79,6 @@ pub enum SubEntityOperation {
 	SetPropertyValue {
 		property_name: String,
 
-		#[ts(type = "any")]
 		value: Value
 	},
 	PatchArrayPropertyValue(String, Vec<ArrayPatchOperation>),
@@ -96,7 +92,6 @@ pub enum SubEntityOperation {
 
 		property_name: String,
 
-		#[ts(type = "any")]
 		value: Value
 	},
 	PatchPlatformSpecificArrayPropertyValue(String, String, Vec<ArrayPatchOperation>),
@@ -134,18 +129,16 @@ pub enum SubEntityOperation {
 	RemoveAllSubsetsFor(String)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, TS)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
 pub enum ArrayPatchOperation {
-	RemoveItemByValue(#[ts(type = "any")] Value),
-	AddItemAfter(#[ts(type = "any")] Value, #[ts(type = "any")] Value),
-	AddItemBefore(#[ts(type = "any")] Value, #[ts(type = "any")] Value),
-	AddItem(#[ts(type = "any")] Value)
+	RemoveItemByValue(Value),
+	AddItemAfter(Value, Value),
+	AddItemBefore(Value, Value),
+	AddItem(Value)
 }
 
 /// A single entity-property override.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct PropertyOverrideConnection {
 	/// A reference to an entity to override a property on.
 	#[serde(rename = "entity")]

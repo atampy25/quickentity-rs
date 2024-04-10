@@ -1,9 +1,8 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+use specta::Type;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SubType {
 	Brick,
@@ -11,8 +10,7 @@ pub enum SubType {
 	Template
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
 	#[serde(rename = "tempHash")]
@@ -83,8 +81,7 @@ pub struct Entity {
 /// A comment entity.
 ///
 /// Will be displayed in QuickEntity Editor as a tree item with a sticky note icon.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct CommentEntity {
 	/// The sub-entity this comment is parented to.
 	pub parent: Ref,
@@ -97,8 +94,7 @@ pub struct CommentEntity {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct SubEntity {
 	/// The "logical" or "organisational" parent of the entity, used for tree organisation in graphical editors.
 	///
@@ -169,8 +165,7 @@ pub struct SubEntity {
 	pub subsets: Option<IndexMap<String, Vec<String>>>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 #[serde(untagged)]
 pub enum RefMaybeConstantValue {
 	RefWithConstantValue(RefWithConstantValue),
@@ -178,8 +173,7 @@ pub enum RefMaybeConstantValue {
 }
 
 /// A reference accompanied by a constant value.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct RefWithConstantValue {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -192,8 +186,7 @@ pub struct RefWithConstantValue {
 
 /// A property with a type and a value. Can be marked as post-init.
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct Property {
 	/// The type of the property.
 	#[serde(rename = "type")]
@@ -201,7 +194,6 @@ pub struct Property {
 
 	/// The value of the property.
 	#[serde(rename = "value")]
-	#[ts(type = "any")]
 	pub value: serde_json::Value,
 
 	/// Whether the property should be (presumably) loaded/set after the entity has been initialised.
@@ -212,8 +204,7 @@ pub struct Property {
 /// A simple property.
 ///
 /// Simple properties cannot be marked as post-init. They are used by pin connection overrides, events and input/output copying.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct SimpleProperty {
 	/// The type of the simple property.
 	#[serde(rename = "type")]
@@ -221,15 +212,13 @@ pub struct SimpleProperty {
 
 	/// The simple property's value.
 	#[serde(rename = "value")]
-	#[ts(type = "any")]
 	pub value: serde_json::Value
 }
 
 /// An exposed entity.
 ///
 /// Exposed entities are accessible when referencing this entity through a property on long-form references.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct ExposedEntity {
 	/// Whether there are multiple target entities.
 	#[serde(rename = "isArray")]
@@ -243,8 +232,7 @@ pub struct ExposedEntity {
 /// A property alias.
 ///
 /// Property aliases are used to access properties of other entities through a single entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct PropertyAlias {
 	/// The other entity's property that should be accessed from this entity.
 	#[serde(rename = "originalProperty")]
@@ -256,8 +244,7 @@ pub struct PropertyAlias {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
 	///
@@ -284,8 +271,7 @@ pub struct PinConnectionOverride {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -311,8 +297,7 @@ pub struct PinConnectionOverrideDelete {
 }
 
 /// A set of overrides for entity properties.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct PropertyOverride {
 	/// An array of references to the entities to override the properties of.
 	#[serde(rename = "entities")]
@@ -323,8 +308,7 @@ pub struct PropertyOverride {
 	pub properties: IndexMap<String, OverriddenProperty>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct OverriddenProperty {
 	/// The type of the property.
 	#[serde(rename = "type")]
@@ -332,13 +316,11 @@ pub struct OverriddenProperty {
 
 	/// The value of the property.
 	#[serde(rename = "value")]
-	#[ts(type = "any")]
 	pub value: serde_json::Value
 }
 
 /// A long-form reference to an entity, allowing for the specification of external scenes and/or an exposed entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct FullRef {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -355,8 +337,7 @@ pub struct FullRef {
 }
 
 /// A reference to an entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 #[serde(untagged)]
 pub enum Ref {
 	Full(FullRef),
@@ -366,8 +347,7 @@ pub enum Ref {
 }
 
 /// A dependency of an entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 #[serde(untagged)]
 pub enum Dependency {
 	Full(DependencyWithFlag),
@@ -377,8 +357,7 @@ pub enum Dependency {
 }
 
 /// A dependency with a flag other than the default (1F).
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, TS, Eq)]
-#[ts(export)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct DependencyWithFlag {
 	pub resource: String,
 	pub flag: String
