@@ -200,7 +200,11 @@ enum PatchCommand {
 
 		/// Ensure the resulting QuickEntity JSON is valid and output the JSON in standard form, including consistent entity ID lengths and sorted JSON keys.
 		#[arg(long, action)]
-		normalise: bool
+		normalise: bool,
+
+		/// Mitigate a serde-json issue where numbers are sometimes not considered equal by parsing JSON files twice.
+		#[arg(long, action)]
+		format_fix: bool
 	}
 }
 
@@ -312,16 +316,23 @@ fn main() -> Result<()> {
 		}
 
 		Command::Patch {
-			subcommand: PatchCommand::Apply {
-				input,
-				patch,
-				output,
-				permissive,
-				normalise
-			}
+			subcommand:
+				PatchCommand::Apply {
+					input,
+					patch,
+					output,
+					permissive,
+					normalise,
+					format_fix
+				}
 		} => {
 			let mut entity = read_as_entity(&input);
-			let patch = read_as_patch(&patch);
+			let mut patch = read_as_patch(&patch);
+
+			if format_fix {
+				entity = from_slice(&to_vec_float_format(&entity))?;
+				patch = from_slice(&to_vec_float_format(&patch))?;
+			}
 
 			if normalise {
 				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
