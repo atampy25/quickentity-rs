@@ -2612,6 +2612,10 @@ pub fn convert_rt_property_value_to_qn(
 			}
 		}
 
+		"ZRepositoryID" => {
+			to_value(property.property_value.as_str().context("ZRepositoryID was not string")?.to_uppercase()).ctx?
+		}
+
 		"ZGuid" => {
 			let guid = from_value::<ZGuidPropertyValue>(property.property_value.to_owned())
 				.context("ZGuid did not have a valid format")?;
