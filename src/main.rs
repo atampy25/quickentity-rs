@@ -4,10 +4,7 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use tryvial::try_fn;
 
-use quickentity_rs::{
-	apply_patch, convert_modern_blueprint_to_2016, convert_modern_factory_to_2016, convert_to_qn, convert_to_rt,
-	generate_patch
-};
+use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rt, generate_patch};
 
 use anyhow::Result;
 use serde_json::from_slice;
@@ -257,7 +254,7 @@ fn main() -> Result<()> {
 
 			fs::write(output_factory, {
 				if h1 {
-					to_vec_float_format(&convert_modern_factory_to_2016(&converted_fac))
+					to_vec_float_format(&converted_fac.into_legacy())
 				} else {
 					to_vec_float_format(&converted_fac)
 				}
@@ -268,7 +265,7 @@ fn main() -> Result<()> {
 
 			fs::write(output_blueprint, {
 				if h1 {
-					to_vec_float_format(&convert_modern_blueprint_to_2016(&converted_blu))
+					to_vec_float_format(&converted_blu.into_legacy())
 				} else {
 					to_vec_float_format(&converted_blu)
 				}
@@ -380,7 +377,7 @@ fn main() -> Result<()> {
 
 			fs::write(output_factory, {
 				if h1 {
-					to_vec_float_format(&convert_modern_factory_to_2016(&converted_fac))
+					to_vec_float_format(&converted_fac.into_legacy())
 				} else {
 					to_vec_float_format(&converted_fac)
 				}
@@ -391,7 +388,7 @@ fn main() -> Result<()> {
 
 			fs::write(output_blueprint, {
 				if h1 {
-					to_vec_float_format(&convert_modern_blueprint_to_2016(&converted_blu))
+					to_vec_float_format(&converted_blu.into_legacy())
 				} else {
 					to_vec_float_format(&converted_blu)
 				}

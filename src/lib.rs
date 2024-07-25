@@ -2,15 +2,16 @@
 
 pub mod patch_structs;
 pub mod qn_structs;
-pub mod rpkg_structs;
-pub mod rt_2016_structs;
-pub mod rt_structs;
 pub mod util_structs;
 
 use anyhow::{anyhow, bail, Context, Error, Result};
 use auto_context::auto_context;
 use core::hash::Hash;
 use fn_error_context::context;
+use hitman_commons::{
+	resourcelib,
+	rpkg_tool::{RpkgResourceMeta, RpkgResourceReference}
+};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -18,7 +19,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_string, to_value, Value};
 use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::collections::HashMap;
-use tracing::instrument;
 use tryvial::try_fn;
 
 use patch_structs::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
@@ -26,17 +26,6 @@ use qn_structs::{
 	Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride,
 	PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue,
 	RefWithConstantValue, SimpleProperty, SubEntity, SubType
-};
-use rpkg_structs::{ResourceDependency, ResourceMeta};
-use rt_2016_structs::{
-	RTBlueprint2016, RTFactory2016, SEntityTemplatePinConnection2016, STemplateSubEntity, STemplateSubEntityBlueprint
-};
-use rt_structs::{
-	PropertyID, RTBlueprint, RTFactory, SEntityTemplateEntitySubset, SEntityTemplateExposedEntity,
-	SEntityTemplatePinConnection, SEntityTemplatePlatformSpecificProperty, SEntityTemplateProperty,
-	SEntityTemplatePropertyAlias, SEntityTemplatePropertyOverride, SEntityTemplatePropertyValue,
-	SEntityTemplateReference, SExternalEntityTemplatePinConnection, STemplateBlueprintSubEntity,
-	STemplateFactorySubEntity
 };
 use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue};
 
@@ -185,7 +174,6 @@ impl Ord for DiffableValue {
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure normalising entity ID")]
 #[auto_context]
@@ -200,7 +188,6 @@ fn normalise_entity_id(entity_id: &str) -> Result<String> {
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure normalising ref")]
 #[auto_context]
@@ -220,7 +207,6 @@ fn normalise_ref(reference: &Ref) -> Result<Ref> {
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
@@ -254,7 +240,6 @@ fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenPropert
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure applying patch to entity")]
 #[auto_context]
@@ -1328,7 +1313,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 	})?;
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure applying array patch")]
 pub fn apply_array_patch(
@@ -1406,7 +1390,6 @@ pub fn apply_array_patch(
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure generating patch from two entities")]
 #[auto_context]
@@ -2346,14 +2329,13 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting RT reference to QN")]
 fn convert_rt_reference_to_qn(
-	reference: &SEntityTemplateReference,
-	factory: &RTFactory,
-	blueprint: &RTBlueprint,
-	factory_meta: &ResourceMeta
+	reference: &resourcelib::EntityReference,
+	factory: &resourcelib::EntityFactory,
+	blueprint: &resourcelib::EntityBlueprint,
+	factory_meta: &RpkgResourceMeta
 ) -> Result<Ref> {
 	if !reference.exposed_entity.is_empty() || reference.external_scene_index != -1 {
 		Ref::Full(FullRef {
@@ -2411,24 +2393,23 @@ fn convert_rt_reference_to_qn(
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting QN reference to RT")]
 #[auto_context]
 fn convert_qn_reference_to_rt(
 	reference: &Ref,
-	factory: &RTFactory,
-	factory_meta: &ResourceMeta,
+	factory: &resourcelib::EntityFactory,
+	factory_meta: &RpkgResourceMeta,
 	entity_id_to_index_mapping: &HashMap<String, usize>
-) -> Result<SEntityTemplateReference> {
+) -> Result<resourcelib::EntityReference> {
 	match reference {
-		Ref::Short(None) => SEntityTemplateReference {
+		Ref::Short(None) => resourcelib::EntityReference {
 			entity_id: 18446744073709551615,
 			external_scene_index: -1,
 			entity_index: -1,
 			exposed_entity: "".to_string()
 		},
-		Ref::Short(Some(ent)) => SEntityTemplateReference {
+		Ref::Short(Some(ent)) => resourcelib::EntityReference {
 			entity_id: 18446744073709551615,
 			external_scene_index: -1,
 			entity_index: entity_id_to_index_mapping
@@ -2437,7 +2418,7 @@ fn convert_qn_reference_to_rt(
 				.to_owned() as i32,
 			exposed_entity: "".to_string()
 		},
-		Ref::Full(fullref) => SEntityTemplateReference {
+		Ref::Full(fullref) => resourcelib::EntityReference {
 			entity_id: match &fullref.external_scene {
 				None => 18446744073709551615,
 				Some(_) => u64::from_str_radix(fullref.entity_ref.as_str(), 16)
@@ -2473,20 +2454,19 @@ fn convert_qn_reference_to_rt(
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting RT property value to QN")]
 #[auto_context]
 pub fn convert_rt_property_value_to_qn(
-	property: &SEntityTemplatePropertyValue,
-	factory: &RTFactory,
-	factory_meta: &ResourceMeta,
-	blueprint: &RTBlueprint,
+	property: &resourcelib::PropertyValue,
+	factory: &resourcelib::EntityFactory,
+	factory_meta: &RpkgResourceMeta,
+	blueprint: &resourcelib::EntityBlueprint,
 	convert_lossless: bool
 ) -> Result<Value> {
 	match property.property_type.as_str() {
 		"SEntityTemplateReference" => to_value(convert_rt_reference_to_qn(
-			&from_value::<SEntityTemplateReference>(property.property_value.to_owned())
+			&from_value::<resourcelib::EntityReference>(property.property_value.to_owned())
 				.context("Converting RT ref to QN in property value returned error in parsing")?,
 			factory,
 			blueprint,
@@ -2547,13 +2527,16 @@ pub fn convert_rt_property_value_to_qn(
 			let n43 = matrix.Trans.z;
 			let n44 = 1.0;
 
-			let det =
-				n41 * (n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34
-					- n12 * n23 * n34) + n42
+			let det = n41
+				* (n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34
+					- n12 * n23 * n34)
+				+ n42
 					* (n11 * n23 * n34 - n11 * n24 * n33 + n14 * n21 * n33 - n13 * n21 * n34 + n13 * n24 * n31
-						- n14 * n23 * n31) + n43
+						- n14 * n23 * n31)
+				+ n43
 					* (n11 * n24 * n32 - n11 * n22 * n34 - n14 * n21 * n32 + n12 * n21 * n34 + n14 * n22 * n31
-						- n12 * n24 * n31) + n44
+						- n12 * n24 * n31)
+				+ n44
 					* (-n13 * n22 * n31 - n11 * n23 * n32 + n11 * n22 * n33 + n13 * n21 * n32 - n12 * n21 * n33
 						+ n12 * n23 * n31);
 
@@ -2613,7 +2596,14 @@ pub fn convert_rt_property_value_to_qn(
 		}
 
 		"ZRepositoryID" => {
-			to_value(property.property_value.as_str().context("ZRepositoryID was not string")?.to_uppercase()).ctx?
+			to_value(
+				property
+					.property_value
+					.as_str()
+					.context("ZRepositoryID was not string")?
+					.to_uppercase()
+			)
+			.ctx?
 		}
 
 		"ZGuid" => {
@@ -2690,16 +2680,15 @@ pub fn convert_rt_property_value_to_qn(
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting RT property to QN")]
 #[auto_context]
 fn convert_rt_property_to_qn(
-	property: &SEntityTemplateProperty,
+	property: &resourcelib::Property,
 	post_init: bool,
-	factory: &RTFactory,
-	factory_meta: &ResourceMeta,
-	blueprint: &RTBlueprint,
+	factory: &resourcelib::EntityFactory,
+	factory_meta: &RpkgResourceMeta,
+	blueprint: &resourcelib::EntityBlueprint,
 	convert_lossless: bool
 ) -> Result<Property> {
 	Property {
@@ -2718,7 +2707,7 @@ fn convert_rt_property_to_qn(
 						y.next_back(); // discard closing >
 
 						convert_rt_property_value_to_qn(
-							&SEntityTemplatePropertyValue {
+							&resourcelib::PropertyValue {
 								property_type: y.collect::<String>(), // mock a single value for each array element
 								property_value: x.to_owned()
 							},
@@ -2738,14 +2727,13 @@ fn convert_rt_property_to_qn(
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting QN property value to RT")]
 #[auto_context]
 pub fn convert_qn_property_value_to_rt(
 	property: &Property,
-	factory: &RTFactory,
-	factory_meta: &ResourceMeta,
+	factory: &resourcelib::EntityFactory,
+	factory_meta: &RpkgResourceMeta,
 	entity_id_to_index_mapping: &HashMap<String, usize>,
 	factory_dependencies_index_mapping: &HashMap<String, usize>
 ) -> Result<Value> {
@@ -2900,21 +2888,20 @@ pub fn convert_qn_property_value_to_rt(
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting QN property to RT")]
 #[auto_context]
 fn convert_qn_property_to_rt(
 	property_name: &str,
 	property_value: &Property,
-	factory: &RTFactory,
-	factory_meta: &ResourceMeta,
+	factory: &resourcelib::EntityFactory,
+	factory_meta: &RpkgResourceMeta,
 	entity_id_to_index_mapping: &HashMap<String, usize>,
 	factory_dependencies_index_mapping: &HashMap<String, usize>
-) -> Result<SEntityTemplateProperty> {
-	SEntityTemplateProperty {
+) -> Result<resourcelib::Property> {
+	resourcelib::Property {
 		n_property_id: convert_string_property_name_to_rt_id(property_name)?,
-		value: SEntityTemplatePropertyValue {
+		value: resourcelib::PropertyValue {
 			property_type: property_value.property_type.to_owned(),
 			property_value: if property_value.value.is_array() {
 				to_value(
@@ -2956,11 +2943,10 @@ fn convert_qn_property_to_rt(
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting string property name to RT id")]
 #[auto_context]
-fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<PropertyID> {
+fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<resourcelib::PropertyID> {
 	if let Ok(i) = property_name.parse::<u64>() {
 		let is_crc_length = {
 			let x = format!("{:x}", i).chars().count();
@@ -2969,23 +2955,22 @@ fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<Property
 		};
 
 		if is_crc_length {
-			PropertyID::Int(property_name.parse().ctx?)
+			resourcelib::PropertyID::Int(property_name.parse().ctx?)
 		} else {
-			PropertyID::String(property_name.to_owned())
+			resourcelib::PropertyID::String(property_name.to_owned())
 		}
 	} else {
-		PropertyID::String(property_name.to_owned())
+		resourcelib::PropertyID::String(property_name.to_owned())
 	}
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure getting factory dependencies")]
 #[auto_context]
-fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> {
+fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference>> {
 	vec![
 		// blueprint first
-		vec![ResourceDependency {
+		vec![RpkgResourceReference {
 			hash: entity.blueprint_hash.to_owned(),
 			flag: "1F".to_string()
 		}],
@@ -2993,7 +2978,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 		entity
 			.external_scenes
 			.par_iter()
-			.map(|scene| ResourceDependency {
+			.map(|scene| RpkgResourceReference {
 				hash: scene.to_owned(),
 				flag: "1F".to_string()
 			})
@@ -3004,7 +2989,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 			.iter()
 			.collect_vec()
 			.par_iter()
-			.map(|(_, sub_entity)| ResourceDependency {
+			.map(|(_, sub_entity)| RpkgResourceReference {
 				hash: sub_entity.factory.to_owned(),
 				flag: sub_entity.factory_flag.to_owned().unwrap_or_else(|| "1F".to_string()) // this is slightly more efficient
 			})
@@ -3024,12 +3009,12 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 								.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
 								.map(|(_, prop)| -> Result<_> {
 									Ok(if prop.value.is_string() {
-										ResourceDependency {
+										RpkgResourceReference {
 											hash: prop.value.as_str().ctx?.to_string(),
 											flag: "1F".to_string()
 										}
 									} else {
-										ResourceDependency {
+										RpkgResourceReference {
 											hash: prop
 												.value
 												.get("resource")
@@ -3060,12 +3045,12 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 										.iter()
 										.map(|value| -> Result<_> {
 											Ok(if value.is_string() {
-												ResourceDependency {
+												RpkgResourceReference {
 													hash: value.as_str().ctx?.to_string(),
 													flag: "1F".to_string()
 												}
 											} else {
-												ResourceDependency {
+												RpkgResourceReference {
 													hash: value
 														.get("resource")
 														.context("ZRuntimeResourceID must have resource")?
@@ -3104,12 +3089,12 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 										})
 										.map(|(_, prop)| -> Result<_> {
 											Ok(if prop.value.is_string() {
-												ResourceDependency {
+												RpkgResourceReference {
 													hash: prop.value.as_str().ctx?.to_string(),
 													flag: "1F".to_string()
 												}
 											} else {
-												ResourceDependency {
+												RpkgResourceReference {
 													hash: prop
 														.value
 														.get("resource")
@@ -3140,12 +3125,12 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 												.iter()
 												.map(|value| -> Result<_> {
 													Ok(if value.is_string() {
-														ResourceDependency {
+														RpkgResourceReference {
 															hash: value.as_str().ctx?.to_string(),
 															flag: "1F".to_string()
 														}
 													} else {
-														ResourceDependency {
+														RpkgResourceReference {
 															hash: value
 																.get("resource")
 																.context("ZRuntimeResourceID must have resource")?
@@ -3196,12 +3181,12 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 						.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
 						.map(|(_, prop)| -> Result<_> {
 							Ok(if prop.value.is_string() {
-								ResourceDependency {
+								RpkgResourceReference {
 									hash: prop.value.as_str().ctx?.to_string(),
 									flag: "1F".to_string()
 								}
 							} else {
-								ResourceDependency {
+								RpkgResourceReference {
 									hash: prop
 										.value
 										.get("resource")
@@ -3230,12 +3215,12 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 								.iter()
 								.map(|value| -> Result<_> {
 									Ok(if value.is_string() {
-										ResourceDependency {
+										RpkgResourceReference {
 											hash: value.as_str().ctx?.to_string(),
 											flag: "1F".to_string()
 										}
 									} else {
-										ResourceDependency {
+										RpkgResourceReference {
 											hash: value
 												.get("resource")
 												.context("ZRuntimeResourceID must have resource")?
@@ -3272,21 +3257,20 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceDependency>> 
 	.collect()
 }
 
-#[instrument]
-fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
+fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
 	vec![
 		entity
 			.external_scenes
 			.par_iter()
-			.map(|scene| ResourceDependency {
+			.map(|scene| RpkgResourceReference {
 				hash: scene.to_owned(),
 				flag: "1F".to_string()
 			})
-			.collect::<Vec<ResourceDependency>>(),
+			.collect::<Vec<RpkgResourceReference>>(),
 		entity
 			.entities
 			.iter()
-			.map(|(_, sub_entity)| ResourceDependency {
+			.map(|(_, sub_entity)| RpkgResourceReference {
 				hash: sub_entity.blueprint.to_owned(),
 				flag: "1F".to_string()
 			})
@@ -3299,15 +3283,14 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceDependency> {
 	.collect()
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting RT entity to QN")]
 #[auto_context]
 pub fn convert_to_qn(
-	factory: &RTFactory,
-	factory_meta: &ResourceMeta,
-	blueprint: &RTBlueprint,
-	blueprint_meta: &ResourceMeta,
+	factory: &resourcelib::EntityFactory,
+	factory_meta: &RpkgResourceMeta,
+	blueprint: &resourcelib::EntityBlueprint,
+	blueprint_meta: &RpkgResourceMeta,
 	convert_lossless: bool
 ) -> Result<Entity> {
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
@@ -3382,8 +3365,8 @@ pub fn convert_to_qn(
 									.map(|property| -> Result<_> {
 										Ok((
 											match &property.n_property_id {
-												PropertyID::Int(id) => id.to_string(),
-												PropertyID::String(id) => id.to_owned()
+												resourcelib::PropertyID::Int(id) => id.to_string(),
+												resourcelib::PropertyID::String(id) => id.to_owned()
 											}, // key
 											convert_rt_property_to_qn(
 												property,
@@ -3400,8 +3383,8 @@ pub fn convert_to_qn(
 											Ok((
 												// we do a little code duplication
 												match &property.n_property_id {
-													PropertyID::Int(id) => id.to_string(),
-													PropertyID::String(id) => id.to_owned()
+													resourcelib::PropertyID::Int(id) => id.to_string(),
+													resourcelib::PropertyID::String(id) => id.to_owned()
 												},
 												convert_rt_property_to_qn(
 													property,
@@ -3438,8 +3421,8 @@ pub fn convert_to_qn(
 													Ok((
 														// we do a little code duplication
 														match &property.property_value.n_property_id {
-															PropertyID::Int(id) => id.to_string(),
-															PropertyID::String(id) => id.to_owned()
+															resourcelib::PropertyID::Int(id) => id.to_string(),
+															resourcelib::PropertyID::String(id) => id.to_owned()
 														},
 														convert_rt_property_to_qn(
 															&property.property_value,
@@ -3638,7 +3621,7 @@ pub fn convert_to_qn(
 				.iter()
 				.filter(|x| {
 					if x.hash.contains(':') {
-						!depends.contains(&ResourceDependency {
+						!depends.contains(&RpkgResourceReference {
 							hash: format!(
 								"00{}",
 								format!("{:X}", md5::compute(&x.hash))
@@ -3654,8 +3637,8 @@ pub fn convert_to_qn(
 					}
 				})
 				.map(|x| match x {
-					ResourceDependency { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
-					ResourceDependency { hash, flag } => Dependency::Full(DependencyWithFlag {
+					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
+					RpkgResourceReference { hash, flag } => Dependency::Full(DependencyWithFlag {
 						resource: hash.to_owned(),
 						flag: flag.to_owned()
 					})
@@ -3672,7 +3655,7 @@ pub fn convert_to_qn(
 				.iter()
 				.filter(|x| {
 					if x.hash.contains(':') {
-						!depends.contains(&ResourceDependency {
+						!depends.contains(&RpkgResourceReference {
 							hash: format!(
 								"00{}",
 								format!("{:X}", md5::compute(&x.hash))
@@ -3688,8 +3671,8 @@ pub fn convert_to_qn(
 					}
 				})
 				.map(|x| match x {
-					ResourceDependency { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
-					ResourceDependency { hash, flag } => Dependency::Full(DependencyWithFlag {
+					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
+					RpkgResourceReference { hash, flag } => Dependency::Full(DependencyWithFlag {
 						resource: hash.to_owned(),
 						flag: flag.to_owned()
 					})
@@ -3954,8 +3937,8 @@ pub fn convert_to_qn(
 
 			let props = [(
 				match &property_override.property_value.n_property_id {
-					PropertyID::Int(id) => id.to_string(),
-					PropertyID::String(id) => id.to_owned()
+					resourcelib::PropertyID::Int(id) => id.to_string(),
+					resourcelib::PropertyID::String(id) => id.to_owned()
 				},
 				{
 					let prop = convert_rt_property_to_qn(
@@ -4004,11 +3987,17 @@ pub fn convert_to_qn(
 	})?
 }
 
-#[instrument]
 #[try_fn]
 #[context("Failure converting QN entity to RT")]
 #[auto_context]
-pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlueprint, ResourceMeta)> {
+pub fn convert_to_rt(
+	entity: &Entity
+) -> Result<(
+	resourcelib::EntityFactory,
+	RpkgResourceMeta,
+	resourcelib::EntityBlueprint,
+	RpkgResourceMeta
+)> {
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
 		let entity_id_to_index_mapping: HashMap<String, usize> = entity
@@ -4019,7 +4008,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 			.collect::<Result<_>>()?;
 
 		log::trace!("Initialisation");
-		let mut factory = RTFactory {
+		let mut factory = resourcelib::EntityFactory {
 			sub_type: match entity.sub_type {
 				SubType::Brick => 2,
 				SubType::Scene => 1,
@@ -4034,7 +4023,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 			external_scene_type_indices_in_resource_header: (1..entity.external_scenes.len() + 1).collect()
 		};
 
-		let factory_meta = ResourceMeta {
+		let factory_meta = RpkgResourceMeta {
 			hash_offset: 1367, // none of this data actually matters except for dependencies and resource type
 			hash_reference_data: [
 				get_factory_dependencies(entity)?,
@@ -4042,11 +4031,11 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 					.extra_factory_dependencies
 					.iter()
 					.map(|x| match x {
-						Dependency::Short(hash) => ResourceDependency {
+						Dependency::Short(hash) => RpkgResourceReference {
 							hash: hash.to_owned(),
 							flag: "1F".to_string()
 						},
-						Dependency::Full(DependencyWithFlag { resource, flag }) => ResourceDependency {
+						Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
 							hash: resource.to_owned(),
 							flag: flag.to_owned()
 						}
@@ -4064,7 +4053,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 			hash_value: entity.factory_hash.to_owned()
 		};
 
-		let mut blueprint = RTBlueprint {
+		let mut blueprint = resourcelib::EntityBlueprint {
 			sub_type: match entity.sub_type {
 				SubType::Brick => 2,
 				SubType::Scene => 1,
@@ -4089,7 +4078,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 					.pin_connection_overrides
 					.par_iter()
 					.map(|pin_connection_override| {
-						Ok(SExternalEntityTemplatePinConnection {
+						Ok(resourcelib::ExternalPinConnection {
 							from_entity: convert_qn_reference_to_rt(
 								&pin_connection_override.from_entity,
 								&factory,
@@ -4112,7 +4101,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 								};
 								let y = x.unwrap_or(&default);
 
-								SEntityTemplatePropertyValue {
+								resourcelib::PropertyValue {
 									property_type: y.property_type.to_owned(),
 									property_value: y.value.to_owned()
 								}
@@ -4151,7 +4140,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 													)
 												})
 												.map(|trigger_entity| {
-													Ok(SExternalEntityTemplatePinConnection {
+													Ok(resourcelib::ExternalPinConnection {
 														from_entity: convert_qn_reference_to_rt(
 															&Ref::Short(Some(entity_id.to_owned().to_owned())),
 															&factory,
@@ -4175,24 +4164,24 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 														constant_pin_value: match &trigger_entity {
 															RefMaybeConstantValue::RefWithConstantValue(
 																RefWithConstantValue { entity_ref: _, value }
-															) => SEntityTemplatePropertyValue {
+															) => resourcelib::PropertyValue {
 																property_type: value.property_type.to_owned(),
 																property_value: value.value.to_owned()
 															},
 
-															_ => SEntityTemplatePropertyValue {
+															_ => resourcelib::PropertyValue {
 																property_type: "void".to_owned(),
 																property_value: Value::Null
 															}
 														}
 													})
 												})
-												.collect::<Result<Vec<SExternalEntityTemplatePinConnection>>>()
+												.collect::<Result<Vec<resourcelib::ExternalPinConnection>>>()
 										})
 										.collect::<Result<Vec<_>>>()?
 										.into_iter()
 										.flatten()
-										.collect::<Vec<SExternalEntityTemplatePinConnection>>())
+										.collect::<Vec<resourcelib::ExternalPinConnection>>())
 								})
 								.collect::<Result<Vec<_>>>()?
 								.into_iter()
@@ -4205,14 +4194,14 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 					.collect::<Result<Vec<_>>>()?
 					.into_iter()
 					.flatten()
-					.collect::<Vec<SExternalEntityTemplatePinConnection>>()
+					.collect::<Vec<resourcelib::ExternalPinConnection>>()
 			]
 			.concat(),
 			pin_connection_override_deletes: entity
 				.pin_connection_override_deletes
 				.par_iter()
 				.map(|pin_connection_override_delete| {
-					Ok(SExternalEntityTemplatePinConnection {
+					Ok(resourcelib::ExternalPinConnection {
 						from_entity: convert_qn_reference_to_rt(
 							&pin_connection_override_delete.from_entity,
 							&factory,
@@ -4235,7 +4224,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 							};
 							let y = x.unwrap_or(&default);
 
-							SEntityTemplatePropertyValue {
+							resourcelib::PropertyValue {
 								property_type: y.property_type.to_owned(),
 								property_value: y.value.to_owned()
 							}
@@ -4246,7 +4235,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 			external_scene_type_indices_in_resource_header: (0..entity.external_scenes.len()).collect()
 		};
 
-		let blueprint_meta = ResourceMeta {
+		let blueprint_meta = RpkgResourceMeta {
 			hash_offset: 1367,
 			hash_reference_data: [
 				get_blueprint_dependencies(entity),
@@ -4254,11 +4243,11 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 					.extra_blueprint_dependencies
 					.iter()
 					.map(|x| match x {
-						Dependency::Short(hash) => ResourceDependency {
+						Dependency::Short(hash) => RpkgResourceReference {
 							hash: hash.to_owned(),
 							flag: "1F".to_string()
 						},
-						Dependency::Full(DependencyWithFlag { resource, flag }) => ResourceDependency {
+						Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
 							hash: resource.to_owned(),
 							flag: flag.to_owned()
 						}
@@ -4303,16 +4292,16 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 							.properties
 							.iter()
 							.map(|(property, overridden)| {
-								Ok(SEntityTemplatePropertyOverride {
+								Ok(resourcelib::PropertyOverride {
 									property_owner: convert_qn_reference_to_rt(
 										ext_entity,
 										&factory,
 										&factory_meta,
 										&entity_id_to_index_mapping
 									)?,
-									property_value: SEntityTemplateProperty {
+									property_value: resourcelib::Property {
 										n_property_id: convert_string_property_name_to_rt_id(property)?,
-										value: SEntityTemplatePropertyValue {
+										value: resourcelib::PropertyValue {
 											property_type: overridden.property_type.to_owned(),
 											property_value: to_value(
 												convert_qn_property_to_rt(
@@ -4348,7 +4337,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 			.collect_vec()
 			.par_iter()
 			.map(|(_, sub_entity)| {
-				Ok(STemplateFactorySubEntity {
+				Ok(resourcelib::FactorySubEntity {
 					logical_parent: convert_qn_reference_to_rt(
 						&sub_entity.parent,
 						&factory,
@@ -4401,7 +4390,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 								props
 									.iter()
 									.map(|(x, y)| {
-										Ok(SEntityTemplatePlatformSpecificProperty {
+										Ok(resourcelib::PlatformSpecificProperty {
 											platform: platform.to_owned(),
 											post_init: y.post_init.unwrap_or(false),
 											property_value: convert_qn_property_to_rt(
@@ -4431,7 +4420,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 			.collect_vec()
 			.par_iter()
 			.map(|(entity_id, sub_entity)| {
-				Ok(STemplateBlueprintSubEntity {
+				Ok(resourcelib::BlueprintSubEntity {
 					logical_parent: convert_qn_reference_to_rt(
 						&sub_entity.parent,
 						&factory,
@@ -4452,7 +4441,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 								aliases
 									.iter()
 									.map(|alias| -> Result<_> {
-										Ok(SEntityTemplatePropertyAlias {
+										Ok(resourcelib::PropertyAlias {
 											entity_id: match &alias.original_entity {
 												Ref::Short(r) => match r {
 													Some(r) => entity_id_to_index_mapping
@@ -4501,7 +4490,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 							.ctx?
 							.iter()
 							.map(|(exposed_name, exposed_entity)| {
-								Ok(SEntityTemplateExposedEntity {
+								Ok(resourcelib::ExposedEntity {
 									s_name: exposed_name.to_owned(),
 									b_is_array: exposed_entity.is_array,
 									a_targets: exposed_entity
@@ -4566,7 +4555,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 						} else {
 							ent_subs.push((
 								subset.to_owned(),
-								SEntityTemplateEntitySubset {
+								resourcelib::EntitySubset {
 									entities: vec![entity_index]
 								}
 							));
@@ -4592,7 +4581,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 						.map(|(evt, triggers)| {
 							pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
 						})
-						.collect::<Result<Vec<Vec<SEntityTemplatePinConnection>>>>()?
+						.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
 						.into_iter()
 						.flatten()
 						.collect())
@@ -4622,7 +4611,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 						.map(|(evt, triggers)| {
 							pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
 						})
-						.collect::<Result<Vec<Vec<SEntityTemplatePinConnection>>>>()?
+						.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
 						.into_iter()
 						.flatten()
 						.collect())
@@ -4651,7 +4640,7 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 						.map(|(evt, triggers)| {
 							pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
 						})
-						.collect::<Result<Vec<Vec<SEntityTemplatePinConnection>>>>()?
+						.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
 						.into_iter()
 						.flatten()
 						.collect())
@@ -4668,189 +4657,6 @@ pub fn convert_to_rt(entity: &Entity) -> Result<(RTFactory, ResourceMeta, RTBlue
 	})?
 }
 
-pub fn convert_2016_factory_to_modern(factory: &RTFactory2016) -> RTFactory {
-	RTFactory {
-		sub_type: factory.sub_type,
-		blueprint_index_in_resource_header: factory.blueprint_index_in_resource_header,
-		root_entity_index: factory.root_entity_index,
-		sub_entities: factory
-			.entity_templates
-			.iter()
-			.map(|x| STemplateFactorySubEntity {
-				entity_type_resource_index: x.entity_type_resource_index,
-				logical_parent: x.logical_parent.to_owned(),
-				platform_specific_property_values: Vec::with_capacity(0),
-				property_values: x.property_values.to_owned(),
-				post_init_property_values: x.post_init_property_values.to_owned()
-			})
-			.collect(),
-		property_overrides: factory.property_overrides.to_owned(),
-		external_scene_type_indices_in_resource_header: factory
-			.external_scene_type_indices_in_resource_header
-			.to_owned()
-	}
-}
-
-pub fn convert_modern_factory_to_2016(factory: &RTFactory) -> RTFactory2016 {
-	RTFactory2016 {
-		sub_type: factory.sub_type,
-		blueprint_index_in_resource_header: factory.blueprint_index_in_resource_header,
-		root_entity_index: factory.root_entity_index,
-		entity_templates: factory
-			.sub_entities
-			.iter()
-			.map(|x| STemplateSubEntity {
-				entity_type_resource_index: x.entity_type_resource_index,
-				logical_parent: x.logical_parent.to_owned(),
-				property_values: x.property_values.to_owned(),
-				post_init_property_values: x.post_init_property_values.to_owned()
-			})
-			.collect(),
-		property_overrides: factory.property_overrides.to_owned(),
-		external_scene_type_indices_in_resource_header: factory
-			.external_scene_type_indices_in_resource_header
-			.to_owned()
-	}
-}
-
-pub fn convert_2016_blueprint_to_modern(blueprint: &RTBlueprint2016) -> RTBlueprint {
-	RTBlueprint {
-		sub_type: blueprint.sub_type,
-		root_entity_index: blueprint.root_entity_index,
-		sub_entities: blueprint
-			.entity_templates
-			.iter()
-			.map(|x| STemplateBlueprintSubEntity {
-				entity_id: x.entity_id,
-				editor_only: false,
-				entity_name: x.entity_name.to_owned(),
-				entity_subsets: x.entity_subsets.to_owned(),
-				entity_type_resource_index: x.entity_type_resource_index,
-				exposed_entities: x
-					.exposed_entities
-					.iter()
-					.map(|(x, y)| SEntityTemplateExposedEntity {
-						b_is_array: false,
-						a_targets: vec![y.to_owned()],
-						s_name: x.to_owned()
-					})
-					.collect(),
-				exposed_interfaces: x.exposed_interfaces.to_owned(),
-				logical_parent: x.logical_parent.to_owned(),
-				property_aliases: x.property_aliases.to_owned()
-			})
-			.collect(),
-		external_scene_type_indices_in_resource_header: blueprint
-			.external_scene_type_indices_in_resource_header
-			.to_owned(),
-		pin_connections: blueprint
-			.pin_connections
-			.iter()
-			.map(|x| SEntityTemplatePinConnection {
-				from_id: x.from_id,
-				from_pin_name: x.from_pin_name.to_owned(),
-				to_id: x.to_id,
-				to_pin_name: x.to_pin_name.to_owned(),
-				constant_pin_value: SEntityTemplatePropertyValue {
-					property_type: "void".to_string(),
-					property_value: Value::Null
-				}
-			})
-			.collect(),
-		input_pin_forwardings: blueprint
-			.input_pin_forwardings
-			.iter()
-			.map(|x| SEntityTemplatePinConnection {
-				from_id: x.from_id,
-				from_pin_name: x.from_pin_name.to_owned(),
-				to_id: x.to_id,
-				to_pin_name: x.to_pin_name.to_owned(),
-				constant_pin_value: SEntityTemplatePropertyValue {
-					property_type: "void".to_string(),
-					property_value: Value::Null
-				}
-			})
-			.collect(),
-		output_pin_forwardings: blueprint
-			.output_pin_forwardings
-			.iter()
-			.map(|x| SEntityTemplatePinConnection {
-				from_id: x.from_id,
-				from_pin_name: x.from_pin_name.to_owned(),
-				to_id: x.to_id,
-				to_pin_name: x.to_pin_name.to_owned(),
-				constant_pin_value: SEntityTemplatePropertyValue {
-					property_type: "void".to_string(),
-					property_value: Value::Null
-				}
-			})
-			.collect(),
-		override_deletes: blueprint.override_deletes.to_owned(),
-		pin_connection_overrides: Vec::with_capacity(0),
-		pin_connection_override_deletes: Vec::with_capacity(0)
-	}
-}
-
-pub fn convert_modern_blueprint_to_2016(blueprint: &RTBlueprint) -> RTBlueprint2016 {
-	RTBlueprint2016 {
-		sub_type: blueprint.sub_type,
-		root_entity_index: blueprint.root_entity_index,
-		entity_templates: blueprint
-			.sub_entities
-			.iter()
-			.map(|x| STemplateSubEntityBlueprint {
-				entity_id: x.entity_id,
-				entity_name: x.entity_name.to_owned(),
-				entity_subsets: x.entity_subsets.to_owned(),
-				entity_type_resource_index: x.entity_type_resource_index,
-				exposed_entities: x
-					.exposed_entities
-					.iter()
-					.map(|x| (x.s_name.to_owned(), x.a_targets[0].to_owned()))
-					.collect(),
-				exposed_interfaces: x.exposed_interfaces.to_owned(),
-				logical_parent: x.logical_parent.to_owned(),
-				property_aliases: x.property_aliases.to_owned()
-			})
-			.collect(),
-		external_scene_type_indices_in_resource_header: blueprint
-			.external_scene_type_indices_in_resource_header
-			.to_owned(),
-		pin_connections: blueprint
-			.pin_connections
-			.iter()
-			.map(|x| SEntityTemplatePinConnection2016 {
-				from_id: x.from_id,
-				from_pin_name: x.from_pin_name.to_owned(),
-				to_id: x.to_id,
-				to_pin_name: x.to_pin_name.to_owned()
-			})
-			.collect(),
-		input_pin_forwardings: blueprint
-			.input_pin_forwardings
-			.iter()
-			.map(|x| SEntityTemplatePinConnection2016 {
-				from_id: x.from_id,
-				from_pin_name: x.from_pin_name.to_owned(),
-				to_id: x.to_id,
-				to_pin_name: x.to_pin_name.to_owned()
-			})
-			.collect(),
-		output_pin_forwardings: blueprint
-			.output_pin_forwardings
-			.iter()
-			.map(|x| SEntityTemplatePinConnection2016 {
-				from_id: x.from_id,
-				from_pin_name: x.from_pin_name.to_owned(),
-				to_id: x.to_id,
-				to_pin_name: x.to_pin_name.to_owned()
-			})
-			.collect(),
-		override_deletes: blueprint.override_deletes.to_owned()
-	}
-}
-
-#[instrument]
 #[try_fn]
 #[context("Failure getting pin connections for event")]
 #[auto_context]
@@ -4859,7 +4665,7 @@ fn pin_connections_for_event(
 	entity_id: &str,
 	event: &str,
 	triggers: &IndexMap<String, Vec<RefMaybeConstantValue>>
-) -> Result<Vec<SEntityTemplatePinConnection>> {
+) -> Result<Vec<resourcelib::PinConnection>> {
 	triggers
 		.iter()
 		.map(|(trigger, entities)| -> Result<_> {
@@ -4876,7 +4682,7 @@ fn pin_connections_for_event(
 					)
 				})
 				.map(|trigger_entity| -> Result<_> {
-					Ok(SEntityTemplatePinConnection {
+					Ok(resourcelib::PinConnection {
 						from_id: *entity_id_to_index_mapping.get(&normalise_entity_id(entity_id)?).ctx?,
 						to_id: *entity_id_to_index_mapping
 							.get(&normalise_entity_id(match &trigger_entity {
@@ -4896,21 +4702,21 @@ fn pin_connections_for_event(
 							RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
 								entity_ref: _,
 								value
-							}) => SEntityTemplatePropertyValue {
+							}) => resourcelib::PropertyValue {
 								property_type: value.property_type.to_owned(),
 								property_value: value.value.to_owned()
 							},
 
-							_ => SEntityTemplatePropertyValue {
+							_ => resourcelib::PropertyValue {
 								property_type: "void".to_owned(),
 								property_value: Value::Null
 							}
 						}
 					})
 				})
-				.collect::<Result<Vec<SEntityTemplatePinConnection>>>()
+				.collect::<Result<Vec<resourcelib::PinConnection>>>()
 		})
-		.collect::<Result<Vec<Vec<SEntityTemplatePinConnection>>>>()?
+		.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
 		.into_iter()
 		.flatten()
 		.collect_vec()

@@ -1,8 +1,7 @@
+use hitman_commons::resourcelib::{EntityBlueprint, EntityBlueprintLegacy, EntityFactory, EntityFactoryLegacy};
+use hitman_commons::rpkg_tool::RpkgResourceMeta;
 use quickentity_rs::patch_structs::Patch;
 use quickentity_rs::qn_structs::Entity;
-use quickentity_rs::rpkg_structs::ResourceMeta;
-use quickentity_rs::rt_structs::{RTBlueprint, RTFactory};
-use quickentity_rs::{convert_2016_blueprint_to_modern, convert_2016_factory_to_modern};
 
 use serde::Serialize;
 use serde_json::ser::Formatter;
@@ -22,29 +21,37 @@ pub fn read_as_entity(path: &str) -> Entity {
 	.expect("Failed to parse file")
 }
 
-pub fn read_as_rtfactory(path: &str) -> RTFactory {
+pub fn read_as_rtfactory(path: &str) -> EntityFactory {
 	let x = fs::read(path).expect("Failed to read file");
-	let val: Value = serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
+	let val: Value =
+		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
 
 	if val.get("entityTemplates").is_some() {
-		convert_2016_factory_to_modern(&from_value(val).expect("Failed to read file as RT struct"))
+		from_value::<EntityFactoryLegacy>(val)
+			.expect("Failed to read file as RT struct")
+			.into_modern()
 	} else {
-		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to read file as RT struct")
+		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x))
+			.expect("Failed to read file as RT struct")
 	}
 }
 
-pub fn read_as_rtblueprint(path: &str) -> RTBlueprint {
+pub fn read_as_rtblueprint(path: &str) -> EntityBlueprint {
 	let x = fs::read(path).expect("Failed to read file");
-	let val: Value = serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
+	let val: Value =
+		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
 
 	if val.get("entityTemplates").is_some() {
-		convert_2016_blueprint_to_modern(&from_value(val).expect("Failed to read file as RT struct"))
+		from_value::<EntityBlueprintLegacy>(val)
+			.expect("Failed to read file as RT struct")
+			.into_modern()
 	} else {
-		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to read file as RT struct")
+		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x))
+			.expect("Failed to read file as RT struct")
 	}
 }
 
-pub fn read_as_meta(path: &str) -> ResourceMeta {
+pub fn read_as_meta(path: &str) -> RpkgResourceMeta {
 	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
 		let mut vec = Vec::new();
 		fs::File::open(path)
