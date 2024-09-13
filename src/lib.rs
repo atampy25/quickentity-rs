@@ -3295,7 +3295,6 @@ pub fn convert_to_qn(
 ) -> Result<Entity> {
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
-		log::trace!("Checking duplicate IDs");
 		{
 			let mut unique = blueprint.sub_entities.to_owned();
 			unique.dedup_by_key(|x| x.entity_id);
@@ -3305,7 +3304,6 @@ pub fn convert_to_qn(
 			}
 		}
 
-		log::trace!("Initial entity conversion");
 		let mut entity = Entity {
 			factory_hash: factory_meta.hash_value.to_owned(),
 			blueprint_hash: blueprint_meta.hash_value.to_owned(),
@@ -3612,7 +3610,6 @@ pub fn convert_to_qn(
 			comments: vec![]
 		};
 
-		log::trace!("Extra factory depends");
 		{
 			let depends = get_factory_dependencies(&entity)?;
 
@@ -3646,7 +3643,6 @@ pub fn convert_to_qn(
 				.collect();
 		}
 
-		log::trace!("Extra blueprint depends");
 		{
 			let depends = get_blueprint_dependencies(&entity);
 
@@ -3680,7 +3676,6 @@ pub fn convert_to_qn(
 				.collect();
 		}
 
-		log::trace!("Pin connections");
 		for pin in &blueprint.pin_connections {
 			let relevant_sub_entity = entity
 				.entities
@@ -3733,7 +3728,6 @@ pub fn convert_to_qn(
 				});
 		}
 
-		log::trace!("Pin connection overrides");
 		for pin_connection_override in blueprint
 			.pin_connection_overrides
 			.iter()
@@ -3787,7 +3781,6 @@ pub fn convert_to_qn(
 		}
 
 		// cheeky bit of code duplication right here
-		log::trace!("Input pin forwardings");
 		for forwarding in &blueprint.input_pin_forwardings {
 			let relevant_sub_entity = entity
 				.entities
@@ -3840,7 +3833,6 @@ pub fn convert_to_qn(
 				});
 		}
 
-		log::trace!("Output pin forwardings");
 		for forwarding in &blueprint.output_pin_forwardings {
 			let relevant_sub_entity = entity
 				.entities
@@ -3893,7 +3885,6 @@ pub fn convert_to_qn(
 				});
 		}
 
-		log::trace!("Subsets");
 		for sub_entity in &blueprint.sub_entities {
 			for (subset, data) in &sub_entity.entity_subsets {
 				for subset_entity in &data.entities {
@@ -3924,7 +3915,6 @@ pub fn convert_to_qn(
 			}
 		}
 
-		log::trace!("Property overrides");
 		let mut pass1: Vec<PropertyOverride> = Vec::default();
 
 		for property_override in &factory.property_overrides {
@@ -4007,7 +3997,6 @@ pub fn convert_to_rt(
 			.map(|(x, y)| -> Result<_> { Ok((normalise_entity_id(y)?, x)) })
 			.collect::<Result<_>>()?;
 
-		log::trace!("Initialisation");
 		let mut factory = resourcelib::EntityFactory {
 			sub_type: match entity.sub_type {
 				SubType::Brick => 2,
@@ -4281,7 +4270,6 @@ pub fn convert_to_rt(
 			.map(|(x, y)| (y.hash.to_owned(), x.to_owned()))
 			.collect();
 
-		log::trace!("Property overrides");
 		factory.property_overrides = entity
 			.property_overrides
 			.par_iter()
@@ -4332,7 +4320,6 @@ pub fn convert_to_rt(
 			})
 			.collect::<Result<_>>()?;
 
-		log::trace!("Factory subentities");
 		factory.sub_entities = entity
 			.entities
 			.iter()
@@ -4415,7 +4402,6 @@ pub fn convert_to_rt(
 			})
 			.collect::<Result<_>>()?;
 
-		log::trace!("Blueprint subentities");
 		blueprint.sub_entities = entity
 			.entities
 			.iter()
@@ -4537,7 +4523,6 @@ pub fn convert_to_rt(
 			})
 			.collect::<Result<_>>()?;
 
-		log::trace!("Subsets");
 		for (entity_index, (_, sub_entity)) in entity.entities.iter().enumerate() {
 			if sub_entity.subsets.is_some() {
 				for (subset, ents) in sub_entity.subsets.as_ref().ctx?.iter() {
@@ -4567,7 +4552,6 @@ pub fn convert_to_rt(
 			}
 		}
 
-		log::trace!("Pin connections");
 		blueprint.pin_connections = entity
 			.entities
 			.iter()
@@ -4597,7 +4581,6 @@ pub fn convert_to_rt(
 			.collect();
 
 		// slightly less code duplication than there used to be
-		log::trace!("Input pin forwardings");
 		blueprint.input_pin_forwardings = entity
 			.entities
 			.iter()
@@ -4626,7 +4609,6 @@ pub fn convert_to_rt(
 			.flatten()
 			.collect();
 
-		log::trace!("Output pin forwardings");
 		blueprint.output_pin_forwardings = entity
 			.entities
 			.iter()
