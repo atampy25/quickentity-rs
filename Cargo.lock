@@ -343,7 +343,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "hitman-commons"
 version = "0.1.0"
-source = "git+https://github.com/atampy25/hitman-commons#939114e4c8d0434ff3ccfc46628873ef80552b56"
+source = "git+https://github.com/atampy25/hitman-commons#9f318201b93fd2deaf782d192ec2ae49070a266f"
 dependencies = [
  "md5",
  "serde",
