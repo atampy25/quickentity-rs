@@ -29,6 +29,7 @@ hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features 
     "serde",
     "specta",
 ] }
+tracing = { version = "0.1.40", optional = true }
 
 [features]
 default = ["cli"]

@@ -177,6 +177,7 @@ impl Ord for DiffableValue {
 #[try_fn]
 #[context("Failure normalising entity ID")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn normalise_entity_id(entity_id: &str) -> Result<String> {
 	if entity_id.chars().count() != 16 {
 		format!(
@@ -191,6 +192,7 @@ fn normalise_entity_id(entity_id: &str) -> Result<String> {
 #[try_fn]
 #[context("Failure normalising ref")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn normalise_ref(reference: &Ref) -> Result<Ref> {
 	match reference {
 		Ref::Full(FullRef {
@@ -210,6 +212,7 @@ fn normalise_ref(reference: &Ref) -> Result<Ref> {
 #[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenProperty) -> Result<bool> {
 	p1.property_type == p2.property_type && {
 		if p1.property_type == "SMatrix43" {
@@ -243,6 +246,7 @@ fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenPropert
 #[try_fn]
 #[context("Failure applying patch to entity")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Result<()> {
 	let patch: Vec<PatchOperation> = patch.patch;
 
@@ -1315,6 +1319,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 #[try_fn]
 #[context("Failure applying array patch")]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn apply_array_patch(
 	arr: &mut Value,
 	patch: Vec<ArrayPatchOperation>,
@@ -1393,6 +1398,7 @@ pub fn apply_array_patch(
 #[try_fn]
 #[context("Failure generating patch from two entities")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	if original.quick_entity_version != modified.quick_entity_version {
 		bail!("Can't create patches between differing QuickEntity versions!")
@@ -2331,6 +2337,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 
 #[try_fn]
 #[context("Failure converting RT reference to QN")]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn convert_rt_reference_to_qn(
 	reference: &resourcelib::EntityReference,
 	factory: &resourcelib::EntityFactory,
@@ -2396,6 +2403,7 @@ fn convert_rt_reference_to_qn(
 #[try_fn]
 #[context("Failure converting QN reference to RT")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn convert_qn_reference_to_rt(
 	reference: &Ref,
 	factory: &resourcelib::EntityFactory,
@@ -2457,6 +2465,7 @@ fn convert_qn_reference_to_rt(
 #[try_fn]
 #[context("Failure converting RT property value to QN")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn convert_rt_property_value_to_qn(
 	property: &resourcelib::PropertyValue,
 	factory: &resourcelib::EntityFactory,
@@ -2683,6 +2692,7 @@ pub fn convert_rt_property_value_to_qn(
 #[try_fn]
 #[context("Failure converting RT property to QN")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn convert_rt_property_to_qn(
 	property: &resourcelib::Property,
 	post_init: bool,
@@ -2730,6 +2740,7 @@ fn convert_rt_property_to_qn(
 #[try_fn]
 #[context("Failure converting QN property value to RT")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn convert_qn_property_value_to_rt(
 	property: &Property,
 	factory: &resourcelib::EntityFactory,
@@ -2891,6 +2902,7 @@ pub fn convert_qn_property_value_to_rt(
 #[try_fn]
 #[context("Failure converting QN property to RT")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn convert_qn_property_to_rt(
 	property_name: &str,
 	property_value: &Property,
@@ -2946,6 +2958,7 @@ fn convert_qn_property_to_rt(
 #[try_fn]
 #[context("Failure converting string property name to RT id")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<resourcelib::PropertyID> {
 	if let Ok(i) = property_name.parse::<u64>() {
 		let is_crc_length = {
@@ -2967,6 +2980,7 @@ fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<resource
 #[try_fn]
 #[context("Failure getting factory dependencies")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference>> {
 	vec![
 		// blueprint first
@@ -3257,6 +3271,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 	.collect()
 }
 
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
 	vec![
 		entity
@@ -3286,6 +3301,7 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
 #[try_fn]
 #[context("Failure converting RT entity to QN")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn convert_to_qn(
 	factory: &resourcelib::EntityFactory,
 	factory_meta: &RpkgResourceMeta,
@@ -3980,6 +3996,7 @@ pub fn convert_to_qn(
 #[try_fn]
 #[context("Failure converting QN entity to RT")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn convert_to_rt(
 	entity: &Entity
 ) -> Result<(
@@ -4644,6 +4661,7 @@ pub fn convert_to_rt(
 #[try_fn]
 #[context("Failure getting pin connections for event")]
 #[auto_context]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 fn pin_connections_for_event(
 	entity_id_to_index_mapping: &HashMap<String, usize>,
 	entity_id: &str,
