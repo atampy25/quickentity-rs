@@ -243,7 +243,7 @@ fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenPropert
 #[try_fn]
 #[context("Failure applying patch to entity")]
 #[auto_context]
-#[cfg_attr(feature = "tracing", tracing::instrument)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Result<()> {
 	let patch: Vec<PatchOperation> = patch.patch;
 
@@ -1316,7 +1316,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 #[try_fn]
 #[context("Failure applying array patch")]
-#[cfg_attr(feature = "tracing", tracing::instrument)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip(arr, patch)))]
 pub fn apply_array_patch(
 	arr: &mut Value,
 	patch: Vec<ArrayPatchOperation>,
@@ -1395,7 +1395,7 @@ pub fn apply_array_patch(
 #[try_fn]
 #[context("Failure generating patch from two entities")]
 #[auto_context]
-#[cfg_attr(feature = "tracing", tracing::instrument)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	if original.quick_entity_version != modified.quick_entity_version {
 		bail!("Can't create patches between differing QuickEntity versions!")
@@ -3289,7 +3289,7 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
 #[try_fn]
 #[context("Failure converting RT entity to QN")]
 #[auto_context]
-#[cfg_attr(feature = "tracing", tracing::instrument)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub fn convert_to_qn(
 	factory: &resourcelib::EntityFactory,
 	factory_meta: &RpkgResourceMeta,
@@ -3984,7 +3984,7 @@ pub fn convert_to_qn(
 #[try_fn]
 #[context("Failure converting QN entity to RT")]
 #[auto_context]
-#[cfg_attr(feature = "tracing", tracing::instrument)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub fn convert_to_rt(
 	entity: &Entity
 ) -> Result<(
