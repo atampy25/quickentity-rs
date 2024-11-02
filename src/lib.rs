@@ -21,7 +21,10 @@ use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::collections::HashMap;
 use tryvial::try_fn;
 
-use patch_structs::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
+use patch_structs::{
+	ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SetPlatformSpecificPropertyValue,
+	SetPropertyValue, SubEntityOperation
+};
 use qn_structs::{
 	Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride,
 	PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue,
@@ -31,6 +34,21 @@ use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceI
 
 pub const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 pub const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
+
+#[cfg(feature = "rune")]
+pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
+	ctx.install(qn_structs::rune_module()?)?;
+	ctx.install(patch_structs::rune_module()?)?;
+
+	let mut module = rune::Module::with_crate("quickentity_rs")?;
+	module.function_meta(apply_patch__meta)?;
+	module.function_meta(generate_patch__meta)?;
+	module.function_meta(convert_to_qn__meta)?;
+	module.function_meta(convert_to_rt__meta)?;
+	ctx.install(module)?;
+
+	Ok(())
+}
 
 // Why is this not in the standard library
 trait TryAllTryAny: Iterator {
@@ -244,6 +262,7 @@ fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenPropert
 #[context("Failure applying patch to entity")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+#[cfg_attr(feature = "rune", rune::function(keep))]
 pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Result<()> {
 	let patch: Vec<PatchOperation> = patch.patch;
 
@@ -267,7 +286,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				}
 
 				PatchOperation::AddEntity(id, data) => {
-					entity.entities.insert(id, *data);
+					entity.entities.insert(id, data);
 				}
 
 				PatchOperation::SubEntityOperation(entity_id, op) => {
@@ -327,7 +346,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.property_type = value;
 						}
 
-						SubEntityOperation::SetPropertyValue { property_name, value } => {
+						SubEntityOperation::SetPropertyValue(SetPropertyValue { property_name, value }) => {
 							entity
 								.properties
 								.get_or_insert(Default::default())
@@ -427,11 +446,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.property_type = value;
 						}
 
-						SubEntityOperation::SetPlatformSpecificPropertyValue {
+						SubEntityOperation::SetPlatformSpecificPropertyValue(SetPlatformSpecificPropertyValue {
 							platform,
 							property_name,
 							value
-						} => {
+						}) => {
 							entity
 								.platform_specific_properties
 								.as_mut()
@@ -1396,6 +1415,7 @@ pub fn apply_array_patch(
 #[context("Failure generating patch from two entities")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+#[cfg_attr(feature = "rune", rune::function(keep))]
 pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	if original.quick_entity_version != modified.quick_entity_version {
 		bail!("Can't create patches between differing QuickEntity versions!")
@@ -1569,7 +1589,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 													prev.0.to_owned(),
 													new_value[new_index + i].0.to_owned()
 												));
-											} else if let Some(next) = old_value.get(0) {
+											} else if let Some(next) = old_value.first() {
 												ops.push(ArrayPatchOperation::AddItemBefore(
 													next.0.to_owned(),
 													new_value[new_index + i].0.to_owned()
@@ -1593,10 +1613,10 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 						} else {
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
-								SubEntityOperation::SetPropertyValue {
+								SubEntityOperation::SetPropertyValue(SetPropertyValue {
 									property_name: property_name.to_owned(),
 									value: new_property_data.value.to_owned()
-								}
+								})
 							));
 						}
 					}
@@ -1676,11 +1696,13 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							if old_property_data.value != new_property_data.value {
 								patch.push(PatchOperation::SubEntityOperation(
 									entity_id.to_owned(),
-									SubEntityOperation::SetPlatformSpecificPropertyValue {
-										platform: platform_name.to_owned(),
-										property_name: property_name.to_owned(),
-										value: new_property_data.value.to_owned()
-									}
+									SubEntityOperation::SetPlatformSpecificPropertyValue(
+										SetPlatformSpecificPropertyValue {
+											platform: platform_name.to_owned(),
+											property_name: property_name.to_owned(),
+											value: new_property_data.value.to_owned()
+										}
+									)
 								));
 							}
 
@@ -2163,7 +2185,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 		} else {
 			patch.push(PatchOperation::AddEntity(
 				entity_id.to_owned(),
-				Box::new(new_entity_data.to_owned())
+				new_entity_data.to_owned()
 			));
 		}
 	}
@@ -3290,6 +3312,7 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
 #[context("Failure converting RT entity to QN")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+#[cfg_attr(feature = "rune", rune::function(keep))]
 pub fn convert_to_qn(
 	factory: &resourcelib::EntityFactory,
 	factory_meta: &RpkgResourceMeta,
@@ -3985,6 +4008,7 @@ pub fn convert_to_qn(
 #[context("Failure converting QN entity to RT")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+#[cfg_attr(feature = "rune", rune::function(keep))]
 pub fn convert_to_rt(
 	entity: &Entity
 ) -> Result<(

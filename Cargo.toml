@@ -30,10 +30,13 @@ hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features 
     "specta",
 ] }
 tracing = { version = "0.1.40", optional = true }
+rune = { version = "0.13.4", optional = true }
+better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", optional = true }
 
 [features]
 default = ["cli"]
 cli = ["dep:env_logger", "dep:clap"]
+rune = ["dep:rune", "dep:better-rune-derive", "hitman-commons/rune"]
 
 [[bin]]
 name = "quickentity_rs"
