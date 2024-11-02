@@ -133,16 +133,6 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 [[package]]
 name = "better-rune-derive"
 version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "rune-core",
- "syn 2.0.86",
-]
-
-[[package]]
-name = "better-rune-derive"
-version = "0.1.0"
 source = "git+https://github.com/atampy25/better-rune-derive#07e87647277e35002d3377c94f875180ef0528cc"
 dependencies = [
  "proc-macro2",
@@ -430,7 +420,7 @@ name = "hitman-commons"
 version = "0.1.0"
 source = "git+https://github.com/atampy25/hitman-commons#bac2a6cd049f05a836705fd25fd468bbb1726d2c"
 dependencies = [
- "better-rune-derive 0.1.0 (git+https://github.com/atampy25/better-rune-derive)",
+ "better-rune-derive",
  "md5",
  "rune",
  "serde",
@@ -770,7 +760,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "auto_context",
- "better-rune-derive 0.1.0",
+ "better-rune-derive",
  "clap",
  "env_logger",
  "fn-error-context",
