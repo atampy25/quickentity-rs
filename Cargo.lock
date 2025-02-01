@@ -419,7 +419,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "hitman-commons"
 version = "0.1.0"
-source = "git+https://github.com/atampy25/hitman-commons#31625361c6ef376e3e86e42dfa083681af1d3c4c"
+source = "git+https://github.com/atampy25/hitman-commons#9de62866b84666b7cb831a71a8a9d91c3b7beb94"
 dependencies = [
  "better-rune-derive",
  "md5",
