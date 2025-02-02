@@ -9,8 +9,8 @@ use auto_context::auto_context;
 use core::hash::Hash;
 use fn_error_context::context;
 use hitman_commons::{
-	resourcelib,
-	rpkg_tool::{RpkgResourceMeta, RpkgResourceReference}
+	metadata::{PathedID, ResourceMetadata, ResourceReference},
+	resourcelib
 };
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_string, to_value, Value};
 use similar::{capture_diff_slices, Algorithm, DiffOp};
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 use tryvial::try_fn;
 
 use patch_structs::{
@@ -26,9 +26,9 @@ use patch_structs::{
 	SetPropertyValue, SubEntityOperation
 };
 use qn_structs::{
-	Dependency, DependencyWithFlag, Entity, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride,
-	PinConnectionOverrideDelete, Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue,
-	RefWithConstantValue, SimpleProperty, SubEntity, SubType
+	Entity, EntityId, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride, PinConnectionOverrideDelete,
+	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, RefWithConstantValue, SimpleProperty,
+	SubEntity, SubType
 };
 use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue};
 
@@ -44,7 +44,7 @@ pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 	module.function_meta(apply_patch__meta)?;
 	module.function_meta(generate_patch__meta)?;
 	module.function_meta(convert_to_qn__meta)?;
-	module.function_meta(convert_to_rt__meta)?;
+	module.function_meta(convert_to_rl__meta)?;
 	ctx.install(module)?;
 
 	Ok(())
@@ -193,39 +193,6 @@ impl Ord for DiffableValue {
 }
 
 #[try_fn]
-#[context("Failure normalising entity ID")]
-#[auto_context]
-fn normalise_entity_id(entity_id: &str) -> Result<String> {
-	if entity_id.chars().count() != 16 {
-		format!(
-			"{:0>16x}",
-			u64::from_str_radix(entity_id, 16).context("entity_id must be valid hex")?
-		)
-	} else {
-		entity_id.to_owned()
-	}
-}
-
-#[try_fn]
-#[context("Failure normalising ref")]
-#[auto_context]
-fn normalise_ref(reference: &Ref) -> Result<Ref> {
-	match reference {
-		Ref::Full(FullRef {
-			entity_ref,
-			external_scene,
-			exposed_entity
-		}) => Ref::Full(FullRef {
-			entity_ref: normalise_entity_id(entity_ref)?,
-			exposed_entity: exposed_entity.to_owned(),
-			external_scene: external_scene.to_owned()
-		}),
-		Ref::Short(Some(x)) => Ref::Short(Some(normalise_entity_id(x)?)),
-		Ref::Short(None) => Ref::Short(None)
-	}
-}
-
-#[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
 fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenProperty) -> Result<bool> {
@@ -279,7 +246,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				}
 
 				PatchOperation::RemoveEntityByID(value) => {
-					entity.entities.shift_remove(&normalise_entity_id(&value)?).permit(
+					entity.entities.shift_remove(&value).permit(
 						permissive,
 						"Couldn't remove entity by ID because entity did not exist in target!"
 					)?;
@@ -292,7 +259,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				PatchOperation::SubEntityOperation(entity_id, op) => {
 					let entity = entity
 						.entities
-						.get_mut(&normalise_entity_id(&entity_id)?)
+						.get_mut(&entity_id)
 						.with_context(|| format!("SubEntityOperation couldn't find entity ID: {}!", entity_id))?;
 
 					match op {
@@ -306,10 +273,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 						SubEntityOperation::SetFactory(value) => {
 							entity.factory = value;
-						}
-
-						SubEntityOperation::SetFactoryFlag(value) => {
-							entity.factory_flag = value;
 						}
 
 						SubEntityOperation::SetBlueprint(value) => {
@@ -529,17 +492,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemoveEventConnection(event, trigger, reference) => {
-							let reference = match reference {
-								RefMaybeConstantValue::Ref(x) => RefMaybeConstantValue::Ref(normalise_ref(&x)?),
-								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-									entity_ref,
-									value
-								}) => RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-									entity_ref: normalise_ref(&entity_ref)?,
-									value
-								})
-							};
-
 							let ind = entity
 								.events
 								.as_ref()
@@ -647,17 +599,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemoveInputCopyConnection(event, trigger, reference) => {
-							let reference = match reference {
-								RefMaybeConstantValue::Ref(x) => RefMaybeConstantValue::Ref(normalise_ref(&x)?),
-								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-									entity_ref,
-									value
-								}) => RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-									entity_ref: normalise_ref(&entity_ref)?,
-									value
-								})
-							};
-
 							let ind = entity
 								.input_copying
 								.as_ref()
@@ -783,17 +724,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemoveOutputCopyConnection(event, trigger, reference) => {
-							let reference = match reference {
-								RefMaybeConstantValue::Ref(x) => RefMaybeConstantValue::Ref(normalise_ref(&x)?),
-								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-									entity_ref,
-									value
-								}) => RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-									entity_ref: normalise_ref(&entity_ref)?,
-									value
-								})
-							};
-
 							let ind = entity
 								.output_copying
 								.as_ref()
@@ -908,11 +838,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemoveConnectionForPropertyAlias(alias, data) => {
-							let data = PropertyAlias {
-								original_property: data.original_property,
-								original_entity: normalise_ref(&data.original_entity)?
-							};
-
 							let connection = entity
 								.property_aliases
 								.as_ref()
@@ -982,8 +907,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemoveSubset(name, ent) => {
-							let ent = normalise_entity_id(&ent)?;
-
 							let ind = entity
 								.subsets
 								.as_ref()
@@ -1024,10 +947,8 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					);
 				}
 
-				PatchOperation::AddPropertyOverrideConnection(mut value) => {
+				PatchOperation::AddPropertyOverrideConnection(value) => {
 					let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
-
-					value.entity = normalise_ref(&value.entity)?;
 
 					for property_override in &entity.property_overrides {
 						for ent in &property_override.entities {
@@ -1103,10 +1024,8 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					entity.property_overrides = merged_overrides;
 				}
 
-				PatchOperation::RemovePropertyOverrideConnection(mut value) => {
+				PatchOperation::RemovePropertyOverrideConnection(value) => {
 					let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
-
-					value.entity = normalise_ref(&value.entity)?;
 
 					for property_override in &entity.property_overrides {
 						for ent in &property_override.entities {
@@ -1191,14 +1110,10 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				}
 
 				PatchOperation::AddOverrideDelete(value) => {
-					let value = normalise_ref(&value)?;
-
 					entity.override_deletes.push(value);
 				}
 
 				PatchOperation::RemoveOverrideDelete(value) => {
-					let value = normalise_ref(&value)?;
-
 					entity.override_deletes.remove(
 						entity
 							.override_deletes
@@ -1208,17 +1123,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					);
 				}
 
-				PatchOperation::AddPinConnectionOverride(mut value) => {
-					value.to_entity = normalise_ref(&value.to_entity)?;
-					value.from_entity = normalise_ref(&value.from_entity)?;
-
+				PatchOperation::AddPinConnectionOverride(value) => {
 					entity.pin_connection_overrides.push(value);
 				}
 
-				PatchOperation::RemovePinConnectionOverride(mut value) => {
-					value.to_entity = normalise_ref(&value.to_entity)?;
-					value.from_entity = normalise_ref(&value.from_entity)?;
-
+				PatchOperation::RemovePinConnectionOverride(value) => {
 					entity.pin_connection_overrides.remove(
 						entity
 							.pin_connection_overrides
@@ -1228,17 +1137,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					);
 				}
 
-				PatchOperation::AddPinConnectionOverrideDelete(mut value) => {
-					value.to_entity = normalise_ref(&value.to_entity)?;
-					value.from_entity = normalise_ref(&value.from_entity)?;
-
+				PatchOperation::AddPinConnectionOverrideDelete(value) => {
 					entity.pin_connection_override_deletes.push(value);
 				}
 
-				PatchOperation::RemovePinConnectionOverrideDelete(mut value) => {
-					value.to_entity = normalise_ref(&value.to_entity)?;
-					value.from_entity = normalise_ref(&value.from_entity)?;
-
+				PatchOperation::RemovePinConnectionOverrideDelete(value) => {
 					entity.pin_connection_override_deletes.remove(
 						entity
 							.pin_connection_override_deletes
@@ -1253,26 +1156,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				}
 
 				PatchOperation::RemoveExternalScene(value) => {
-					if let Some(x) = entity.external_scenes.par_iter().position_any(|x| {
-						*x == value
-							|| value
-								== format!(
-									"00{}",
-									format!("{:X}", md5::compute(x))
-										.chars()
-										.skip(2)
-										.take(14)
-										.collect::<String>()
-								) || *x
-							== format!(
-								"00{}",
-								format!("{:X}", md5::compute(&value))
-									.chars()
-									.skip(2)
-									.take(14)
-									.collect::<String>()
-							)
-					}) {
+					if let Some(x) = entity.external_scenes.par_iter().position_any(|x| *x == value) {
 						entity.external_scenes.remove(x);
 					} else if permissive {
 						log::warn!("QuickEntity warning: RemoveExternalScene couldn't find expected value!");
@@ -1281,43 +1165,39 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					}
 				}
 
-				PatchOperation::AddExtraFactoryDependency(value) => {
-					entity.extra_factory_dependencies.push(value);
+				PatchOperation::AddExtraFactoryReference(value) => {
+					entity.extra_factory_references.push(value);
 				}
 
-				PatchOperation::RemoveExtraFactoryDependency(value) => {
-					entity.extra_factory_dependencies.remove(
+				PatchOperation::RemoveExtraFactoryReference(value) => {
+					entity.extra_factory_references.remove(
 						entity
-							.extra_factory_dependencies
+							.extra_factory_references
 							.par_iter()
 							.position_any(|x| *x == value)
 							.context("RemoveExtraFactoryDependency couldn't find expected value!")?
 					);
 				}
 
-				PatchOperation::AddExtraBlueprintDependency(value) => {
-					entity.extra_blueprint_dependencies.push(value);
+				PatchOperation::AddExtraBlueprintReference(value) => {
+					entity.extra_blueprint_references.push(value);
 				}
 
-				PatchOperation::RemoveExtraBlueprintDependency(value) => {
-					entity.extra_blueprint_dependencies.remove(
+				PatchOperation::RemoveExtraBlueprintReference(value) => {
+					entity.extra_blueprint_references.remove(
 						entity
-							.extra_blueprint_dependencies
+							.extra_blueprint_references
 							.par_iter()
 							.position_any(|x| *x == value)
 							.context("RemoveExtraBlueprintDependency couldn't find expected value!")?
 					);
 				}
 
-				PatchOperation::AddComment(mut value) => {
-					value.parent = normalise_ref(&value.parent)?;
-
+				PatchOperation::AddComment(value) => {
 					entity.comments.push(value);
 				}
 
-				PatchOperation::RemoveComment(mut value) => {
-					value.parent = normalise_ref(&value.parent)?;
-
+				PatchOperation::RemoveComment(value) => {
 					entity.comments.remove(
 						entity
 							.comments
@@ -1350,7 +1230,7 @@ pub fn apply_array_patch(
 		// It's not unnecessary because what Clippy suggests causes an error due to the borrow from .iter().cloned()
 		#[allow(clippy::unnecessary_to_owned)]
 		for (index, elem) in arr.to_owned().into_iter().enumerate() {
-			arr[index] = to_value(normalise_ref(&from_value::<Ref>(elem)?)?)?;
+			arr[index] = to_value(&from_value::<Ref>(elem)?)?;
 		}
 	}
 
@@ -1358,7 +1238,7 @@ pub fn apply_array_patch(
 		match op {
 			ArrayPatchOperation::RemoveItemByValue(mut val) => {
 				if is_ref_array {
-					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
+					val = to_value(&from_value::<Ref>(val)?)?;
 				}
 
 				arr.retain(|x| *x != val);
@@ -1366,8 +1246,8 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::AddItemAfter(mut val, mut new) => {
 				if is_ref_array {
-					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
-					new = to_value(normalise_ref(&from_value::<Ref>(new)?)?)?;
+					val = to_value(&from_value::<Ref>(val)?)?;
+					new = to_value(&from_value::<Ref>(new)?)?;
 				}
 
 				let new = new.to_owned();
@@ -1384,8 +1264,8 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::AddItemBefore(mut val, mut new) => {
 				if is_ref_array {
-					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
-					new = to_value(normalise_ref(&from_value::<Ref>(new)?)?)?;
+					val = to_value(&from_value::<Ref>(val)?)?;
+					new = to_value(&from_value::<Ref>(new)?)?;
 				}
 
 				let new = new.to_owned();
@@ -1402,7 +1282,7 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::AddItem(mut val) => {
 				if is_ref_array {
-					val = to_value(normalise_ref(&from_value::<Ref>(val)?)?)?;
+					val = to_value(&from_value::<Ref>(val)?)?;
 				}
 
 				arr.push(val);
@@ -1460,13 +1340,6 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				patch.push(PatchOperation::SubEntityOperation(
 					entity_id.to_owned(),
 					SubEntityOperation::SetFactory(new_entity_data.factory.to_owned())
-				));
-			}
-
-			if old_entity_data.factory_flag != new_entity_data.factory_flag {
-				patch.push(PatchOperation::SubEntityOperation(
-					entity_id.to_owned(),
-					SubEntityOperation::SetFactoryFlag(new_entity_data.factory_flag.to_owned())
 				));
 			}
 
@@ -2310,27 +2183,27 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 		}
 	}
 
-	for x in &original.extra_factory_dependencies {
-		if !modified.extra_factory_dependencies.contains(x) {
-			patch.push(PatchOperation::RemoveExtraFactoryDependency(x.to_owned()))
+	for x in &original.extra_factory_references {
+		if !modified.extra_factory_references.contains(x) {
+			patch.push(PatchOperation::RemoveExtraFactoryReference(x.to_owned()))
 		}
 	}
 
-	for x in &modified.extra_factory_dependencies {
-		if !original.extra_factory_dependencies.contains(x) {
-			patch.push(PatchOperation::AddExtraFactoryDependency(x.to_owned()))
+	for x in &modified.extra_factory_references {
+		if !original.extra_factory_references.contains(x) {
+			patch.push(PatchOperation::AddExtraFactoryReference(x.to_owned()))
 		}
 	}
 
-	for x in &original.extra_blueprint_dependencies {
-		if !modified.extra_blueprint_dependencies.contains(x) {
-			patch.push(PatchOperation::RemoveExtraBlueprintDependency(x.to_owned()))
+	for x in &original.extra_blueprint_references {
+		if !modified.extra_blueprint_references.contains(x) {
+			patch.push(PatchOperation::RemoveExtraBlueprintReference(x.to_owned()))
 		}
 	}
 
-	for x in &modified.extra_blueprint_dependencies {
-		if !original.extra_blueprint_dependencies.contains(x) {
-			patch.push(PatchOperation::AddExtraBlueprintDependency(x.to_owned()))
+	for x in &modified.extra_blueprint_references {
+		if !original.extra_blueprint_references.contains(x) {
+			patch.push(PatchOperation::AddExtraBlueprintReference(x.to_owned()))
 		}
 	}
 
@@ -2347,42 +2220,38 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	}
 
 	Patch {
-		factory_hash: modified.factory_hash,
-		blueprint_hash: modified.blueprint_hash,
+		factory: modified.factory,
+		blueprint: modified.blueprint,
 		patch,
-		patch_version: 6
+		patch_version: 7
 	}
 }
 
 #[try_fn]
-#[context("Failure converting RT reference to QN")]
-fn convert_rt_reference_to_qn(
+#[context("Failure converting RL reference to QN")]
+fn convert_rl_reference_to_qn(
 	reference: &resourcelib::EntityReference,
 	factory: &resourcelib::EntityFactory,
 	blueprint: &resourcelib::EntityBlueprint,
-	factory_meta: &RpkgResourceMeta
+	factory_meta: &ResourceMetadata
 ) -> Result<Ref> {
 	if !reference.exposed_entity.is_empty() || reference.external_scene_index != -1 {
 		Ref::Full(FullRef {
 			entity_ref: match reference.entity_index {
-				-2 => format!("{:0>16x}", reference.entity_id),
-				index if index >= 0 => {
-					format!(
-						"{:0>16x}",
-						blueprint
-							.sub_entities
-							.get(index as usize)
-							.context("Expected an entity at the index when converting ref to QN")?
-							.entity_id
-					)
-				}
-				_ => bail!("Uhh you can't reference nothing and then ask for an external scene or exposed entity")
+				-2 => reference.entity_id.into(),
+				index if index >= 0 => blueprint
+					.sub_entities
+					.get(index as usize)
+					.context("Expected an entity at the index when converting ref to QN")?
+					.entity_id
+					.into(),
+				_ => bail!("Can't reference exposed entity/external scene with -1 entity index")
 			},
 			external_scene: match reference.external_scene_index {
 				-1 => None,
 				index if index >= 0 => Some(
 					factory_meta
-						.hash_reference_data
+						.references
 						.get(
 							factory
 								.external_scene_type_indices_in_resource_header
@@ -2391,10 +2260,10 @@ fn convert_rt_reference_to_qn(
 								.to_owned()
 						)
 						.context("Expected an external scene to be in the TEMP meta")?
-						.hash
+						.resource
 						.to_owned()
 				),
-				_ => bail!("Uhh this external scene is not valid at all")
+				_ => bail!("Invalid external scene index")
 			},
 			exposed_entity: if reference.exposed_entity.is_empty() {
 				None
@@ -2405,49 +2274,48 @@ fn convert_rt_reference_to_qn(
 	} else {
 		Ref::Short(match reference.entity_index {
 			-1 => None,
-			index if index >= 0 => Some(format!(
-				"{:0>16x}",
+			index if index >= 0 => Some(
 				blueprint
 					.sub_entities
 					.get(index as usize)
 					.context("Expected an entity at the index when converting ref to QN")?
 					.entity_id
-			)),
-			_ => bail!("Uhh you can't have a -2 entity index and then not provide the entity id")
+					.into()
+			),
+			_ => bail!("Invalid entity index for no external scene")
 		})
 	}
 }
 
 #[try_fn]
-#[context("Failure converting QN reference to RT")]
+#[context("Failure converting QN reference to RL")]
 #[auto_context]
-fn convert_qn_reference_to_rt(
+fn convert_qn_reference_to_rl(
 	reference: &Ref,
 	factory: &resourcelib::EntityFactory,
-	factory_meta: &RpkgResourceMeta,
-	entity_id_to_index_mapping: &HashMap<String, usize>
+	factory_meta: &ResourceMetadata,
+	entity_id_to_index_mapping: &HashMap<EntityId, usize>
 ) -> Result<resourcelib::EntityReference> {
 	match reference {
 		Ref::Short(None) => resourcelib::EntityReference {
-			entity_id: 18446744073709551615,
+			entity_id: u64::MAX,
 			external_scene_index: -1,
 			entity_index: -1,
 			exposed_entity: "".to_string()
 		},
 		Ref::Short(Some(ent)) => resourcelib::EntityReference {
-			entity_id: 18446744073709551615,
+			entity_id: u64::MAX,
 			external_scene_index: -1,
 			entity_index: entity_id_to_index_mapping
-				.get(&normalise_entity_id(ent)?)
+				.get(ent)
 				.with_context(|| format!("Short ref referred to a nonexistent entity ID: {}", ent))?
 				.to_owned() as i32,
 			exposed_entity: "".to_string()
 		},
 		Ref::Full(fullref) => resourcelib::EntityReference {
 			entity_id: match &fullref.external_scene {
-				None => 18446744073709551615,
-				Some(_) => u64::from_str_radix(fullref.entity_ref.as_str(), 16)
-					.with_context(|| format!("Full ref had invalid hex ref: {}", fullref.entity_ref))?
+				None => u64::MAX,
+				Some(_) => fullref.entity_ref.as_u64()
 			},
 			external_scene_index: match &fullref.external_scene {
 				None => -1,
@@ -2457,10 +2325,10 @@ fn convert_qn_reference_to_rt(
 						.iter()
 						.try_position(|x| {
 							Ok(factory_meta
-								.hash_reference_data
+								.references
 								.get(*x)
 								.context("TEMP referenced external scene not found in meta in externalScenes")?
-								.hash == *extscene)
+								.resource == *extscene)
 						})?
 						.context("TEMP referenced external scene not found in externalScenes in sub-entity")?
 						.try_into()
@@ -2469,7 +2337,7 @@ fn convert_qn_reference_to_rt(
 			},
 			entity_index: match &fullref.external_scene {
 				None => entity_id_to_index_mapping
-					.get(&normalise_entity_id(&fullref.entity_ref)?)
+					.get(&fullref.entity_ref)
 					.with_context(|| format!("Full ref referred to a nonexistent entity ID: {}", fullref.entity_ref))?
 					.to_owned() as i32,
 				Some(_) => -2
@@ -2480,24 +2348,24 @@ fn convert_qn_reference_to_rt(
 }
 
 #[try_fn]
-#[context("Failure converting RT property value to QN")]
+#[context("Failure converting RL property value to QN")]
 #[auto_context]
-pub fn convert_rt_property_value_to_qn(
+pub fn convert_rl_property_value_to_qn(
 	property: &resourcelib::PropertyValue,
 	factory: &resourcelib::EntityFactory,
-	factory_meta: &RpkgResourceMeta,
+	factory_meta: &ResourceMetadata,
 	blueprint: &resourcelib::EntityBlueprint,
 	convert_lossless: bool
 ) -> Result<Value> {
 	match property.property_type.as_str() {
-		"SEntityTemplateReference" => to_value(convert_rt_reference_to_qn(
+		"SEntityTemplateReference" => to_value(convert_rl_reference_to_qn(
 			&from_value::<resourcelib::EntityReference>(property.property_value.to_owned())
-				.context("Converting RT ref to QN in property value returned error in parsing")?,
+				.context("Converting RL ref to QN in property value returned error in parsing")?,
 			factory,
 			blueprint,
 			factory_meta
 		)?)
-		.context("Converting RT ref to QN in property value returned error in serialisation")?,
+		.context("Converting RL ref to QN in property value returned error in serialisation")?,
 
 		"ZRuntimeResourceID" => {
 			match from_value::<ZRuntimeResourceIDPropertyValue>(property.property_value.to_owned())
@@ -2512,19 +2380,13 @@ pub fn convert_rt_property_value_to_qn(
 					m_IDHigh: _, // We ignore the id_high as no resource in the game has that many depends
 					m_IDLow: id_low
 				} => {
-					let depend_data = factory_meta
-						.hash_reference_data
-						.get(id_low as usize)
-						.context("ZRuntimeResourceID m_IDLow referred to non-existent dependency")?;
-
-					if depend_data.flag != "1F" {
-						json!({
-							"resource": depend_data.hash,
-							"flag": depend_data.flag
-						})
-					} else {
-						to_value(depend_data.hash.to_owned()).ctx?
-					}
+					to_value(
+						factory_meta
+							.references
+							.get(id_low as usize)
+							.context("ZRuntimeResourceID m_IDLow referred to non-existent dependency")?
+					)
+					.ctx?
 				}
 			}
 		}
@@ -2706,13 +2568,13 @@ pub fn convert_rt_property_value_to_qn(
 }
 
 #[try_fn]
-#[context("Failure converting RT property to QN")]
+#[context("Failure converting RL property to QN")]
 #[auto_context]
-fn convert_rt_property_to_qn(
+fn convert_rl_property_to_qn(
 	property: &resourcelib::Property,
 	post_init: bool,
 	factory: &resourcelib::EntityFactory,
-	factory_meta: &RpkgResourceMeta,
+	factory_meta: &ResourceMetadata,
 	blueprint: &resourcelib::EntityBlueprint,
 	convert_lossless: bool
 ) -> Result<Property> {
@@ -2731,7 +2593,7 @@ fn convert_rt_property_to_qn(
 						y.nth(6); // discard TArray<
 						y.next_back(); // discard closing >
 
-						convert_rt_property_value_to_qn(
+						convert_rl_property_value_to_qn(
 							&resourcelib::PropertyValue {
 								property_type: y.collect::<String>(), // mock a single value for each array element
 								property_value: x.to_owned()
@@ -2746,31 +2608,31 @@ fn convert_rt_property_to_qn(
 			)
 			.ctx?
 		} else {
-			convert_rt_property_value_to_qn(&property.value, factory, factory_meta, blueprint, convert_lossless)?
+			convert_rl_property_value_to_qn(&property.value, factory, factory_meta, blueprint, convert_lossless)?
 		},
 		post_init: if post_init { Some(true) } else { None }
 	}
 }
 
 #[try_fn]
-#[context("Failure converting QN property value to RT")]
+#[context("Failure converting QN property value to RL")]
 #[auto_context]
-pub fn convert_qn_property_value_to_rt(
+pub fn convert_qn_property_value_to_rl(
 	property: &Property,
 	factory: &resourcelib::EntityFactory,
-	factory_meta: &RpkgResourceMeta,
-	entity_id_to_index_mapping: &HashMap<String, usize>,
-	factory_dependencies_index_mapping: &HashMap<String, usize>
+	factory_meta: &ResourceMetadata,
+	entity_id_to_index_mapping: &HashMap<EntityId, usize>,
+	factory_dependencies_index_mapping: &HashMap<PathedID, usize>
 ) -> Result<Value> {
 	match property.property_type.as_str() {
-		"SEntityTemplateReference" => to_value(convert_qn_reference_to_rt(
+		"SEntityTemplateReference" => to_value(convert_qn_reference_to_rl(
 			&from_value::<Ref>(property.value.to_owned())
-				.context("Converting RT ref to QN in property value returned error in parsing")?,
+				.context("Converting RL ref to QN in property value returned error in parsing")?,
 			factory,
 			factory_meta,
 			entity_id_to_index_mapping
 		)?)
-		.context("Converting RT ref to QN in property value returned error in serialisation")?,
+		.context("Converting RL ref to QN in property value returned error in serialisation")?,
 
 		"ZRuntimeResourceID" => {
 			if property.value.is_null() {
@@ -2781,12 +2643,12 @@ pub fn convert_qn_property_value_to_rt(
 			} else if property.value.is_string() {
 				json!({
 					"m_IDHigh": 0, // I doubt we'll ever have that many dependencies
-					"m_IDLow": factory_dependencies_index_mapping.get(property.value.as_str().ctx?).ctx?
+					"m_IDLow": factory_dependencies_index_mapping.get(&PathedID::from_str(property.value.as_str().ctx?)?).ctx?
 				})
 			} else if property.value.is_object() {
 				json!({
 					"m_IDHigh": 0,
-					"m_IDLow": factory_dependencies_index_mapping.get(property.value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?).ctx?
+					"m_IDLow": factory_dependencies_index_mapping.get(&PathedID::from_str(property.value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?)?).ctx?
 				})
 			} else {
 				bail!("ZRuntimeResourceID was not of a valid type")
@@ -2914,18 +2776,18 @@ pub fn convert_qn_property_value_to_rt(
 }
 
 #[try_fn]
-#[context("Failure converting QN property to RT")]
+#[context("Failure converting QN property to RL")]
 #[auto_context]
-fn convert_qn_property_to_rt(
+fn convert_qn_property_to_rl(
 	property_name: &str,
 	property_value: &Property,
 	factory: &resourcelib::EntityFactory,
-	factory_meta: &RpkgResourceMeta,
-	entity_id_to_index_mapping: &HashMap<String, usize>,
-	factory_dependencies_index_mapping: &HashMap<String, usize>
+	factory_meta: &ResourceMetadata,
+	entity_id_to_index_mapping: &HashMap<EntityId, usize>,
+	factory_dependencies_index_mapping: &HashMap<PathedID, usize>
 ) -> Result<resourcelib::Property> {
 	resourcelib::Property {
-		n_property_id: convert_string_property_name_to_rt_id(property_name)?,
+		n_property_id: convert_string_property_name_to_rl_id(property_name)?,
 		value: resourcelib::PropertyValue {
 			property_type: property_value.property_type.to_owned(),
 			property_value: if property_value.value.is_array() {
@@ -2940,7 +2802,7 @@ fn convert_qn_property_to_rt(
 							y.nth(6); // discard TArray<
 							y.next_back(); // discard closing >
 
-							convert_qn_property_value_to_rt(
+							convert_qn_property_value_to_rl(
 								&Property {
 									property_type: y.collect(),
 									post_init: property_value.post_init,
@@ -2956,7 +2818,7 @@ fn convert_qn_property_to_rt(
 				)
 				.ctx?
 			} else {
-				convert_qn_property_value_to_rt(
+				convert_qn_property_value_to_rl(
 					property_value,
 					factory,
 					factory_meta,
@@ -2969,9 +2831,9 @@ fn convert_qn_property_to_rt(
 }
 
 #[try_fn]
-#[context("Failure converting string property name to RT id")]
+#[context("Failure converting string property name to RL id")]
 #[auto_context]
-fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<resourcelib::PropertyID> {
+fn convert_string_property_name_to_rl_id(property_name: &str) -> Result<resourcelib::PropertyID> {
 	if let Ok(i) = property_name.parse::<u64>() {
 		let is_crc_length = {
 			let x = format!("{:x}", i).chars().count();
@@ -2992,20 +2854,20 @@ fn convert_string_property_name_to_rt_id(property_name: &str) -> Result<resource
 #[try_fn]
 #[context("Failure getting factory dependencies")]
 #[auto_context]
-fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference>> {
+fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 	vec![
 		// blueprint first
-		vec![RpkgResourceReference {
-			hash: entity.blueprint_hash.to_owned(),
-			flag: "1F".to_string()
+		vec![ResourceReference {
+			resource: entity.blueprint.to_owned(),
+			flags: Default::default()
 		}],
 		// then external scenes
 		entity
 			.external_scenes
 			.par_iter()
-			.map(|scene| RpkgResourceReference {
-				hash: scene.to_owned(),
-				flag: "1F".to_string()
+			.map(|scene| ResourceReference {
+				resource: scene.to_owned(),
+				flags: Default::default()
 			})
 			.collect(),
 		// then factories of sub-entities
@@ -3014,10 +2876,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 			.iter()
 			.collect_vec()
 			.par_iter()
-			.map(|(_, sub_entity)| RpkgResourceReference {
-				hash: sub_entity.factory.to_owned(),
-				flag: sub_entity.factory_flag.to_owned().unwrap_or_else(|| "1F".to_string()) // this is slightly more efficient
-			})
+			.map(|(_, sub_entity)| sub_entity.factory.to_owned())
 			.collect(),
 		// then sub-entity ZRuntimeResourceIDs
 		entity
@@ -3033,29 +2892,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 								.iter()
 								.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
 								.map(|(_, prop)| -> Result<_> {
-									Ok(if prop.value.is_string() {
-										RpkgResourceReference {
-											hash: prop.value.as_str().ctx?.to_string(),
-											flag: "1F".to_string()
-										}
-									} else {
-										RpkgResourceReference {
-											hash: prop
-												.value
-												.get("resource")
-												.context("ZRuntimeResourceID must have resource")?
-												.as_str()
-												.context("ZRuntimeResourceID resource must be string")?
-												.to_string(),
-											flag: prop
-												.value
-												.get("flag")
-												.context("ZRuntimeResourceID must have flag")?
-												.as_str()
-												.context("ZRuntimeResourceID flag must be string")?
-												.to_string()
-										}
-									})
+									Ok(from_value::<ResourceReference>(prop.value.to_owned())
+										.context("ZRuntimeResourceID must be valid ResourceReference")?)
 								})
 								.collect::<Result<Vec<_>>>()?,
 							props
@@ -3069,27 +2907,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 										.context("TArray<ZRuntimeResourceID> must be array")?
 										.iter()
 										.map(|value| -> Result<_> {
-											Ok(if value.is_string() {
-												RpkgResourceReference {
-													hash: value.as_str().ctx?.to_string(),
-													flag: "1F".to_string()
-												}
-											} else {
-												RpkgResourceReference {
-													hash: value
-														.get("resource")
-														.context("ZRuntimeResourceID must have resource")?
-														.as_str()
-														.context("ZRuntimeResourceID resource must be string")?
-														.to_string(),
-													flag: value
-														.get("flag")
-														.context("ZRuntimeResourceID must have flag")?
-														.as_str()
-														.context("ZRuntimeResourceID flag must be string")?
-														.to_string()
-												}
-											})
+											Ok(from_value::<ResourceReference>(value.to_owned())
+												.context("ZRuntimeResourceID must be valid ResourceReference")?)
 										})
 										.collect::<Result<Vec<_>>>()
 								})
@@ -3113,29 +2932,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 											prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
 										})
 										.map(|(_, prop)| -> Result<_> {
-											Ok(if prop.value.is_string() {
-												RpkgResourceReference {
-													hash: prop.value.as_str().ctx?.to_string(),
-													flag: "1F".to_string()
-												}
-											} else {
-												RpkgResourceReference {
-													hash: prop
-														.value
-														.get("resource")
-														.context("ZRuntimeResourceID must have resource")?
-														.as_str()
-														.context("ZRuntimeResourceID resource must be string")?
-														.to_string(),
-													flag: prop
-														.value
-														.get("flag")
-														.context("ZRuntimeResourceID must have flag")?
-														.as_str()
-														.context("ZRuntimeResourceID flag must be string")?
-														.to_string()
-												}
-											})
+											Ok(from_value::<ResourceReference>(prop.value.to_owned())
+												.context("ZRuntimeResourceID must be valid ResourceReference")?)
 										})
 										.collect::<Result<Vec<_>>>()?,
 									props
@@ -3149,27 +2947,9 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 												.context("TArray<ZRuntimeResourceID> must be array")?
 												.iter()
 												.map(|value| -> Result<_> {
-													Ok(if value.is_string() {
-														RpkgResourceReference {
-															hash: value.as_str().ctx?.to_string(),
-															flag: "1F".to_string()
-														}
-													} else {
-														RpkgResourceReference {
-															hash: value
-																.get("resource")
-																.context("ZRuntimeResourceID must have resource")?
-																.as_str()
-																.context("ZRuntimeResourceID resource must be string")?
-																.to_string(),
-															flag: value
-																.get("flag")
-																.context("ZRuntimeResourceID must have flag")?
-																.as_str()
-																.context("ZRuntimeResourceID flag must be string")?
-																.to_string()
-														}
-													})
+													Ok(from_value::<ResourceReference>(value.to_owned()).context(
+														"ZRuntimeResourceID must be valid ResourceReference"
+													)?)
 												})
 												.collect::<Result<Vec<_>>>()
 										})
@@ -3205,29 +2985,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 						.iter()
 						.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
 						.map(|(_, prop)| -> Result<_> {
-							Ok(if prop.value.is_string() {
-								RpkgResourceReference {
-									hash: prop.value.as_str().ctx?.to_string(),
-									flag: "1F".to_string()
-								}
-							} else {
-								RpkgResourceReference {
-									hash: prop
-										.value
-										.get("resource")
-										.context("ZRuntimeResourceID must have resource")?
-										.as_str()
-										.context("ZRuntimeResourceID resource must be string")?
-										.to_string(),
-									flag: prop
-										.value
-										.get("flag")
-										.context("ZRuntimeResourceID must have flag")?
-										.as_str()
-										.context("ZRuntimeResourceID flag must be string")?
-										.to_string()
-								}
-							})
+							Ok(from_value::<ResourceReference>(prop.value.to_owned())
+								.context("ZRuntimeResourceID must be valid ResourceReference")?)
 						})
 						.collect::<Result<Vec<_>>>()?,
 					properties
@@ -3239,27 +2998,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 								.context("TArray<ZRuntimeResourceID> must be array")?
 								.iter()
 								.map(|value| -> Result<_> {
-									Ok(if value.is_string() {
-										RpkgResourceReference {
-											hash: value.as_str().ctx?.to_string(),
-											flag: "1F".to_string()
-										}
-									} else {
-										RpkgResourceReference {
-											hash: value
-												.get("resource")
-												.context("ZRuntimeResourceID must have resource")?
-												.as_str()
-												.context("ZRuntimeResourceID resource must be string")?
-												.to_string(),
-											flag: value
-												.get("flag")
-												.context("ZRuntimeResourceID must have flag")?
-												.as_str()
-												.context("ZRuntimeResourceID flag must be string")?
-												.to_string()
-										}
-									})
+									Ok(from_value::<ResourceReference>(value.to_owned())
+										.context("ZRuntimeResourceID must be valid ResourceReference")?)
 								})
 								.collect::<Result<Vec<_>>>()
 						})
@@ -3282,22 +3022,22 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 	.collect()
 }
 
-fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
+fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceReference> {
 	vec![
 		entity
 			.external_scenes
 			.par_iter()
-			.map(|scene| RpkgResourceReference {
-				hash: scene.to_owned(),
-				flag: "1F".to_string()
+			.map(|scene| ResourceReference {
+				resource: scene.to_owned(),
+				flags: Default::default()
 			})
-			.collect::<Vec<RpkgResourceReference>>(),
+			.collect::<Vec<_>>(),
 		entity
 			.entities
 			.iter()
-			.map(|(_, sub_entity)| RpkgResourceReference {
-				hash: sub_entity.blueprint.to_owned(),
-				flag: "1F".to_string()
+			.map(|(_, sub_entity)| ResourceReference {
+				resource: sub_entity.blueprint.to_owned(),
+				flags: Default::default()
 			})
 			.collect(),
 	]
@@ -3309,15 +3049,15 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
 }
 
 #[try_fn]
-#[context("Failure converting RT entity to QN")]
+#[context("Failure converting RL entity to QN")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 #[cfg_attr(feature = "rune", rune::function(keep))]
 pub fn convert_to_qn(
 	factory: &resourcelib::EntityFactory,
-	factory_meta: &RpkgResourceMeta,
+	factory_meta: &ResourceMetadata,
 	blueprint: &resourcelib::EntityBlueprint,
-	blueprint_meta: &RpkgResourceMeta,
+	blueprint_meta: &ResourceMetadata,
 	convert_lossless: bool
 ) -> Result<Entity> {
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
@@ -3332,52 +3072,45 @@ pub fn convert_to_qn(
 		}
 
 		let mut entity = Entity {
-			factory_hash: factory_meta.hash_value.to_owned(),
-			blueprint_hash: blueprint_meta.hash_value.to_owned(),
-			root_entity: format!(
-				"{:0>16x}",
-				blueprint
-					.sub_entities
-					.get(blueprint.root_entity_index)
-					.context("Root entity index referred to nonexistent entity")?
-					.entity_id
-			),
+			factory: factory_meta.id.to_owned(),
+			blueprint: blueprint_meta.id.to_owned(),
+			root_entity: blueprint
+				.sub_entities
+				.get(blueprint.root_entity_index)
+				.context("Root entity index referred to nonexistent entity")?
+				.entity_id
+				.into(),
 			entities: factory
 				.sub_entities
 				.par_iter() // rayon automatically makes this run in parallel for s p e e d
 				.enumerate()
-				.map(|(index, sub_entity_factory)| -> Result<(String, SubEntity)> {
+				.map(|(index, sub_entity_factory)| -> Result<(EntityId, SubEntity)> {
 					let sub_entity_blueprint = blueprint
 						.sub_entities
 						.get(index)
 						.context("Factory entity had no equivalent by index in blueprint")?;
 
-					let factory_dependency = factory_meta
-						.hash_reference_data
-						.get(sub_entity_factory.entity_type_resource_index)
-						.context("Entity resource index referred to nonexistent dependency")?;
-
 					Ok((
-						format!("{:0>16x}", sub_entity_blueprint.entity_id),
+						sub_entity_blueprint.entity_id.into(),
 						SubEntity {
 							name: sub_entity_blueprint.entity_name.to_owned(),
-							factory: factory_dependency.hash.to_owned(),
+							factory: factory_meta
+								.references
+								.get(sub_entity_factory.entity_type_resource_index)
+								.context("Entity resource index referred to nonexistent dependency")?
+								.to_owned(),
 							blueprint: blueprint_meta
-								.hash_reference_data
+								.references
 								.get(sub_entity_blueprint.entity_type_resource_index)
 								.context("Entity resource index referred to nonexistent dependency")?
-								.hash
+								.resource
 								.to_owned(),
-							parent: convert_rt_reference_to_qn(
+							parent: convert_rl_reference_to_qn(
 								&sub_entity_factory.logical_parent,
 								factory,
 								blueprint,
 								factory_meta
 							)?,
-							factory_flag: match factory_dependency.flag.as_str() {
-								"1F" => None,
-								flag => Some(flag.to_owned())
-							},
 							editor_only: if sub_entity_blueprint.editor_only {
 								Some(true)
 							} else {
@@ -3393,7 +3126,7 @@ pub fn convert_to_qn(
 												resourcelib::PropertyID::Int(id) => id.to_string(),
 												resourcelib::PropertyID::String(id) => id.to_owned()
 											}, // key
-											convert_rt_property_to_qn(
+											convert_rl_property_to_qn(
 												property,
 												false,
 												factory,
@@ -3411,7 +3144,7 @@ pub fn convert_to_qn(
 													resourcelib::PropertyID::Int(id) => id.to_string(),
 													resourcelib::PropertyID::String(id) => id.to_owned()
 												},
-												convert_rt_property_to_qn(
+												convert_rl_property_to_qn(
 													property,
 													true,
 													factory,
@@ -3449,7 +3182,7 @@ pub fn convert_to_qn(
 															resourcelib::PropertyID::Int(id) => id.to_string(),
 															resourcelib::PropertyID::String(id) => id.to_owned()
 														},
-														convert_rt_property_to_qn(
+														convert_rl_property_to_qn(
 															&property.property_value,
 															property.post_init.to_owned(),
 															factory,
@@ -3488,8 +3221,7 @@ pub fn convert_to_qn(
 													.map(|alias| {
 														Ok(PropertyAlias {
 															original_property: alias.s_alias_name.to_owned(),
-															original_entity: Ref::Short(Some(format!(
-																"{:0>16x}",
+															original_entity: Ref::Short(Some(
 																blueprint
 																	.sub_entities
 																	.get(alias.entity_id)
@@ -3498,7 +3230,8 @@ pub fn convert_to_qn(
 																		 sub-entity"
 																	)?
 																	.entity_id
-															)))
+																	.into()
+															))
 														})
 													})
 													.collect::<Result<_>>()?
@@ -3526,7 +3259,7 @@ pub fn convert_to_qn(
 													.a_targets
 													.iter()
 													.map(|target| -> Result<_> {
-														convert_rt_reference_to_qn(
+														convert_rl_reference_to_qn(
 															target,
 															factory,
 															blueprint,
@@ -3546,20 +3279,18 @@ pub fn convert_to_qn(
 								}
 							},
 							exposed_interfaces: {
-								let x: IndexMap<String, String> = sub_entity_blueprint
+								let x: IndexMap<String, EntityId> = sub_entity_blueprint
 									.exposed_interfaces
 									.iter()
 									.map(|(interface, entity_index)| {
 										Ok((
 											interface.to_owned(),
-											format!(
-												"{:0>16x}",
-												blueprint
-													.sub_entities
-													.get(*entity_index)
-													.context("Exposed interface referred to nonexistent sub-entity")?
-													.entity_id
-											)
+											blueprint
+												.sub_entities
+												.get(*entity_index)
+												.context("Exposed interface referred to nonexistent sub-entity")?
+												.entity_id
+												.into()
 										))
 									})
 									.collect::<Result<_>>()?;
@@ -3574,24 +3305,24 @@ pub fn convert_to_qn(
 						}
 					))
 				})
-				.collect::<Result<IndexMap<String, SubEntity>>>()?,
+				.collect::<Result<IndexMap<EntityId, SubEntity>>>()?,
 			external_scenes: factory
 				.external_scene_type_indices_in_resource_header
 				.par_iter()
-				.map(|scene_index| Ok(factory_meta.hash_reference_data.get(*scene_index).ctx?.hash.to_owned()))
+				.map(|scene_index| Ok(factory_meta.references.get(*scene_index).ctx?.resource.to_owned()))
 				.collect::<Result<_>>()?,
 			override_deletes: blueprint
 				.override_deletes
 				.par_iter()
-				.map(|x| convert_rt_reference_to_qn(x, factory, blueprint, factory_meta))
+				.map(|x| convert_rl_reference_to_qn(x, factory, blueprint, factory_meta))
 				.collect::<Result<_>>()?,
 			pin_connection_override_deletes: blueprint
 				.pin_connection_override_deletes
 				.par_iter()
 				.map(|x| {
 					Ok(PinConnectionOverrideDelete {
-						from_entity: convert_rt_reference_to_qn(&x.from_entity, factory, blueprint, factory_meta)?,
-						to_entity: convert_rt_reference_to_qn(&x.to_entity, factory, blueprint, factory_meta)?,
+						from_entity: convert_rl_reference_to_qn(&x.from_entity, factory, blueprint, factory_meta)?,
+						to_entity: convert_rl_reference_to_qn(&x.to_entity, factory, blueprint, factory_meta)?,
 						from_pin: x.from_pin_name.to_owned(),
 						to_pin: x.to_pin_name.to_owned(),
 						value: match x.constant_pin_value.property_type.as_str() {
@@ -3610,8 +3341,8 @@ pub fn convert_to_qn(
 				.filter(|x| x.from_entity.external_scene_index != -1)
 				.map(|x| {
 					Ok(PinConnectionOverride {
-						from_entity: convert_rt_reference_to_qn(&x.from_entity, factory, blueprint, factory_meta)?,
-						to_entity: convert_rt_reference_to_qn(&x.to_entity, factory, blueprint, factory_meta)?,
+						from_entity: convert_rl_reference_to_qn(&x.from_entity, factory, blueprint, factory_meta)?,
+						to_entity: convert_rl_reference_to_qn(&x.to_entity, factory, blueprint, factory_meta)?,
 						from_pin: x.from_pin_name.to_owned(),
 						to_pin: x.to_pin_name.to_owned(),
 						value: match x.constant_pin_value.property_type.as_str() {
@@ -3631,83 +3362,38 @@ pub fn convert_to_qn(
 				0 => SubType::Template,
 				_ => bail!("Invalid subtype {}", blueprint.sub_type)
 			},
-			quick_entity_version: 3.1,
-			extra_factory_dependencies: vec![],
-			extra_blueprint_dependencies: vec![],
+			quick_entity_version: 3.2,
+			extra_factory_references: vec![],
+			extra_blueprint_references: vec![],
 			comments: vec![]
 		};
 
 		{
 			let depends = get_factory_dependencies(&entity)?;
 
-			entity.extra_factory_dependencies = factory_meta
-				.hash_reference_data
+			entity.extra_factory_references = factory_meta
+				.references
 				.iter()
-				.filter(|x| {
-					if x.hash.contains(':') {
-						!depends.contains(&RpkgResourceReference {
-							hash: format!(
-								"00{}",
-								format!("{:X}", md5::compute(&x.hash))
-									.chars()
-									.skip(2)
-									.take(14)
-									.collect::<String>()
-							),
-							flag: x.flag.to_owned()
-						}) && !depends.contains(x)
-					} else {
-						!depends.contains(x)
-					}
-				})
-				.map(|x| match x {
-					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
-					RpkgResourceReference { hash, flag } => Dependency::Full(DependencyWithFlag {
-						resource: hash.to_owned(),
-						flag: flag.to_owned()
-					})
-				})
+				.filter(|x| !depends.contains(x))
+				.cloned()
 				.collect();
 		}
 
 		{
 			let depends = get_blueprint_dependencies(&entity);
 
-			entity.extra_blueprint_dependencies = blueprint_meta
-				.hash_reference_data
+			entity.extra_blueprint_references = blueprint_meta
+				.references
 				.iter()
-				.filter(|x| {
-					if x.hash.contains(':') {
-						!depends.contains(&RpkgResourceReference {
-							hash: format!(
-								"00{}",
-								format!("{:X}", md5::compute(&x.hash))
-									.chars()
-									.skip(2)
-									.take(14)
-									.collect::<String>()
-							),
-							flag: x.flag.to_owned()
-						}) && !depends.contains(x)
-					} else {
-						!depends.contains(x)
-					}
-				})
-				.map(|x| match x {
-					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
-					RpkgResourceReference { hash, flag } => Dependency::Full(DependencyWithFlag {
-						resource: hash.to_owned(),
-						flag: flag.to_owned()
-					})
-				})
+				.filter(|x| !depends.contains(x))
+				.cloned()
 				.collect();
 		}
 
 		for pin in &blueprint.pin_connections {
 			let relevant_sub_entity = entity
 				.entities
-				.get_mut(&format!(
-					"{:0>16x}",
+				.get_mut(&EntityId::from(
 					blueprint
 						.sub_entities
 						.get(pin.from_id)
@@ -3729,24 +3415,24 @@ pub fn convert_to_qn(
 				.entry(pin.to_pin_name.to_owned())
 				.or_default()
 				.push(if pin.constant_pin_value.property_type == "void" {
-					RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
-						"{:0>16x}",
+					RefMaybeConstantValue::Ref(Ref::Short(Some(
 						blueprint
 							.sub_entities
 							.get(pin.to_id)
 							.context("Pin referred to nonexistent sub-entity")?
 							.entity_id
-					))))
+							.into()
+					)))
 				} else {
 					RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-						entity_ref: Ref::Short(Some(format!(
-							"{:0>16x}",
+						entity_ref: Ref::Short(Some(
 							blueprint
 								.sub_entities
 								.get(pin.to_id)
 								.context("Pin referred to nonexistent sub-entity")?
 								.entity_id
-						))),
+								.into()
+						)),
 						value: SimpleProperty {
 							property_type: pin.constant_pin_value.property_type.to_owned(),
 							value: pin.constant_pin_value.property_value.to_owned()
@@ -3762,8 +3448,7 @@ pub fn convert_to_qn(
 		{
 			let relevant_sub_entity = entity
 				.entities
-				.get_mut(&format!(
-					"{:0>16x}",
+				.get_mut(&EntityId::from(
 					blueprint
 						.sub_entities
 						.get(pin_connection_override.from_entity.entity_index as usize)
@@ -3785,7 +3470,7 @@ pub fn convert_to_qn(
 				.entry(pin_connection_override.to_pin_name.to_owned())
 				.or_default()
 				.push(if pin_connection_override.constant_pin_value.property_type == "void" {
-					RefMaybeConstantValue::Ref(convert_rt_reference_to_qn(
+					RefMaybeConstantValue::Ref(convert_rl_reference_to_qn(
 						&pin_connection_override.to_entity,
 						factory,
 						blueprint,
@@ -3793,7 +3478,7 @@ pub fn convert_to_qn(
 					)?)
 				} else {
 					RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-						entity_ref: convert_rt_reference_to_qn(
+						entity_ref: convert_rl_reference_to_qn(
 							&pin_connection_override.to_entity,
 							factory,
 							blueprint,
@@ -3811,8 +3496,7 @@ pub fn convert_to_qn(
 		for forwarding in &blueprint.input_pin_forwardings {
 			let relevant_sub_entity = entity
 				.entities
-				.get_mut(&format!(
-					"{:0>16x}",
+				.get_mut(&EntityId::from(
 					blueprint
 						.sub_entities
 						.get(forwarding.from_id)
@@ -3834,24 +3518,24 @@ pub fn convert_to_qn(
 				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
 				.push(if forwarding.constant_pin_value.property_type == "void" {
-					RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
-						"{:0>16x}",
+					RefMaybeConstantValue::Ref(Ref::Short(Some(
 						blueprint
 							.sub_entities
 							.get(forwarding.to_id)
 							.context("Pin referred to nonexistent sub-entity")?
 							.entity_id
-					))))
+							.into()
+					)))
 				} else {
 					RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-						entity_ref: Ref::Short(Some(format!(
-							"{:0>16x}",
+						entity_ref: Ref::Short(Some(
 							blueprint
 								.sub_entities
 								.get(forwarding.to_id)
 								.context("Pin referred to nonexistent sub-entity")?
 								.entity_id
-						))),
+								.into()
+						)),
 						value: SimpleProperty {
 							property_type: forwarding.constant_pin_value.property_type.to_owned(),
 							value: forwarding.constant_pin_value.property_value.to_owned()
@@ -3863,8 +3547,7 @@ pub fn convert_to_qn(
 		for forwarding in &blueprint.output_pin_forwardings {
 			let relevant_sub_entity = entity
 				.entities
-				.get_mut(&format!(
-					"{:0>16x}",
+				.get_mut(&EntityId::from(
 					blueprint
 						.sub_entities
 						.get(forwarding.from_id)
@@ -3886,24 +3569,24 @@ pub fn convert_to_qn(
 				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
 				.push(if forwarding.constant_pin_value.property_type == "void" {
-					RefMaybeConstantValue::Ref(Ref::Short(Some(format!(
-						"{:0>16x}",
+					RefMaybeConstantValue::Ref(Ref::Short(Some(
 						blueprint
 							.sub_entities
 							.get(forwarding.to_id)
 							.context("Pin referred to nonexistent sub-entity")?
 							.entity_id
-					))))
+							.into()
+					)))
 				} else {
 					RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
-						entity_ref: Ref::Short(Some(format!(
-							"{:0>16x}",
+						entity_ref: Ref::Short(Some(
 							blueprint
 								.sub_entities
 								.get(forwarding.to_id)
 								.context("Pin referred to nonexistent sub-entity")?
 								.entity_id
-						))),
+								.into()
+						)),
 						value: SimpleProperty {
 							property_type: forwarding.constant_pin_value.property_type.to_owned(),
 							value: forwarding.constant_pin_value.property_value.to_owned()
@@ -3917,8 +3600,7 @@ pub fn convert_to_qn(
 				for subset_entity in &data.entities {
 					let relevant_qn = entity
 						.entities
-						.get_mut(&format!(
-							"{:0>16x}",
+						.get_mut(&EntityId::from(
 							blueprint
 								.sub_entities
 								.get(*subset_entity)
@@ -3937,7 +3619,7 @@ pub fn convert_to_qn(
 						.ctx?
 						.entry(subset.to_owned())
 						.or_default()
-						.push(format!("{:0>16x}", sub_entity.entity_id));
+						.push(sub_entity.entity_id.into());
 				}
 			}
 		}
@@ -3945,7 +3627,7 @@ pub fn convert_to_qn(
 		let mut pass1: Vec<PropertyOverride> = Vec::default();
 
 		for property_override in &factory.property_overrides {
-			let ents = vec![convert_rt_reference_to_qn(
+			let ents = vec![convert_rl_reference_to_qn(
 				&property_override.property_owner,
 				factory,
 				blueprint,
@@ -3958,7 +3640,7 @@ pub fn convert_to_qn(
 					resourcelib::PropertyID::String(id) => id.to_owned()
 				},
 				{
-					let prop = convert_rt_property_to_qn(
+					let prop = convert_rl_property_to_qn(
 						&property_override.property_value,
 						false,
 						factory,
@@ -4005,26 +3687,22 @@ pub fn convert_to_qn(
 }
 
 #[try_fn]
-#[context("Failure converting QN entity to RT")]
+#[context("Failure converting QN entity to RL")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 #[cfg_attr(feature = "rune", rune::function(keep))]
-pub fn convert_to_rt(
+pub fn convert_to_rl(
 	entity: &Entity
 ) -> Result<(
 	resourcelib::EntityFactory,
-	RpkgResourceMeta,
+	ResourceMetadata,
 	resourcelib::EntityBlueprint,
-	RpkgResourceMeta
+	ResourceMetadata
 )> {
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
-		let entity_id_to_index_mapping: HashMap<String, usize> = entity
-			.entities
-			.keys()
-			.enumerate()
-			.map(|(x, y)| -> Result<_> { Ok((normalise_entity_id(y)?, x)) })
-			.collect::<Result<_>>()?;
+		let entity_id_to_index_mapping: HashMap<EntityId, usize> =
+			entity.entities.keys().enumerate().map(|(x, y)| (*y, x)).collect();
 
 		let mut factory = resourcelib::EntityFactory {
 			sub_type: match entity.sub_type {
@@ -4034,42 +3712,23 @@ pub fn convert_to_rt(
 			},
 			blueprint_index_in_resource_header: 0,
 			root_entity_index: *entity_id_to_index_mapping
-				.get(&normalise_entity_id(&entity.root_entity)?)
+				.get(&entity.root_entity)
 				.context("Root entity was non-existent")?,
 			sub_entities: vec![],
 			property_overrides: vec![],
 			external_scene_type_indices_in_resource_header: (1..entity.external_scenes.len() + 1).collect()
 		};
 
-		let factory_meta = RpkgResourceMeta {
-			hash_offset: 1367, // none of this data actually matters except for dependencies and resource type
-			hash_reference_data: [
+		let factory_meta = ResourceMetadata {
+			id: entity.factory.to_owned(),
+			resource_type: "TEMP".try_into()?,
+			compressed: ResourceMetadata::infer_compressed("TEMP".try_into()?),
+			scrambled: ResourceMetadata::infer_scrambled("TEMP".try_into()?),
+			references: [
 				get_factory_dependencies(entity)?,
-				entity
-					.extra_factory_dependencies
-					.iter()
-					.map(|x| match x {
-						Dependency::Short(hash) => RpkgResourceReference {
-							hash: hash.to_owned(),
-							flag: "1F".to_string()
-						},
-						Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
-							hash: resource.to_owned(),
-							flag: flag.to_owned()
-						}
-					})
-					.collect()
+				entity.extra_factory_references.to_owned()
 			]
-			.concat(),
-			hash_reference_table_dummy: 0,
-			hash_reference_table_size: 193,
-			hash_resource_type: "TEMP".to_string(),
-			hash_size: 2147484657,
-			hash_size_final: 2377,
-			hash_size_in_memory: 1525,
-			hash_size_in_video_memory: 4294967295,
-			hash_value: entity.factory_hash.to_owned(),
-			hash_path: None
+			.concat()
 		};
 
 		let mut blueprint = resourcelib::EntityBlueprint {
@@ -4079,7 +3738,7 @@ pub fn convert_to_rt(
 				SubType::Template => 0
 			},
 			root_entity_index: *entity_id_to_index_mapping
-				.get(&normalise_entity_id(&entity.root_entity)?)
+				.get(&entity.root_entity)
 				.context("Root entity was non-existent")?,
 			sub_entities: vec![],
 			pin_connections: vec![],
@@ -4089,7 +3748,7 @@ pub fn convert_to_rt(
 				.override_deletes
 				.par_iter()
 				.map(|override_delete| {
-					convert_qn_reference_to_rt(override_delete, &factory, &factory_meta, &entity_id_to_index_mapping)
+					convert_qn_reference_to_rl(override_delete, &factory, &factory_meta, &entity_id_to_index_mapping)
 				})
 				.collect::<Result<_>>()?,
 			pin_connection_overrides: [
@@ -4098,13 +3757,13 @@ pub fn convert_to_rt(
 					.par_iter()
 					.map(|pin_connection_override| {
 						Ok(resourcelib::ExternalPinConnection {
-							from_entity: convert_qn_reference_to_rt(
+							from_entity: convert_qn_reference_to_rl(
 								&pin_connection_override.from_entity,
 								&factory,
 								&factory_meta,
 								&entity_id_to_index_mapping
 							)?,
-							to_entity: convert_qn_reference_to_rt(
+							to_entity: convert_qn_reference_to_rl(
 								&pin_connection_override.to_entity,
 								&factory,
 								&factory_meta,
@@ -4160,13 +3819,13 @@ pub fn convert_to_rt(
 												})
 												.map(|trigger_entity| {
 													Ok(resourcelib::ExternalPinConnection {
-														from_entity: convert_qn_reference_to_rt(
+														from_entity: convert_qn_reference_to_rl(
 															&Ref::Short(Some(entity_id.to_owned().to_owned())),
 															&factory,
 															&factory_meta,
 															&entity_id_to_index_mapping
 														)?,
-														to_entity: convert_qn_reference_to_rt(
+														to_entity: convert_qn_reference_to_rl(
 															match &trigger_entity {
 																RefMaybeConstantValue::Ref(entity_ref) => entity_ref,
 
@@ -4221,13 +3880,13 @@ pub fn convert_to_rt(
 				.par_iter()
 				.map(|pin_connection_override_delete| {
 					Ok(resourcelib::ExternalPinConnection {
-						from_entity: convert_qn_reference_to_rt(
+						from_entity: convert_qn_reference_to_rl(
 							&pin_connection_override_delete.from_entity,
 							&factory,
 							&factory_meta,
 							&entity_id_to_index_mapping
 						)?,
-						to_entity: convert_qn_reference_to_rt(
+						to_entity: convert_qn_reference_to_rl(
 							&pin_connection_override_delete.to_entity,
 							&factory,
 							&factory_meta,
@@ -4254,49 +3913,30 @@ pub fn convert_to_rt(
 			external_scene_type_indices_in_resource_header: (0..entity.external_scenes.len()).collect()
 		};
 
-		let blueprint_meta = RpkgResourceMeta {
-			hash_offset: 1367,
-			hash_reference_data: [
+		let blueprint_meta = ResourceMetadata {
+			id: entity.blueprint.to_owned(),
+			resource_type: "TBLU".try_into()?,
+			compressed: ResourceMetadata::infer_compressed("TBLU".try_into()?),
+			scrambled: ResourceMetadata::infer_scrambled("TBLU".try_into()?),
+			references: [
 				get_blueprint_dependencies(entity),
-				entity
-					.extra_blueprint_dependencies
-					.iter()
-					.map(|x| match x {
-						Dependency::Short(hash) => RpkgResourceReference {
-							hash: hash.to_owned(),
-							flag: "1F".to_string()
-						},
-						Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
-							hash: resource.to_owned(),
-							flag: flag.to_owned()
-						}
-					})
-					.collect()
+				entity.extra_blueprint_references.to_owned()
 			]
-			.concat(),
-			hash_reference_table_dummy: 0,
-			hash_reference_table_size: 193,
-			hash_resource_type: "TBLU".to_string(),
-			hash_size: 2147484657,
-			hash_size_final: 2377,
-			hash_size_in_memory: 1525,
-			hash_size_in_video_memory: 4294967295,
-			hash_value: entity.blueprint_hash.to_owned(),
-			hash_path: None
+			.concat()
 		};
 
-		let factory_dependencies_index_mapping: HashMap<String, usize> = factory_meta
-			.hash_reference_data
+		let factory_dependencies_index_mapping: HashMap<PathedID, usize> = factory_meta
+			.references
 			.par_iter()
 			.enumerate()
-			.map(|(x, y)| (y.hash.to_owned(), x.to_owned()))
+			.map(|(x, y)| (y.resource.to_owned(), x.to_owned()))
 			.collect();
 
-		let blueprint_dependencies_index_mapping: HashMap<String, usize> = blueprint_meta
-			.hash_reference_data
+		let blueprint_dependencies_index_mapping: HashMap<PathedID, usize> = blueprint_meta
+			.references
 			.par_iter()
 			.enumerate()
-			.map(|(x, y)| (y.hash.to_owned(), x.to_owned()))
+			.map(|(x, y)| (y.resource.to_owned(), x.to_owned()))
 			.collect();
 
 		factory.property_overrides = entity
@@ -4312,18 +3952,18 @@ pub fn convert_to_rt(
 							.iter()
 							.map(|(property, overridden)| {
 								Ok(resourcelib::PropertyOverride {
-									property_owner: convert_qn_reference_to_rt(
+									property_owner: convert_qn_reference_to_rl(
 										ext_entity,
 										&factory,
 										&factory_meta,
 										&entity_id_to_index_mapping
 									)?,
 									property_value: resourcelib::Property {
-										n_property_id: convert_string_property_name_to_rt_id(property)?,
+										n_property_id: convert_string_property_name_to_rl_id(property)?,
 										value: resourcelib::PropertyValue {
 											property_type: overridden.property_type.to_owned(),
 											property_value: to_value(
-												convert_qn_property_to_rt(
+												convert_qn_property_to_rl(
 													property,
 													&Property {
 														property_type: overridden.property_type.to_owned(),
@@ -4356,19 +3996,21 @@ pub fn convert_to_rt(
 			.par_iter()
 			.map(|(_, sub_entity)| {
 				Ok(resourcelib::FactorySubEntity {
-					logical_parent: convert_qn_reference_to_rt(
+					logical_parent: convert_qn_reference_to_rl(
 						&sub_entity.parent,
 						&factory,
 						&factory_meta,
 						&entity_id_to_index_mapping
 					)?,
-					entity_type_resource_index: *factory_dependencies_index_mapping.get(&sub_entity.factory).ctx?,
+					entity_type_resource_index: *factory_dependencies_index_mapping
+						.get(&sub_entity.factory.resource)
+						.ctx?,
 					property_values: if let Some(props) = sub_entity.properties.to_owned() {
 						props
 							.iter()
 							.filter(|(_, x)| !x.post_init.unwrap_or(false))
 							.map(|(x, y)| {
-								convert_qn_property_to_rt(
+								convert_qn_property_to_rl(
 									x,
 									y,
 									&factory,
@@ -4386,7 +4028,7 @@ pub fn convert_to_rt(
 							.iter()
 							.filter(|(_, y)| y.post_init.unwrap_or(false))
 							.map(|(x, y)| {
-								convert_qn_property_to_rt(
+								convert_qn_property_to_rl(
 									x,
 									y,
 									&factory,
@@ -4411,7 +4053,7 @@ pub fn convert_to_rt(
 										Ok(resourcelib::PlatformSpecificProperty {
 											platform: platform.to_owned(),
 											post_init: y.post_init.unwrap_or(false),
-											property_value: convert_qn_property_to_rt(
+											property_value: convert_qn_property_to_rl(
 												x,
 												y,
 												&factory,
@@ -4433,19 +4075,17 @@ pub fn convert_to_rt(
 
 		blueprint.sub_entities = entity
 			.entities
-			.iter()
-			.collect_vec()
 			.par_iter()
 			.map(|(entity_id, sub_entity)| {
 				Ok(resourcelib::BlueprintSubEntity {
-					logical_parent: convert_qn_reference_to_rt(
+					logical_parent: convert_qn_reference_to_rl(
 						&sub_entity.parent,
 						&factory,
 						&factory_meta,
 						&entity_id_to_index_mapping
 					)?,
 					entity_type_resource_index: *blueprint_dependencies_index_mapping.get(&sub_entity.blueprint).ctx?,
-					entity_id: u64::from_str_radix(entity_id, 16).context("entity_id must be valid hex")?,
+					entity_id: (*entity_id).into(),
 					editor_only: sub_entity.editor_only.unwrap_or(false),
 					entity_name: sub_entity.name.to_owned(),
 					property_aliases: if sub_entity.property_aliases.is_some() {
@@ -4462,12 +4102,12 @@ pub fn convert_to_rt(
 											entity_id: match &alias.original_entity {
 												Ref::Short(r) => match r {
 													Some(r) => entity_id_to_index_mapping
-														.get(&normalise_entity_id(r)?)
+														.get(&r)
 														.with_context(|| {
 															format!(
 																"Property alias short ref referred to nonexistent \
 																 entity ID: {}",
-																r.as_str()
+																r
 															)
 														})?
 														.to_owned(),
@@ -4514,7 +4154,7 @@ pub fn convert_to_rt(
 										.refers_to
 										.iter()
 										.map(|target| {
-											convert_qn_reference_to_rt(
+											convert_qn_reference_to_rl(
 												target,
 												&factory,
 												&factory_meta,
@@ -4538,7 +4178,7 @@ pub fn convert_to_rt(
 								Ok((
 									interface.to_owned(),
 									entity_id_to_index_mapping
-										.get(&normalise_entity_id(implementor)?)
+										.get(&implementor)
 										.context("Exposed interface referenced nonexistent local entity")?
 										.to_owned()
 								))
@@ -4560,7 +4200,7 @@ pub fn convert_to_rt(
 							.sub_entities
 							.get_mut(
 								*entity_id_to_index_mapping
-									.get(&normalise_entity_id(ent)?)
+									.get(&ent)
 									.context("Entity subset referenced nonexistent local entity")?
 							)
 							.ctx?
@@ -4583,10 +4223,8 @@ pub fn convert_to_rt(
 
 		blueprint.pin_connections = entity
 			.entities
-			.iter()
-			.collect_vec()
 			.par_iter()
-			.map(|(entity_id, sub_entity)| -> Result<_> {
+			.map(|(&entity_id, sub_entity)| -> Result<_> {
 				if sub_entity.events.is_some() {
 					Ok(sub_entity
 						.events
@@ -4612,10 +4250,8 @@ pub fn convert_to_rt(
 		// slightly less code duplication than there used to be
 		blueprint.input_pin_forwardings = entity
 			.entities
-			.iter()
-			.collect_vec()
 			.par_iter()
-			.map(|(entity_id, sub_entity)| -> Result<_> {
+			.map(|(&entity_id, sub_entity)| -> Result<_> {
 				if sub_entity.input_copying.is_some() {
 					Ok(sub_entity
 						.input_copying
@@ -4640,10 +4276,8 @@ pub fn convert_to_rt(
 
 		blueprint.output_pin_forwardings = entity
 			.entities
-			.iter()
-			.collect_vec()
 			.par_iter()
-			.map(|(entity_id, sub_entity)| -> Result<_> {
+			.map(|(&entity_id, sub_entity)| -> Result<_> {
 				if sub_entity.output_copying.is_some() {
 					Ok(sub_entity
 						.output_copying
@@ -4674,8 +4308,8 @@ pub fn convert_to_rt(
 #[context("Failure getting pin connections for event")]
 #[auto_context]
 fn pin_connections_for_event(
-	entity_id_to_index_mapping: &HashMap<String, usize>,
-	entity_id: &str,
+	entity_id_to_index_mapping: &HashMap<EntityId, usize>,
+	entity_id: EntityId,
 	event: &str,
 	triggers: &IndexMap<String, Vec<RefMaybeConstantValue>>
 ) -> Result<Vec<resourcelib::PinConnection>> {
@@ -4696,9 +4330,9 @@ fn pin_connections_for_event(
 				})
 				.map(|trigger_entity| -> Result<_> {
 					Ok(resourcelib::PinConnection {
-						from_id: *entity_id_to_index_mapping.get(&normalise_entity_id(entity_id)?).ctx?,
+						from_id: *entity_id_to_index_mapping.get(&entity_id).ctx?,
 						to_id: *entity_id_to_index_mapping
-							.get(&normalise_entity_id(match &trigger_entity {
+							.get(&match &trigger_entity {
 								RefMaybeConstantValue::Ref(Ref::Short(Some(id))) => id,
 
 								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
@@ -4706,8 +4340,8 @@ fn pin_connections_for_event(
 									value: _
 								}) => id,
 
-								_ => bail!("Invalid to_id for trigger on events")
-							})?)
+								_ => bail!("Invalid to_id for trigger")
+							})
 							.ctx?,
 						from_pin_name: event.to_owned(),
 						to_pin_name: trigger.to_owned(),

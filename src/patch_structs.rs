@@ -1,9 +1,10 @@
+use hitman_commons::metadata::{PathedID, ResourceReference};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use specta::Type;
 
 use crate::qn_structs::{
-	CommentEntity, Dependency, ExposedEntity, OverriddenProperty, PinConnectionOverride, PinConnectionOverrideDelete,
+	CommentEntity, EntityId, ExposedEntity, OverriddenProperty, PinConnectionOverride, PinConnectionOverrideDelete,
 	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SubEntity, SubType
 };
 
@@ -28,17 +29,17 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
 pub struct Patch {
 	/// The hash of the TEMP file of this entity.
-	#[serde(rename = "tempHash")]
-	pub factory_hash: String,
+	#[serde(rename = "factory")]
+	pub factory: PathedID,
 
 	/// The hash of the TBLU file of this entity.
-	#[serde(rename = "tbluHash")]
-	pub blueprint_hash: String,
+	#[serde(rename = "blueprint")]
+	pub blueprint: PathedID,
 
 	/// The patch operations to apply.
 	pub patch: Vec<PatchOperation>,
 
-	/// The patch version. The current version is 6.
+	/// The patch version. The current version is 7.
 	#[serde(rename = "patchVersion")]
 	pub patch_version: u8
 }
@@ -50,23 +51,23 @@ pub struct Patch {
 #[cfg_attr(feature = "rune", rune(constructor))]
 pub enum PatchOperation {
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetRootEntity(#[cfg_attr(feature = "rune", rune(get, set))] String),
+	SetRootEntity(#[cfg_attr(feature = "rune", rune(get, set))] EntityId),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	SetSubType(#[cfg_attr(feature = "rune", rune(get, set))] SubType),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddEntity(
-		#[cfg_attr(feature = "rune", rune(get, set))] String,
+		#[cfg_attr(feature = "rune", rune(get, set))] EntityId,
 		#[cfg_attr(feature = "rune", rune(get, set))] SubEntity
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveEntityByID(#[cfg_attr(feature = "rune", rune(get, set))] String),
+	RemoveEntityByID(#[cfg_attr(feature = "rune", rune(get, set))] EntityId),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	SubEntityOperation(
-		#[cfg_attr(feature = "rune", rune(get, set))] String,
+		#[cfg_attr(feature = "rune", rune(get, set))] EntityId,
 		#[cfg_attr(feature = "rune", rune(get, set))] SubEntityOperation
 	),
 
@@ -103,22 +104,22 @@ pub enum PatchOperation {
 	RemovePinConnectionOverrideDelete(#[cfg_attr(feature = "rune", rune(get, set))] PinConnectionOverrideDelete),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] String),
+	AddExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] PathedID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] String),
+	RemoveExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] PathedID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddExtraFactoryDependency(#[cfg_attr(feature = "rune", rune(get, set))] Dependency),
+	AddExtraFactoryReference(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveExtraFactoryDependency(#[cfg_attr(feature = "rune", rune(get, set))] Dependency),
+	RemoveExtraFactoryReference(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddExtraBlueprintDependency(#[cfg_attr(feature = "rune", rune(get, set))] Dependency),
+	AddExtraBlueprintReference(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveExtraBlueprintDependency(#[cfg_attr(feature = "rune", rune(get, set))] Dependency),
+	RemoveExtraBlueprintReference(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddComment(#[cfg_attr(feature = "rune", rune(get, set))] CommentEntity),
@@ -140,13 +141,10 @@ pub enum SubEntityOperation {
 	SetName(#[cfg_attr(feature = "rune", rune(get, set))] String),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetFactory(#[cfg_attr(feature = "rune", rune(get, set))] String),
+	SetFactory(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetFactoryFlag(#[cfg_attr(feature = "rune", rune(get, set))] Option<String>),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetBlueprint(#[cfg_attr(feature = "rune", rune(get, set))] String),
+	SetBlueprint(#[cfg_attr(feature = "rune", rune(get, set))] PathedID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	SetEditorOnly(#[cfg_attr(feature = "rune", rune(get, set))] Option<bool>),
@@ -317,7 +315,7 @@ pub enum SubEntityOperation {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	SetExposedInterface(
 		#[cfg_attr(feature = "rune", rune(get, set))] String,
-		#[cfg_attr(feature = "rune", rune(get, set))] String
+		#[cfg_attr(feature = "rune", rune(get, set))] EntityId
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -326,13 +324,13 @@ pub enum SubEntityOperation {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddSubset(
 		#[cfg_attr(feature = "rune", rune(get, set))] String,
-		#[cfg_attr(feature = "rune", rune(get, set))] String
+		#[cfg_attr(feature = "rune", rune(get, set))] EntityId
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	RemoveSubset(
 		#[cfg_attr(feature = "rune", rune(get, set))] String,
-		#[cfg_attr(feature = "rune", rune(get, set))] String
+		#[cfg_attr(feature = "rune", rune(get, set))] EntityId
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -427,6 +425,7 @@ impl SetPlatformSpecificPropertyValue {
 #[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 pub enum ArrayPatchOperation {
+	// TODO: Design new array patch system
 	RemoveItemByValue(Value),
 	AddItemAfter(Value, Value),
 	AddItemBefore(Value, Value),

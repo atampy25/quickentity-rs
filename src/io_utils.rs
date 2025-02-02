@@ -1,5 +1,5 @@
+use hitman_commons::metadata::ResourceMetadata;
 use hitman_commons::resourcelib::{EntityBlueprint, EntityBlueprintLegacy, EntityFactory, EntityFactoryLegacy};
-use hitman_commons::rpkg_tool::RpkgResourceMeta;
 use quickentity_rs::patch_structs::Patch;
 use quickentity_rs::qn_structs::Entity;
 
@@ -51,7 +51,7 @@ pub fn read_as_rtblueprint(path: &str) -> EntityBlueprint {
 	}
 }
 
-pub fn read_as_meta(path: &str) -> RpkgResourceMeta {
+pub fn read_as_meta(path: &str) -> ResourceMetadata {
 	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
 		let mut vec = Vec::new();
 		fs::File::open(path)

@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use tryvial::try_fn;
 
-use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rt, generate_patch};
+use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rl, generate_patch};
 
 use anyhow::Result;
 use serde_json::from_slice;
@@ -250,7 +250,7 @@ fn main() -> Result<()> {
 		} => {
 			let entity = read_as_entity(&input);
 
-			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rt(&entity)?;
+			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rl(&entity)?;
 
 			fs::write(output_factory, {
 				if h1 {
@@ -284,7 +284,7 @@ fn main() -> Result<()> {
 		} => {
 			let mut entity = read_as_entity(&input);
 
-			let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
+			let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rl(&entity)?;
 			entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
@@ -332,14 +332,14 @@ fn main() -> Result<()> {
 			}
 
 			if normalise {
-				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
+				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rl(&entity)?;
 				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
 			apply_patch(&mut entity, patch, permissive)?;
 
 			if normalise {
-				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rt(&entity)?;
+				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rl(&entity)?;
 				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
@@ -373,7 +373,7 @@ fn main() -> Result<()> {
 				apply_patch(&mut entity, patch, permissive)?;
 			}
 
-			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rt(&entity)?;
+			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rl(&entity)?;
 
 			fs::write(output_factory, {
 				if h1 {
