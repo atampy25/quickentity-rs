@@ -1,8 +1,6 @@
 #![feature(proc_macro_quote)]
 #![feature(proc_macro_span)]
 
-use std::ffi::OsStr;
-
 use proc_macro::{quote, Delimiter, Group, Literal, TokenStream, TokenTree};
 
 static RESERVED_KEYWORDS: [&str; 57] = [
@@ -134,11 +132,7 @@ fn process_tokentree(prev: [Option<TokenTree>; 12], tree: TokenTree) -> Vec<Toke
 									.join(""),
 								func_name
 									.span()
-									.source_file()
-									.path()
-									.file_name()
-									.unwrap_or(OsStr::new("unknown"))
-									.to_string_lossy(),
+									.file(),
 								func_name.span().start().line()
 							)));
 
@@ -178,11 +172,7 @@ fn process_tokentree(prev: [Option<TokenTree>; 12], tree: TokenTree) -> Vec<Toke
 								.join(""),
 							func_name
 								.span()
-								.source_file()
-								.path()
-								.file_name()
-								.unwrap_or(OsStr::new("unknown"))
-								.to_string_lossy(),
+								.file(),
 							func_name.span().start().line()
 						)));
 
