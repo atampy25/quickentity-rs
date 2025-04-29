@@ -1154,7 +1154,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 										}
 
 										for i in (0..new_len).rev() {
-											if let Some(prev) = old_value.get(old_index - 1) {
+											if let Some(prev) = old_value.get(old_index.overflowing_sub(1).0) {
 												ops.push(ArrayPatchOperation::AddItemAfter(
 													prev.value.to_owned(),
 													new_value[new_index + i].value.to_owned()
