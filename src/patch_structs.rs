@@ -147,7 +147,7 @@ pub enum SubEntityOperation {
 	SetBlueprint(#[cfg_attr(feature = "rune", rune(get, set))] PathedID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetEditorOnly(#[cfg_attr(feature = "rune", rune(get, set))] Option<bool>),
+	SetEditorOnly(#[cfg_attr(feature = "rune", rune(get, set))] bool),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddProperty(

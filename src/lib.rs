@@ -266,26 +266,19 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::AddProperty(name, data) => {
-							entity.properties.get_or_insert(Default::default()).insert(name, data);
+							entity.properties.insert(name, data);
 						}
 
 						SubEntityOperation::RemovePropertyByName(name) => {
 							entity
 								.properties
-								.as_mut()
-								.context("RemovePropertyByName couldn't find entity properties!")?
 								.shift_remove(&name)
 								.permit(permissive, "RemovePropertyByName couldn't find expected property!")?;
-
-							if entity.properties.as_ref().ctx?.is_empty() {
-								entity.properties = None;
-							}
 						}
 
 						SubEntityOperation::SetPropertyType(name, value) => {
 							entity
 								.properties
-								.get_or_insert(Default::default())
 								.get_mut(&name)
 								.context("SetPropertyType couldn't find expected property!")?
 								.property_type = value;
@@ -294,7 +287,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::SetPropertyValue(SetPropertyValue { property_name, value }) => {
 							entity
 								.properties
-								.get_or_insert(Default::default())
 								.get_mut(&property_name)
 								.context("SetPropertyValue couldn't find expected property!")?
 								.value = value;
@@ -303,7 +295,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::PatchArrayPropertyValue(property_name, array_patch) => {
 							let item_to_patch = entity
 								.properties
-								.get_or_insert(Default::default())
 								.get_mut(&property_name)
 								.context("PatchArrayPropertyValue couldn't find expected property!")?;
 
@@ -318,72 +309,42 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::SetPropertyPostInit(name, value) => {
 							entity
 								.properties
-								.get_or_insert(Default::default())
 								.get_mut(&name)
 								.context("SetPropertyPostInit couldn't find expected property!")?
-								.post_init = if value { Some(true) } else { None };
+								.post_init = value;
 						}
 
 						SubEntityOperation::AddPlatformSpecificProperty(platform, name, data) => {
 							entity
 								.platform_specific_properties
-								.get_or_insert(Default::default())
 								.entry(platform)
 								.or_default()
 								.insert(name, data);
 						}
 
 						SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
-							entity
-								.platform_specific_properties
-								.as_mut()
-								.context("RemovePSPropertiesForPlatform couldn't find properties!")?
-								.shift_remove(&name)
-								.permit(
-									permissive,
-									"RemovePSPropertiesForPlatform couldn't find platform to remove!"
-								)?;
-
-							if entity.platform_specific_properties.as_ref().ctx?.is_empty() {
-								entity.platform_specific_properties = None;
-							}
+							entity.platform_specific_properties.shift_remove(&name).permit(
+								permissive,
+								"RemovePSPropertiesForPlatform couldn't find platform to remove!"
+							)?;
 						}
 
 						SubEntityOperation::RemovePlatformSpecificPropertyByName(platform, name) => {
 							entity
 								.platform_specific_properties
-								.as_mut()
-								.context("RemovePSPropertyByName couldn't find properties!")?
 								.get_mut(&platform)
 								.context("RemovePSPropertyByName couldn't find platform!")?
 								.shift_remove(&name)
 								.permit(permissive, "RemovePSPropertyByName couldn't find property to remove!")?;
 
-							if entity
-								.platform_specific_properties
-								.as_ref()
-								.ctx?
-								.get(&platform)
-								.ctx?
-								.is_empty()
-							{
-								entity
-									.platform_specific_properties
-									.as_mut()
-									.ctx?
-									.shift_remove(&platform);
-							}
-
-							if entity.platform_specific_properties.as_ref().ctx?.is_empty() {
-								entity.platform_specific_properties = None;
+							if entity.platform_specific_properties.get(&platform).ctx?.is_empty() {
+								entity.platform_specific_properties.shift_remove(&platform);
 							}
 						}
 
 						SubEntityOperation::SetPlatformSpecificPropertyType(platform, name, value) => {
 							entity
 								.platform_specific_properties
-								.as_mut()
-								.context("SetPSPropertyType couldn't find properties!")?
 								.get_mut(&platform)
 								.context("SetPSPropertyType couldn't find expected platform!")?
 								.get_mut(&name)
@@ -398,8 +359,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}) => {
 							entity
 								.platform_specific_properties
-								.as_mut()
-								.context("SetPSPropertyValue couldn't find properties!")?
 								.get_mut(&platform)
 								.context("SetPSPropertyValue couldn't find expected platform!")?
 								.get_mut(&property_name)
@@ -414,8 +373,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						) => {
 							let item_to_patch = entity
 								.platform_specific_properties
-								.as_mut()
-								.context("PatchPSArrayPropertyValue couldn't find properties!")?
 								.get_mut(&platform)
 								.context("PatchPSArrayPropertyValue couldn't find expected platform!")?
 								.get_mut(&property_name)
@@ -432,52 +389,36 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::SetPlatformSpecificPropertyPostInit(platform, name, value) => {
 							entity
 								.platform_specific_properties
-								.as_mut()
-								.context("SetPSPropertyPostInit couldn't find properties!")?
 								.get_mut(&platform)
 								.context("SetPSPropertyPostInit couldn't find expected platform!")?
 								.get_mut(&name)
 								.context("SetPSPropertyPostInit couldn't find expected property!")?
-								.post_init = if value { Some(true) } else { None };
+								.post_init = value;
 						}
 
 						SubEntityOperation::RemoveAllEventConnectionsForEvent(event) => {
 							entity
 								.events
-								.as_mut()
-								.context("RemoveAllEventConnectionsForEvent couldn't find events!")?
 								.shift_remove(&event)
 								.context("RemoveAllEventConnectionsForEvent couldn't find event!")?;
-
-							if entity.events.as_ref().ctx?.is_empty() {
-								entity.events = None;
-							}
 						}
 
 						SubEntityOperation::RemoveAllEventConnectionsForTrigger(event, trigger) => {
 							entity
 								.events
-								.as_mut()
-								.context("RemoveAllEventConnectionsForTrigger couldn't find events!")?
 								.get_mut(&event)
 								.context("RemoveAllEventConnectionsForTrigger couldn't find event!")?
 								.shift_remove(&trigger)
 								.context("RemoveAllEventConnectionsForTrigger couldn't find trigger!")?;
 
-							if entity.events.as_ref().ctx?.get(&event).ctx?.is_empty() {
-								entity.events.as_mut().ctx?.shift_remove(&event);
-							}
-
-							if entity.events.as_ref().ctx?.is_empty() {
-								entity.events = None;
+							if entity.events.get(&event).ctx?.is_empty() {
+								entity.events.shift_remove(&event);
 							}
 						}
 
 						SubEntityOperation::RemoveEventConnection(event, trigger, reference) => {
 							let ind = entity
 								.events
-								.as_ref()
-								.context("RemoveEventConnection couldn't find events!")?
 								.get(&event)
 								.context("RemoveEventConnection couldn't find event!")?
 								.get(&trigger)
@@ -486,52 +427,25 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.position(|x| *x == reference)
 								.context("RemoveEventConnection couldn't find reference!")?;
 
-							entity
-								.events
-								.as_mut()
-								.ctx?
-								.get_mut(&event)
-								.ctx?
-								.get_mut(&trigger)
-								.ctx?
-								.remove(ind);
+							entity.events.get_mut(&event).ctx?.get_mut(&trigger).ctx?.remove(ind);
 
-							if entity
-								.events
-								.as_ref()
-								.ctx?
-								.get(&event)
-								.ctx?
-								.get(&trigger)
-								.ctx?
-								.is_empty()
-							{
-								entity.events.as_mut().ctx?.get_mut(&event).ctx?.shift_remove(&trigger);
+							if entity.events.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
+								entity.events.get_mut(&event).ctx?.shift_remove(&trigger);
 							}
 
-							if entity.events.as_ref().ctx?.get(&event).ctx?.is_empty() {
-								entity.events.as_mut().ctx?.shift_remove(&event);
-							}
-
-							if entity.events.as_ref().ctx?.is_empty() {
-								entity.events = None;
+							if entity.events.get(&event).ctx?.is_empty() {
+								entity.events.shift_remove(&event);
 							}
 						}
 
 						SubEntityOperation::AddEventConnection(event, trigger, reference) => {
-							if entity.events.is_none() {
-								entity.events = Some(Default::default());
+							if entity.events.get(&event).is_none() {
+								entity.events.insert(event.to_owned(), Default::default());
 							}
 
-							if entity.events.as_ref().ctx?.get(&event).is_none() {
-								entity.events.as_mut().ctx?.insert(event.to_owned(), Default::default());
-							}
-
-							if entity.events.as_ref().ctx?.get(&event).ctx?.get(&trigger).is_none() {
+							if entity.events.get(&event).ctx?.get(&trigger).is_none() {
 								entity
 									.events
-									.as_mut()
-									.ctx?
 									.get_mut(&event)
 									.ctx?
 									.insert(trigger.to_owned(), Default::default());
@@ -539,8 +453,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 							entity
 								.events
-								.as_mut()
-								.ctx?
 								.get_mut(&event)
 								.ctx?
 								.get_mut(&trigger)
@@ -551,40 +463,26 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveAllInputCopyConnectionsForInput(event) => {
 							entity
 								.input_copying
-								.as_mut()
-								.context("RemoveAllInputCopyConnectionsForInput couldn't find input copying!")?
 								.shift_remove(&event)
 								.context("RemoveAllInputCopyConnectionsForInput couldn't find input!")?;
-
-							if entity.input_copying.as_ref().ctx?.is_empty() {
-								entity.input_copying = None;
-							}
 						}
 
 						SubEntityOperation::RemoveAllInputCopyConnectionsForTrigger(event, trigger) => {
 							entity
 								.input_copying
-								.as_mut()
-								.context("RemoveAllInputCopyConnectionsForTrigger couldn't find input copying!")?
 								.get_mut(&event)
 								.context("RemoveAllInputCopyConnectionsForTrigger couldn't find input!")?
 								.shift_remove(&trigger)
 								.context("RemoveAllInputCopyConnectionsForTrigger couldn't find trigger!")?;
 
-							if entity.input_copying.as_ref().ctx?.get(&event).ctx?.is_empty() {
-								entity.input_copying.as_mut().ctx?.shift_remove(&event);
-							}
-
-							if entity.input_copying.as_ref().ctx?.is_empty() {
-								entity.input_copying = None;
+							if entity.input_copying.get(&event).ctx?.is_empty() {
+								entity.input_copying.shift_remove(&event);
 							}
 						}
 
 						SubEntityOperation::RemoveInputCopyConnection(event, trigger, reference) => {
 							let ind = entity
 								.input_copying
-								.as_ref()
-								.context("RemoveInputCopyConnection couldn't find input copying!")?
 								.get(&event)
 								.context("RemoveInputCopyConnection couldn't find input!")?
 								.get(&trigger)
@@ -595,68 +493,29 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 							entity
 								.input_copying
-								.as_mut()
-								.ctx?
 								.get_mut(&event)
 								.ctx?
 								.get_mut(&trigger)
 								.ctx?
 								.remove(ind);
 
-							if entity
-								.input_copying
-								.as_ref()
-								.ctx?
-								.get(&event)
-								.ctx?
-								.get(&trigger)
-								.ctx?
-								.is_empty()
-							{
-								entity
-									.input_copying
-									.as_mut()
-									.ctx?
-									.get_mut(&event)
-									.ctx?
-									.shift_remove(&trigger);
+							if entity.input_copying.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
+								entity.input_copying.get_mut(&event).ctx?.shift_remove(&trigger);
 							}
 
-							if entity.input_copying.as_ref().ctx?.get(&event).ctx?.is_empty() {
-								entity.input_copying.as_mut().ctx?.shift_remove(&event);
-							}
-
-							if entity.input_copying.as_ref().ctx?.is_empty() {
-								entity.input_copying = None;
+							if entity.input_copying.get(&event).ctx?.is_empty() {
+								entity.input_copying.shift_remove(&event);
 							}
 						}
 
 						SubEntityOperation::AddInputCopyConnection(event, trigger, reference) => {
-							if entity.input_copying.is_none() {
-								entity.input_copying = Some(Default::default());
+							if entity.input_copying.get(&event).is_none() {
+								entity.input_copying.insert(event.to_owned(), Default::default());
 							}
 
-							if entity.input_copying.as_ref().ctx?.get(&event).is_none() {
+							if entity.input_copying.get(&event).ctx?.get(&trigger).is_none() {
 								entity
 									.input_copying
-									.as_mut()
-									.ctx?
-									.insert(event.to_owned(), Default::default());
-							}
-
-							if entity
-								.input_copying
-								.as_ref()
-								.ctx?
-								.get(&event)
-								.ctx?
-								.get(&trigger)
-								.is_none()
-							{
-								entity
-									.input_copying
-									.as_mut()
-									.ctx?
 									.get_mut(&event)
 									.ctx?
 									.insert(trigger.to_owned(), Default::default());
@@ -664,8 +523,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 							entity
 								.input_copying
-								.as_mut()
-								.ctx?
 								.get_mut(&event)
 								.ctx?
 								.get_mut(&trigger)
@@ -676,40 +533,26 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(event) => {
 							entity
 								.output_copying
-								.as_mut()
-								.context("RemoveAllOutputCopyConnectionsForOutput couldn't find output copying!")?
 								.shift_remove(&event)
 								.context("RemoveAllOutputCopyConnectionsForOutput couldn't find event!")?;
-
-							if entity.output_copying.as_ref().ctx?.is_empty() {
-								entity.output_copying = None;
-							}
 						}
 
 						SubEntityOperation::RemoveAllOutputCopyConnectionsForPropagate(event, trigger) => {
 							entity
 								.output_copying
-								.as_mut()
-								.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find output copying!")?
 								.get_mut(&event)
 								.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find event!")?
 								.shift_remove(&trigger)
 								.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find propagate!")?;
 
-							if entity.output_copying.as_ref().ctx?.get(&event).ctx?.is_empty() {
-								entity.output_copying.as_mut().ctx?.shift_remove(&event);
-							}
-
-							if entity.output_copying.as_ref().ctx?.is_empty() {
-								entity.output_copying = None;
+							if entity.output_copying.get(&event).ctx?.is_empty() {
+								entity.output_copying.shift_remove(&event);
 							}
 						}
 
 						SubEntityOperation::RemoveOutputCopyConnection(event, trigger, reference) => {
 							let ind = entity
 								.output_copying
-								.as_ref()
-								.context("RemoveOutputCopyConnection couldn't find output copying!")?
 								.get(&event)
 								.context("RemoveOutputCopyConnection couldn't find event!")?
 								.get(&trigger)
@@ -720,68 +563,29 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 							entity
 								.output_copying
-								.as_mut()
-								.ctx?
 								.get_mut(&event)
 								.ctx?
 								.get_mut(&trigger)
 								.ctx?
 								.remove(ind);
 
-							if entity
-								.output_copying
-								.as_ref()
-								.ctx?
-								.get(&event)
-								.ctx?
-								.get(&trigger)
-								.ctx?
-								.is_empty()
-							{
-								entity
-									.output_copying
-									.as_mut()
-									.ctx?
-									.get_mut(&event)
-									.ctx?
-									.shift_remove(&trigger);
+							if entity.output_copying.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
+								entity.output_copying.get_mut(&event).ctx?.shift_remove(&trigger);
 							}
 
-							if entity.output_copying.as_ref().ctx?.get(&event).ctx?.is_empty() {
-								entity.output_copying.as_mut().ctx?.shift_remove(&event);
-							}
-
-							if entity.output_copying.as_ref().ctx?.is_empty() {
-								entity.output_copying = None;
+							if entity.output_copying.get(&event).ctx?.is_empty() {
+								entity.output_copying.shift_remove(&event);
 							}
 						}
 
 						SubEntityOperation::AddOutputCopyConnection(event, trigger, reference) => {
-							if entity.output_copying.is_none() {
-								entity.output_copying = Some(Default::default());
+							if entity.output_copying.get(&event).is_none() {
+								entity.output_copying.insert(event.to_owned(), Default::default());
 							}
 
-							if entity.output_copying.as_ref().ctx?.get(&event).is_none() {
+							if entity.output_copying.get(&event).ctx?.get(&trigger).is_none() {
 								entity
 									.output_copying
-									.as_mut()
-									.ctx?
-									.insert(event.to_owned(), Default::default());
-							}
-
-							if entity
-								.output_copying
-								.as_ref()
-								.ctx?
-								.get(&event)
-								.ctx?
-								.get(&trigger)
-								.is_none()
-							{
-								entity
-									.output_copying
-									.as_mut()
-									.ctx?
 									.get_mut(&event)
 									.ctx?
 									.insert(trigger.to_owned(), Default::default());
@@ -789,8 +593,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 							entity
 								.output_copying
-								.as_mut()
-								.ctx?
 								.get_mut(&event)
 								.ctx?
 								.get_mut(&trigger)
@@ -799,114 +601,73 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::AddPropertyAliasConnection(alias, data) => {
-							entity
-								.property_aliases
-								.get_or_insert(Default::default())
-								.entry(alias)
-								.or_default()
-								.push(data);
+							entity.property_aliases.entry(alias).or_default().push(data);
 						}
 
 						SubEntityOperation::RemovePropertyAlias(alias) => {
 							entity
 								.property_aliases
-								.get_or_insert(Default::default())
 								.shift_remove(&alias)
 								.context("RemovePropertyAlias couldn't find alias!")?;
-
-							if entity.property_aliases.as_ref().ctx?.is_empty() {
-								entity.property_aliases = None;
-							}
 						}
 
 						SubEntityOperation::RemoveConnectionForPropertyAlias(alias, data) => {
 							let connection = entity
 								.property_aliases
-								.as_ref()
-								.context("RemoveConnectionForPropertyAlias had no aliases to remove!")?
 								.get(&alias)
 								.context("RemoveConnectionForPropertyAlias couldn't find alias!")?
 								.iter()
 								.position(|x| *x == data)
 								.context("RemoveConnectionForPropertyAlias couldn't find connection!")?;
 
-							entity
-								.property_aliases
-								.as_mut()
-								.ctx?
-								.get_mut(&alias)
-								.ctx?
-								.remove(connection);
+							entity.property_aliases.get_mut(&alias).ctx?.remove(connection);
 
-							if entity.property_aliases.as_ref().ctx?.get(&alias).ctx?.is_empty() {
-								entity.property_aliases.as_mut().ctx?.shift_remove(&alias);
-							}
-
-							if entity.property_aliases.as_ref().ctx?.is_empty() {
-								entity.property_aliases = None;
+							if entity.property_aliases.get(&alias).ctx?.is_empty() {
+								entity.property_aliases.shift_remove(&alias);
 							}
 						}
 
 						SubEntityOperation::SetExposedEntity(name, data) => {
-							entity
-								.exposed_entities
-								.get_or_insert(Default::default())
-								.insert(name, data);
+							entity.exposed_entities.insert(name, data);
 						}
 
 						SubEntityOperation::RemoveExposedEntity(name) => {
 							entity
 								.exposed_entities
-								.as_mut()
-								.context("RemoveExposedEntity had no exposed entities to remove!")?
 								.shift_remove(&name)
 								.context("RemoveExposedEntity couldn't find exposed entity to remove!")?;
 						}
 
 						SubEntityOperation::SetExposedInterface(name, implementor) => {
-							entity
-								.exposed_interfaces
-								.get_or_insert(Default::default())
-								.insert(name, implementor);
+							entity.exposed_interfaces.insert(name, implementor);
 						}
 
 						SubEntityOperation::RemoveExposedInterface(name) => {
 							entity
 								.exposed_interfaces
-								.as_mut()
-								.context("RemoveExposedInterface had no exposed entities to remove!")?
 								.shift_remove(&name)
 								.context("RemoveExposedInterface couldn't find exposed entity to remove!")?;
 						}
 
 						SubEntityOperation::AddSubset(name, ent) => {
-							entity
-								.subsets
-								.get_or_insert(Default::default())
-								.entry(name)
-								.or_default()
-								.push(ent);
+							entity.subsets.entry(name).or_default().push(ent);
 						}
 
 						SubEntityOperation::RemoveSubset(name, ent) => {
 							let ind = entity
 								.subsets
-								.as_ref()
-								.context("RemoveSubset had no subsets to remove!")?
 								.get(&name)
 								.context("RemoveSubset couldn't find subset to remove from!")?
 								.iter()
 								.position(|x| *x == ent)
 								.context("RemoveSubset couldn't find the entity to remove from the subset!")?;
 
-							entity.subsets.as_mut().ctx?.get_mut(&name).ctx?.remove(ind);
+							entity.subsets.get_mut(&name).ctx?.remove(ind);
 						}
 
 						SubEntityOperation::RemoveAllSubsetsFor(name) => {
 							entity
 								.subsets
-								.as_mut()
-								.context("RemoveAllSubsetsFor had no subsets to remove!")?
 								.shift_remove(&name)
 								.context("RemoveAllSubsetsFor couldn't find subset to remove!")?;
 						}
@@ -1285,9 +1046,6 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 
 	let mut patch: Vec<PatchOperation> = vec![];
 
-	let mut original = original.clone();
-	let mut modified = modified.clone();
-
 	if original.root_entity != modified.root_entity {
 		patch.push(PatchOperation::SetRootEntity(modified.root_entity.to_owned()));
 	}
@@ -1302,8 +1060,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 		}
 	}
 
-	for (entity_id, new_entity_data) in &mut modified.entities {
-		if let Some(old_entity_data) = original.entities.get_mut(entity_id) {
+	for (entity_id, new_entity_data) in &modified.entities {
+		if let Some(old_entity_data) = original.entities.get(entity_id) {
 			if old_entity_data.parent != new_entity_data.parent {
 				patch.push(PatchOperation::SubEntityOperation(
 					entity_id.to_owned(),
@@ -1339,16 +1097,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				));
 			}
 
-			if old_entity_data.properties.is_none() {
-				old_entity_data.properties = Some(IndexMap::new());
-			}
-
-			if new_entity_data.properties.is_none() {
-				new_entity_data.properties = Some(IndexMap::new());
-			}
-
-			for property_name in old_entity_data.properties.as_ref().ctx?.keys() {
-				if !new_entity_data.properties.as_ref().ctx?.contains_key(property_name) {
+			for property_name in old_entity_data.properties.keys() {
+				if !new_entity_data.properties.contains_key(property_name) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemovePropertyByName(property_name.to_owned())
@@ -1356,8 +1106,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (property_name, new_property_data) in new_entity_data.properties.as_ref().ctx? {
-				if let Some(old_property_data) = old_entity_data.properties.as_ref().ctx?.get(property_name) {
+			for (property_name, new_property_data) in &new_entity_data.properties {
+				if let Some(old_property_data) = old_entity_data.properties.get(property_name) {
 					if old_property_data.property_type != new_property_data.property_type {
 						patch.push(PatchOperation::SubEntityOperation(
 							entity_id.to_owned(),
@@ -1481,7 +1231,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							entity_id.to_owned(),
 							SubEntityOperation::SetPropertyPostInit(
 								property_name.to_owned(),
-								new_property_data.post_init.unwrap_or(false)
+								new_property_data.post_init
 							)
 						));
 					}
@@ -1494,21 +1244,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 			}
 
 			// Duplicated from above except with an extra layer for platform
-			if old_entity_data.platform_specific_properties.is_none() {
-				old_entity_data.platform_specific_properties = Some(IndexMap::new());
-			}
-
-			if new_entity_data.platform_specific_properties.is_none() {
-				new_entity_data.platform_specific_properties = Some(IndexMap::new());
-			}
-
-			for platform_name in old_entity_data.platform_specific_properties.as_ref().ctx?.keys() {
-				if !new_entity_data
-					.platform_specific_properties
-					.as_ref()
-					.ctx?
-					.contains_key(platform_name)
-				{
+			for platform_name in old_entity_data.platform_specific_properties.keys() {
+				if !new_entity_data.platform_specific_properties.contains_key(platform_name) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(platform_name.to_owned())
@@ -1516,15 +1253,10 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (platform_name, new_properties_data) in new_entity_data.platform_specific_properties.as_ref().ctx? {
-				if let Some(old_properties_data) = old_entity_data
-					.platform_specific_properties
-					.as_ref()
-					.ctx?
-					.get(platform_name)
-				{
+			for (platform_name, new_properties_data) in &new_entity_data.platform_specific_properties {
+				if let Some(old_properties_data) = old_entity_data.platform_specific_properties.get(platform_name) {
 					for property_name in old_properties_data.keys() {
-						if !new_entity_data.properties.as_ref().ctx?.contains_key(property_name) {
+						if !new_entity_data.properties.contains_key(property_name) {
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
 								SubEntityOperation::RemovePlatformSpecificPropertyByName(
@@ -1567,7 +1299,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 									SubEntityOperation::SetPlatformSpecificPropertyPostInit(
 										platform_name.to_owned(),
 										property_name.to_owned(),
-										new_property_data.post_init.unwrap_or(false)
+										new_property_data.post_init
 									)
 								));
 							}
@@ -1597,16 +1329,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 			}
 
 			// An egregious amount of code duplication
-			if old_entity_data.events.is_none() {
-				old_entity_data.events = Some(IndexMap::new());
-			}
-
-			if new_entity_data.events.is_none() {
-				new_entity_data.events = Some(IndexMap::new());
-			}
-
-			for event_name in old_entity_data.events.as_ref().ctx?.keys() {
-				if !new_entity_data.events.as_ref().ctx?.contains_key(event_name) {
+			for event_name in old_entity_data.events.keys() {
+				if !new_entity_data.events.contains_key(event_name) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemoveAllEventConnectionsForEvent(event_name.to_owned())
@@ -1614,8 +1338,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (event_name, new_events_data) in new_entity_data.events.as_ref().ctx? {
-				if let Some(old_events_data) = old_entity_data.events.as_ref().ctx?.get(event_name) {
+			for (event_name, new_events_data) in &new_entity_data.events {
+				if let Some(old_events_data) = old_entity_data.events.get(event_name) {
 					for trigger_name in old_events_data.keys() {
 						if !new_events_data.contains_key(trigger_name) {
 							patch.push(PatchOperation::SubEntityOperation(
@@ -1644,7 +1368,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							}
 
 							for i in new_refs_data {
-								if !old_refs_data.contains(i) {
+								if !old_refs_data.contains(&i) {
 									patch.push(PatchOperation::SubEntityOperation(
 										entity_id.to_owned(),
 										SubEntityOperation::AddEventConnection(
@@ -1684,16 +1408,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			if old_entity_data.input_copying.is_none() {
-				old_entity_data.input_copying = Some(IndexMap::new());
-			}
-
-			if new_entity_data.input_copying.is_none() {
-				new_entity_data.input_copying = Some(IndexMap::new());
-			}
-
-			for event_name in old_entity_data.input_copying.as_ref().ctx?.keys() {
-				if !new_entity_data.input_copying.as_ref().ctx?.contains_key(event_name) {
+			for event_name in old_entity_data.input_copying.keys() {
+				if !new_entity_data.input_copying.contains_key(event_name) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemoveAllInputCopyConnectionsForInput(event_name.to_owned())
@@ -1701,8 +1417,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (event_name, new_input_copying_data) in new_entity_data.input_copying.as_ref().ctx? {
-				if let Some(old_input_copying_data) = old_entity_data.input_copying.as_ref().ctx?.get(event_name) {
+			for (event_name, new_input_copying_data) in &new_entity_data.input_copying {
+				if let Some(old_input_copying_data) = old_entity_data.input_copying.get(event_name) {
 					for trigger_name in old_input_copying_data.keys() {
 						if !new_input_copying_data.contains_key(trigger_name) {
 							patch.push(PatchOperation::SubEntityOperation(
@@ -1731,7 +1447,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							}
 
 							for i in new_refs_data {
-								if !old_refs_data.contains(i) {
+								if !old_refs_data.contains(&i) {
 									patch.push(PatchOperation::SubEntityOperation(
 										entity_id.to_owned(),
 										SubEntityOperation::AddInputCopyConnection(
@@ -1771,16 +1487,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			if old_entity_data.output_copying.is_none() {
-				old_entity_data.output_copying = Some(IndexMap::new());
-			}
-
-			if new_entity_data.output_copying.is_none() {
-				new_entity_data.output_copying = Some(IndexMap::new());
-			}
-
-			for event_name in old_entity_data.output_copying.as_ref().ctx?.keys() {
-				if !new_entity_data.output_copying.as_ref().ctx?.contains_key(event_name) {
+			for event_name in old_entity_data.output_copying.keys() {
+				if !new_entity_data.output_copying.contains_key(event_name) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(event_name.to_owned())
@@ -1788,8 +1496,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (event_name, new_output_copying_data) in new_entity_data.output_copying.as_ref().ctx? {
-				if let Some(old_output_copying_data) = old_entity_data.output_copying.as_ref().ctx?.get(event_name) {
+			for (event_name, new_output_copying_data) in &new_entity_data.output_copying {
+				if let Some(old_output_copying_data) = old_entity_data.output_copying.get(event_name) {
 					for trigger_name in old_output_copying_data.keys() {
 						if !new_output_copying_data.contains_key(trigger_name) {
 							patch.push(PatchOperation::SubEntityOperation(
@@ -1818,7 +1526,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							}
 
 							for i in new_refs_data {
-								if !old_refs_data.contains(i) {
+								if !old_refs_data.contains(&i) {
 									patch.push(PatchOperation::SubEntityOperation(
 										entity_id.to_owned(),
 										SubEntityOperation::AddOutputCopyConnection(
@@ -1858,16 +1566,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			if old_entity_data.property_aliases.is_none() {
-				old_entity_data.property_aliases = Some(IndexMap::new());
-			}
-
-			if new_entity_data.property_aliases.is_none() {
-				new_entity_data.property_aliases = Some(IndexMap::new());
-			}
-
-			for alias_name in old_entity_data.property_aliases.as_ref().ctx?.keys() {
-				if !new_entity_data.property_aliases.as_ref().ctx?.contains_key(alias_name) {
+			for alias_name in old_entity_data.property_aliases.keys() {
+				if !new_entity_data.property_aliases.contains_key(alias_name) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemovePropertyAlias(alias_name.to_owned())
@@ -1875,10 +1575,10 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (alias_name, new_alias_connections) in new_entity_data.property_aliases.as_ref().ctx? {
-				if let Some(old_alias_connections) = old_entity_data.property_aliases.as_ref().ctx?.get(alias_name) {
+			for (alias_name, new_alias_connections) in &new_entity_data.property_aliases {
+				if let Some(old_alias_connections) = old_entity_data.property_aliases.get(alias_name) {
 					for connection in new_alias_connections {
-						if !old_alias_connections.contains(connection) {
+						if !old_alias_connections.contains(&connection) {
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
 								SubEntityOperation::AddPropertyAliasConnection(
@@ -1913,21 +1613,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			if old_entity_data.exposed_entities.is_none() {
-				old_entity_data.exposed_entities = Some(IndexMap::new());
-			}
-
-			if new_entity_data.exposed_entities.is_none() {
-				new_entity_data.exposed_entities = Some(IndexMap::new());
-			}
-
-			for exposed_entity in old_entity_data.exposed_entities.as_ref().ctx?.keys() {
-				if !new_entity_data
-					.exposed_entities
-					.as_ref()
-					.ctx?
-					.contains_key(exposed_entity)
-				{
+			for exposed_entity in old_entity_data.exposed_entities.keys() {
+				if !new_entity_data.exposed_entities.contains_key(exposed_entity) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemoveExposedEntity(exposed_entity.to_owned())
@@ -1935,13 +1622,9 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (exposed_entity, data) in new_entity_data.exposed_entities.as_ref().ctx? {
-				if !old_entity_data
-					.exposed_entities
-					.as_ref()
-					.ctx?
-					.contains_key(exposed_entity)
-					|| old_entity_data.exposed_entities.as_ref().ctx?.get(exposed_entity).ctx? != data
+			for (exposed_entity, data) in &new_entity_data.exposed_entities {
+				if !old_entity_data.exposed_entities.contains_key(exposed_entity)
+					|| old_entity_data.exposed_entities.get(exposed_entity).ctx? != data
 				{
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
@@ -1950,21 +1633,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			if old_entity_data.exposed_interfaces.is_none() {
-				old_entity_data.exposed_interfaces = Some(IndexMap::new());
-			}
-
-			if new_entity_data.exposed_interfaces.is_none() {
-				new_entity_data.exposed_interfaces = Some(IndexMap::new());
-			}
-
-			for exposed_interface in old_entity_data.exposed_interfaces.as_ref().ctx?.keys() {
-				if !new_entity_data
-					.exposed_interfaces
-					.as_ref()
-					.ctx?
-					.contains_key(exposed_interface)
-				{
+			for exposed_interface in old_entity_data.exposed_interfaces.keys() {
+				if !new_entity_data.exposed_interfaces.contains_key(exposed_interface) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemoveExposedInterface(exposed_interface.to_owned())
@@ -1972,18 +1642,9 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (exposed_interface, data) in new_entity_data.exposed_interfaces.as_ref().ctx? {
-				if !old_entity_data
-					.exposed_interfaces
-					.as_ref()
-					.ctx?
-					.contains_key(exposed_interface)
-					|| old_entity_data
-						.exposed_interfaces
-						.as_ref()
-						.ctx?
-						.get(exposed_interface)
-						.ctx? != data
+			for (exposed_interface, data) in &new_entity_data.exposed_interfaces {
+				if !old_entity_data.exposed_interfaces.contains_key(exposed_interface)
+					|| old_entity_data.exposed_interfaces.get(exposed_interface).ctx? != data
 				{
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
@@ -1992,16 +1653,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			if old_entity_data.subsets.is_none() {
-				old_entity_data.subsets = Some(IndexMap::new());
-			}
-
-			if new_entity_data.subsets.is_none() {
-				new_entity_data.subsets = Some(IndexMap::new());
-			}
-
-			for subset_name in old_entity_data.subsets.as_ref().ctx?.keys() {
-				if !new_entity_data.subsets.as_ref().ctx?.contains_key(subset_name) {
+			for subset_name in old_entity_data.subsets.keys() {
+				if !new_entity_data.subsets.contains_key(subset_name) {
 					patch.push(PatchOperation::SubEntityOperation(
 						entity_id.to_owned(),
 						SubEntityOperation::RemoveAllSubsetsFor(subset_name.to_owned())
@@ -2009,8 +1662,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 				}
 			}
 
-			for (subset_name, new_refs_data) in new_entity_data.subsets.as_ref().ctx? {
-				if let Some(old_refs_data) = old_entity_data.subsets.as_ref().ctx?.get(subset_name) {
+			for (subset_name, new_refs_data) in &new_entity_data.subsets {
+				if let Some(old_refs_data) = old_entity_data.subsets.get(subset_name) {
 					for i in old_refs_data {
 						if !new_refs_data.contains(i) {
 							patch.push(PatchOperation::SubEntityOperation(
@@ -2021,7 +1674,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 					}
 
 					for i in new_refs_data {
-						if !old_refs_data.contains(i) {
+						if !old_refs_data.contains(&i) {
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
 								SubEntityOperation::AddSubset(subset_name.to_owned(), i.to_owned())
@@ -2202,8 +1855,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 	}
 
 	Patch {
-		factory: modified.factory,
-		blueprint: modified.blueprint,
+		factory: modified.factory.to_owned(),
+		blueprint: modified.blueprint.to_owned(),
 		patch,
 		patch_version: 7
 	}
@@ -2592,7 +2245,7 @@ fn convert_rl_property_to_qn(
 		} else {
 			convert_rl_property_value_to_qn(&property.value, factory, factory_meta, blueprint, convert_lossless)?
 		},
-		post_init: if post_init { Some(true) } else { None }
+		post_init
 	}
 }
 
@@ -2868,86 +2521,76 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 			.par_iter()
 			.map(|(_, sub_entity)| -> Result<_> {
 				Ok(vec![
-					if let Some(props) = &sub_entity.properties {
-						[
-							props
+					sub_entity
+						.properties
+						.iter()
+						.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
+						.map(|(_, prop)| -> Result<_> {
+							from_value::<ResourceReference>(prop.value.to_owned())
+								.context("ZRuntimeResourceID must be valid ResourceReference")
+						})
+						.collect::<Result<Vec<_>>>()?,
+					sub_entity
+						.properties
+						.iter()
+						.filter(|(_, prop)| prop.property_type == "TArray<ZRuntimeResourceID>" && !prop.value.is_null())
+						.map(|(_, prop)| -> Result<_> {
+							prop.value
+								.as_array()
+								.context("TArray<ZRuntimeResourceID> must be array")?
 								.iter()
-								.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
-								.map(|(_, prop)| -> Result<_> {
-									from_value::<ResourceReference>(prop.value.to_owned())
+								.map(|value| -> Result<_> {
+									from_value::<ResourceReference>(value.to_owned())
 										.context("ZRuntimeResourceID must be valid ResourceReference")
 								})
-								.collect::<Result<Vec<_>>>()?,
-							props
-								.iter()
-								.filter(|(_, prop)| {
-									prop.property_type == "TArray<ZRuntimeResourceID>" && !prop.value.is_null()
-								})
-								.map(|(_, prop)| -> Result<_> {
-									prop.value
-										.as_array()
-										.context("TArray<ZRuntimeResourceID> must be array")?
-										.iter()
-										.map(|value| -> Result<_> {
-											from_value::<ResourceReference>(value.to_owned())
-												.context("ZRuntimeResourceID must be valid ResourceReference")
-										})
-										.collect::<Result<Vec<_>>>()
-								})
-								.collect::<Result<Vec<_>>>()?
-								.into_iter()
-								.flatten()
-								.collect()
-						]
-						.concat()
-					} else {
-						vec![]
-					},
-					if let Some(platforms) = &sub_entity.platform_specific_properties {
-						platforms
-							.iter()
-							.map(|(_, props)| -> Result<_> {
-								Ok([
-									props
-										.iter()
-										.filter(|(_, prop)| {
-											prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
-										})
-										.map(|(_, prop)| -> Result<_> {
-											from_value::<ResourceReference>(prop.value.to_owned())
-												.context("ZRuntimeResourceID must be valid ResourceReference")
-										})
-										.collect::<Result<Vec<_>>>()?,
-									props
-										.iter()
-										.filter(|(_, prop)| {
-											prop.property_type == "TArray<ZRuntimeResourceID>" && !prop.value.is_null()
-										})
-										.map(|(_, prop)| -> Result<_> {
-											prop.value
-												.as_array()
-												.context("TArray<ZRuntimeResourceID> must be array")?
-												.iter()
-												.map(|value| -> Result<_> {
-													from_value::<ResourceReference>(value.to_owned())
-														.context("ZRuntimeResourceID must be valid ResourceReference")
-												})
-												.collect::<Result<Vec<_>>>()
-										})
-										.collect::<Result<Vec<_>>>()?
-										.into_iter()
-										.flatten()
-										.collect()
-								]
-								.concat())
-							})
-							.collect::<Result<Vec<_>>>()?
-							.into_iter()
-							.flatten()
-							.collect()
-					} else {
-						vec![]
-					},
+								.collect::<Result<Vec<_>>>()
+						})
+						.collect::<Result<Vec<_>>>()?
+						.into_iter()
+						.flatten()
+						.collect(),
+					sub_entity
+						.platform_specific_properties
+						.iter()
+						.map(|(_, props)| -> Result<_> {
+							Ok([
+								props
+									.iter()
+									.filter(|(_, prop)| {
+										prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
+									})
+									.map(|(_, prop)| -> Result<_> {
+										from_value::<ResourceReference>(prop.value.to_owned())
+											.context("ZRuntimeResourceID must be valid ResourceReference")
+									})
+									.collect::<Result<Vec<_>>>()?,
+								props
+									.iter()
+									.filter(|(_, prop)| {
+										prop.property_type == "TArray<ZRuntimeResourceID>" && !prop.value.is_null()
+									})
+									.map(|(_, prop)| -> Result<_> {
+										prop.value
+											.as_array()
+											.context("TArray<ZRuntimeResourceID> must be array")?
+											.iter()
+											.map(|value| -> Result<_> {
+												from_value::<ResourceReference>(value.to_owned())
+													.context("ZRuntimeResourceID must be valid ResourceReference")
+											})
+											.collect::<Result<Vec<_>>>()
+									})
+									.collect::<Result<Vec<_>>>()?
+									.into_iter()
+									.flatten()
+									.collect()
+							]
+							.concat())
+						})
+						.collect::<Result<Vec<_>>>()?
+						.into_iter()
+						.flatten()
+						.collect(),
 				]
 				.into_iter()
 				.concat())
@@ -3092,197 +2735,147 @@ pub fn convert_to_qn(
 								blueprint,
 								factory_meta
 							)?,
-							editor_only: if sub_entity_blueprint.editor_only {
-								Some(true)
-							} else {
-								None
-							},
-							properties: {
-								let x: IndexMap<String, Property> = sub_entity_factory
-									.property_values
-									.iter()
-									.map(|property| -> Result<_> {
+							editor_only: sub_entity_blueprint.editor_only,
+							properties: sub_entity_factory
+								.property_values
+								.iter()
+								.map(|property| -> Result<_> {
+									Ok((
+										match &property.n_property_id {
+											resourcelib::PropertyID::Int(id) => id.to_string(),
+											resourcelib::PropertyID::String(id) => id.to_owned()
+										}, // key
+										convert_rl_property_to_qn(
+											property,
+											false,
+											factory,
+											factory_meta,
+											blueprint,
+											convert_lossless
+										)? // value
+									))
+								})
+								.chain(sub_entity_factory.post_init_property_values.iter().map(
+									|property| -> Result<_> {
 										Ok((
+											// we do a little code duplication
 											match &property.n_property_id {
 												resourcelib::PropertyID::Int(id) => id.to_string(),
 												resourcelib::PropertyID::String(id) => id.to_owned()
-											}, // key
+											},
 											convert_rl_property_to_qn(
 												property,
-												false,
+												true,
 												factory,
 												factory_meta,
 												blueprint,
 												convert_lossless
-											)? // value
+											)?
 										))
-									})
-									.chain(sub_entity_factory.post_init_property_values.iter().map(
-										|property| -> Result<_> {
-											Ok((
-												// we do a little code duplication
-												match &property.n_property_id {
-													resourcelib::PropertyID::Int(id) => id.to_string(),
-													resourcelib::PropertyID::String(id) => id.to_owned()
-												},
-												convert_rl_property_to_qn(
-													property,
-													true,
-													factory,
-													factory_meta,
-													blueprint,
-													convert_lossless
-												)?
-											))
-										}
+									}
+								))
+								.collect::<Result<_>>()?,
+							// Group props by platform, then convert them all and turn into a nested IndexMap structure
+							platform_specific_properties: sub_entity_factory
+								.platform_specific_property_values
+								.iter()
+								.sorted_by_key(|property| &property.platform)
+								.group_by(|property| property.platform.to_owned())
+								.into_iter()
+								.map(|(platform, properties)| -> Result<_> {
+									Ok((
+										platform,
+										properties
+											.map(|property| -> Result<(String, Property)> {
+												Ok((
+													// we do a little code duplication
+													match &property.property_value.n_property_id {
+														resourcelib::PropertyID::Int(id) => id.to_string(),
+														resourcelib::PropertyID::String(id) => id.to_owned()
+													},
+													convert_rl_property_to_qn(
+														&property.property_value,
+														property.post_init.to_owned(),
+														factory,
+														factory_meta,
+														blueprint,
+														convert_lossless
+													)?
+												))
+											})
+											.collect::<Result<_>>()?
 									))
-									.collect::<Result<_>>()?;
-
-								if !x.is_empty() {
-									Some(x)
-								} else {
-									None
-								}
-							},
-							platform_specific_properties: {
-								// Group props by platform, then convert them all and turn into a nested IndexMap structure
-								let x: IndexMap<String, IndexMap<String, Property>> = sub_entity_factory
-									.platform_specific_property_values
-									.iter()
-									.sorted_by_key(|property| &property.platform)
-									.group_by(|property| property.platform.to_owned())
-									.into_iter()
-									.map(|(platform, properties)| -> Result<_> {
-										Ok((
-											platform,
-											properties
-												.map(|property| -> Result<(String, Property)> {
-													Ok((
-														// we do a little code duplication
-														match &property.property_value.n_property_id {
-															resourcelib::PropertyID::Int(id) => id.to_string(),
-															resourcelib::PropertyID::String(id) => id.to_owned()
-														},
-														convert_rl_property_to_qn(
-															&property.property_value,
-															property.post_init.to_owned(),
-															factory,
-															factory_meta,
-															blueprint,
-															convert_lossless
-														)?
-													))
+								})
+								.collect::<Result<_>>()?,
+							events: Default::default(),         // will be mutated later
+							input_copying: Default::default(),  // will be mutated later
+							output_copying: Default::default(), // will be mutated later
+							property_aliases: sub_entity_blueprint
+								.property_aliases
+								.iter()
+								.sorted_by_key(|alias| &alias.s_property_name)
+								.group_by(|alias| alias.s_property_name.to_owned())
+								.into_iter()
+								.map(|(property_name, aliases)| {
+									Ok({
+										(
+											property_name,
+											aliases
+												.map(|alias| {
+													Ok(PropertyAlias {
+														original_property: alias.s_alias_name.to_owned(),
+														original_entity: Ref::Short(Some(
+															blueprint
+																.sub_entities
+																.get(alias.entity_id)
+																.context(
+																	"Property alias referred to nonexistent sub-entity"
+																)?
+																.entity_id
+																.into()
+														))
+													})
 												})
 												.collect::<Result<_>>()?
-										))
+										)
 									})
-									.collect::<Result<_>>()?;
-
-								if !x.is_empty() {
-									Some(x)
-								} else {
-									None
-								}
-							},
-							events: None,         // will be mutated later
-							input_copying: None,  // will be mutated later
-							output_copying: None, // will be mutated later
-							property_aliases: {
-								let x: IndexMap<String, Vec<PropertyAlias>> = sub_entity_blueprint
-									.property_aliases
-									.iter()
-									.sorted_by_key(|alias| &alias.s_property_name)
-									.group_by(|alias| alias.s_property_name.to_owned())
-									.into_iter()
-									.map(|(property_name, aliases)| {
-										Ok({
-											(
-												property_name,
-												aliases
-													.map(|alias| {
-														Ok(PropertyAlias {
-															original_property: alias.s_alias_name.to_owned(),
-															original_entity: Ref::Short(Some(
-																blueprint
-																	.sub_entities
-																	.get(alias.entity_id)
-																	.context(
-																		"Property alias referred to nonexistent \
-																		 sub-entity"
-																	)?
-																	.entity_id
-																	.into()
-															))
-														})
-													})
-													.collect::<Result<_>>()?
-											)
-										})
-									})
-									.collect::<Result<_>>()?;
-
-								if !x.is_empty() {
-									Some(x)
-								} else {
-									None
-								}
-							},
-							exposed_entities: {
-								let x: IndexMap<String, ExposedEntity> = sub_entity_blueprint
-									.exposed_entities
-									.iter()
-									.map(|exposed_entity| -> Result<_> {
-										Ok((
-											exposed_entity.s_name.to_owned(),
-											ExposedEntity {
-												is_array: exposed_entity.b_is_array.to_owned(),
-												refers_to: exposed_entity
-													.a_targets
-													.iter()
-													.map(|target| -> Result<_> {
-														convert_rl_reference_to_qn(
-															target,
-															factory,
-															blueprint,
-															factory_meta
-														)
-													})
-													.collect::<Result<_>>()?
-											}
-										))
-									})
-									.collect::<Result<_>>()?;
-
-								if !x.is_empty() {
-									Some(x)
-								} else {
-									None
-								}
-							},
-							exposed_interfaces: {
-								let x: IndexMap<String, EntityId> = sub_entity_blueprint
-									.exposed_interfaces
-									.iter()
-									.map(|(interface, entity_index)| {
-										Ok((
-											interface.to_owned(),
-											blueprint
-												.sub_entities
-												.get(*entity_index)
-												.context("Exposed interface referred to nonexistent sub-entity")?
-												.entity_id
-												.into()
-										))
-									})
-									.collect::<Result<_>>()?;
-
-								if !x.is_empty() {
-									Some(x)
-								} else {
-									None
-								}
-							},
-							subsets: None // will be mutated later
+								})
+								.collect::<Result<_>>()?,
+							exposed_entities: sub_entity_blueprint
+								.exposed_entities
+								.iter()
+								.map(|exposed_entity| -> Result<_> {
+									Ok((
+										exposed_entity.s_name.to_owned(),
+										ExposedEntity {
+											is_array: exposed_entity.b_is_array.to_owned(),
+											refers_to: exposed_entity
+												.a_targets
+												.iter()
+												.map(|target| -> Result<_> {
+													convert_rl_reference_to_qn(target, factory, blueprint, factory_meta)
+												})
+												.collect::<Result<_>>()?
+										}
+									))
+								})
+								.collect::<Result<_>>()?,
+							exposed_interfaces: sub_entity_blueprint
+								.exposed_interfaces
+								.iter()
+								.map(|(interface, entity_index)| {
+									Ok((
+										interface.to_owned(),
+										blueprint
+											.sub_entities
+											.get(*entity_index)
+											.context("Exposed interface referred to nonexistent sub-entity")?
+											.entity_id
+											.into()
+									))
+								})
+								.collect::<Result<_>>()?,
+							subsets: Default::default() // will be mutated later
 						}
 					))
 				})
@@ -3383,14 +2976,8 @@ pub fn convert_to_qn(
 				))
 				.ctx?;
 
-			if relevant_sub_entity.events.is_none() {
-				relevant_sub_entity.events = Some(IndexMap::new());
-			}
-
 			relevant_sub_entity
 				.events
-				.as_mut()
-				.ctx?
 				.entry(pin.from_pin_name.to_owned())
 				.or_default()
 				.entry(pin.to_pin_name.to_owned())
@@ -3438,14 +3025,8 @@ pub fn convert_to_qn(
 				))
 				.ctx?;
 
-			if relevant_sub_entity.events.is_none() {
-				relevant_sub_entity.events = Some(IndexMap::new());
-			}
-
 			relevant_sub_entity
 				.events
-				.as_mut()
-				.ctx?
 				.entry(pin_connection_override.from_pin_name.to_owned())
 				.or_default()
 				.entry(pin_connection_override.to_pin_name.to_owned())
@@ -3486,14 +3067,8 @@ pub fn convert_to_qn(
 				))
 				.ctx?;
 
-			if relevant_sub_entity.input_copying.is_none() {
-				relevant_sub_entity.input_copying = Some(IndexMap::new());
-			}
-
 			relevant_sub_entity
 				.input_copying
-				.as_mut()
-				.ctx?
 				.entry(forwarding.from_pin_name.to_owned())
 				.or_default()
 				.entry(forwarding.to_pin_name.to_owned())
@@ -3537,14 +3112,8 @@ pub fn convert_to_qn(
 				))
 				.ctx?;
 
-			if relevant_sub_entity.output_copying.is_none() {
-				relevant_sub_entity.output_copying = Some(IndexMap::new());
-			}
-
 			relevant_sub_entity
 				.output_copying
-				.as_mut()
-				.ctx?
 				.entry(forwarding.from_pin_name.to_owned())
 				.or_default()
 				.entry(forwarding.to_pin_name.to_owned())
@@ -3590,14 +3159,8 @@ pub fn convert_to_qn(
 						))
 						.ctx?;
 
-					if relevant_qn.subsets.is_none() {
-						relevant_qn.subsets = Some(IndexMap::new());
-					}
-
 					relevant_qn
 						.subsets
-						.as_mut()
-						.ctx?
 						.entry(subset.to_owned())
 						.or_default()
 						.push(sub_entity.entity_id.into());
@@ -3774,81 +3337,75 @@ pub fn convert_to_rl(
 					.collect_vec()
 					.par_iter()
 					.map(|(entity_id, sub_entity)| {
-						Ok(if sub_entity.events.is_some() {
-							sub_entity
-								.events
-								.as_ref()
-								.ctx?
-								.iter()
-								.map(|(event, pin)| {
-									Ok(pin
-										.iter()
-										.map(|(trigger, entities)| {
-											entities
-												.iter()
-												.filter(|trigger_entity| {
-													matches!(
-														trigger_entity,
-														RefMaybeConstantValue::Ref(Ref::Full(_))
-															| RefMaybeConstantValue::RefWithConstantValue(
-																RefWithConstantValue {
-																	entity_ref: Ref::Full(_),
-																	value: _
-																}
-															)
-													)
-												})
-												.map(|trigger_entity| {
-													Ok(resourcelib::ExternalPinConnection {
-														from_entity: convert_qn_reference_to_rl(
-															&Ref::Short(Some(entity_id.to_owned().to_owned())),
-															&factory,
-															&factory_meta,
-															&entity_id_to_index_mapping
-														)?,
-														to_entity: convert_qn_reference_to_rl(
-															match &trigger_entity {
-																RefMaybeConstantValue::Ref(entity_ref) => entity_ref,
-
-																RefMaybeConstantValue::RefWithConstantValue(
-																	RefWithConstantValue { entity_ref, value: _ }
-																) => entity_ref
-															},
-															&factory,
-															&factory_meta,
-															&entity_id_to_index_mapping
-														)?,
-														from_pin_name: event.to_owned(),
-														to_pin_name: trigger.to_owned(),
-														constant_pin_value: match &trigger_entity {
-															RefMaybeConstantValue::RefWithConstantValue(
-																RefWithConstantValue { entity_ref: _, value }
-															) => resourcelib::PropertyValue {
-																property_type: value.property_type.to_owned(),
-																property_value: value.value.to_owned()
-															},
-
-															_ => resourcelib::PropertyValue {
-																property_type: "void".to_owned(),
-																property_value: Value::Null
+						Ok(sub_entity
+							.events
+							.iter()
+							.map(|(event, pin)| {
+								Ok(pin
+									.iter()
+									.map(|(trigger, entities)| {
+										entities
+											.iter()
+											.filter(|trigger_entity| {
+												matches!(
+													trigger_entity,
+													RefMaybeConstantValue::Ref(Ref::Full(_))
+														| RefMaybeConstantValue::RefWithConstantValue(
+															RefWithConstantValue {
+																entity_ref: Ref::Full(_),
+																value: _
 															}
+														)
+												)
+											})
+											.map(|trigger_entity| {
+												Ok(resourcelib::ExternalPinConnection {
+													from_entity: convert_qn_reference_to_rl(
+														&Ref::Short(Some(entity_id.to_owned().to_owned())),
+														&factory,
+														&factory_meta,
+														&entity_id_to_index_mapping
+													)?,
+													to_entity: convert_qn_reference_to_rl(
+														match &trigger_entity {
+															RefMaybeConstantValue::Ref(entity_ref) => entity_ref,
+
+															RefMaybeConstantValue::RefWithConstantValue(
+																RefWithConstantValue { entity_ref, value: _ }
+															) => entity_ref
+														},
+														&factory,
+														&factory_meta,
+														&entity_id_to_index_mapping
+													)?,
+													from_pin_name: event.to_owned(),
+													to_pin_name: trigger.to_owned(),
+													constant_pin_value: match &trigger_entity {
+														RefMaybeConstantValue::RefWithConstantValue(
+															RefWithConstantValue { entity_ref: _, value }
+														) => resourcelib::PropertyValue {
+															property_type: value.property_type.to_owned(),
+															property_value: value.value.to_owned()
+														},
+
+														_ => resourcelib::PropertyValue {
+															property_type: "void".to_owned(),
+															property_value: Value::Null
 														}
-													})
+													}
 												})
-												.collect::<Result<Vec<resourcelib::ExternalPinConnection>>>()
-										})
-										.collect::<Result<Vec<_>>>()?
-										.into_iter()
-										.flatten()
-										.collect::<Vec<resourcelib::ExternalPinConnection>>())
-								})
-								.collect::<Result<Vec<_>>>()?
-								.into_iter()
-								.flatten()
-								.collect()
-						} else {
-							vec![]
-						})
+											})
+											.collect::<Result<Vec<resourcelib::ExternalPinConnection>>>()
+									})
+									.collect::<Result<Vec<_>>>()?
+									.into_iter()
+									.flatten()
+									.collect::<Vec<resourcelib::ExternalPinConnection>>())
+							})
+							.collect::<Result<Vec<_>>>()?
+							.into_iter()
+							.flatten()
+							.collect::<Vec<_>>())
 					})
 					.collect::<Result<Vec<_>>>()?
 					.into_iter()
@@ -3949,7 +3506,7 @@ pub fn convert_to_rl(
 													&Property {
 														property_type: overridden.property_type.to_owned(),
 														value: overridden.value.to_owned(),
-														post_init: None
+														post_init: false
 													},
 													&factory,
 													&factory_meta,
@@ -3986,70 +3543,59 @@ pub fn convert_to_rl(
 					entity_type_resource_index: *factory_dependencies_index_mapping
 						.get(&sub_entity.factory.resource)
 						.ctx?,
-					property_values: if let Some(props) = sub_entity.properties.to_owned() {
-						props
-							.iter()
-							.filter(|(_, x)| !x.post_init.unwrap_or(false))
-							.map(|(x, y)| {
-								convert_qn_property_to_rl(
-									x,
-									y,
-									&factory,
-									&factory_meta,
-									&entity_id_to_index_mapping,
-									&factory_dependencies_index_mapping
-								)
-							})
-							.collect::<Result<_>>()?
-					} else {
-						vec![]
-					},
-					post_init_property_values: if let Some(props) = sub_entity.properties.to_owned() {
-						props
-							.iter()
-							.filter(|(_, y)| y.post_init.unwrap_or(false))
-							.map(|(x, y)| {
-								convert_qn_property_to_rl(
-									x,
-									y,
-									&factory,
-									&factory_meta,
-									&entity_id_to_index_mapping,
-									&factory_dependencies_index_mapping
-								)
-							})
-							.collect::<Result<_>>()?
-					} else {
-						vec![]
-					},
-					platform_specific_property_values: if let Some(p_s_props) =
-						sub_entity.platform_specific_properties.to_owned()
-					{
-						p_s_props
-							.iter()
-							.flat_map(|(platform, props)| {
-								props
-									.iter()
-									.map(|(x, y)| {
-										Ok(resourcelib::PlatformSpecificProperty {
-											platform: platform.to_owned(),
-											post_init: y.post_init.unwrap_or(false),
-											property_value: convert_qn_property_to_rl(
-												x,
-												y,
-												&factory,
-												&factory_meta,
-												&entity_id_to_index_mapping,
-												&factory_dependencies_index_mapping
-											)?
-										})
+					property_values: sub_entity
+						.properties
+						.iter()
+						.filter(|(_, x)| !x.post_init)
+						.map(|(x, y)| {
+							convert_qn_property_to_rl(
+								x,
+								y,
+								&factory,
+								&factory_meta,
+								&entity_id_to_index_mapping,
+								&factory_dependencies_index_mapping
+							)
+						})
+						.collect::<Result<_>>()?,
+					post_init_property_values: sub_entity
+						.properties
+						.iter()
+						.filter(|(_, y)| y.post_init)
+						.map(|(x, y)| {
+							convert_qn_property_to_rl(
+								x,
+								y,
+								&factory,
+								&factory_meta,
+								&entity_id_to_index_mapping,
+								&factory_dependencies_index_mapping
+							)
+						})
+						.collect::<Result<_>>()?,
+					platform_specific_property_values: sub_entity
+						.platform_specific_properties
+						.iter()
+						.flat_map(|(platform, props)| {
+							props
+								.iter()
+								.map(|(x, y)| {
+									Ok(resourcelib::PlatformSpecificProperty {
+										platform: platform.to_owned(),
+										post_init: y.post_init,
+										property_value: convert_qn_property_to_rl(
+											x,
+											y,
+											&factory,
+											&factory_meta,
+											&entity_id_to_index_mapping,
+											&factory_dependencies_index_mapping
+										)?
 									})
-									.collect_vec()
-							})
-							.collect::<Result<_>>()?
-					} else {
-						vec![]
-					}
+								})
+								.collect_vec()
+						})
+						.collect::<Result<_>>()?
 				})
 			})
 			.collect::<Result<_>>()?;
@@ -4067,136 +3613,114 @@ pub fn convert_to_rl(
 					)?,
 					entity_type_resource_index: *blueprint_dependencies_index_mapping.get(&sub_entity.blueprint).ctx?,
 					entity_id: (*entity_id).into(),
-					editor_only: sub_entity.editor_only.unwrap_or(false),
+					editor_only: sub_entity.editor_only,
 					entity_name: sub_entity.name.to_owned(),
-					property_aliases: if sub_entity.property_aliases.is_some() {
-						sub_entity
-							.property_aliases
-							.as_ref()
-							.ctx?
-							.iter()
-							.map(|(aliased_name, aliases)| -> Result<_> {
-								aliases
-									.iter()
-									.map(|alias| -> Result<_> {
-										Ok(resourcelib::PropertyAlias {
-											entity_id: match &alias.original_entity {
-												Ref::Short(r) => match r {
-													Some(r) => entity_id_to_index_mapping
-														.get(r)
-														.with_context(|| {
-															format!(
-																"Property alias short ref referred to nonexistent \
-																 entity ID: {r}"
-															)
-														})?
-														.to_owned(),
-
-													_ => bail!(
-														"Null references are not permitted in property aliases ({}: \
-														 {})",
-														entity_id,
-														sub_entity.name
-													)
-												},
+					property_aliases: sub_entity
+						.property_aliases
+						.iter()
+						.map(|(aliased_name, aliases)| -> Result<_> {
+							aliases
+								.iter()
+								.map(|alias| -> Result<_> {
+									Ok(resourcelib::PropertyAlias {
+										entity_id: match &alias.original_entity {
+											Ref::Short(r) => match r {
+												Some(r) => entity_id_to_index_mapping
+													.get(r)
+													.with_context(|| {
+														format!(
+															"Property alias short ref referred to nonexistent entity \
+															 ID: {r}"
+														)
+													})?
+													.to_owned(),
 
 												_ => bail!(
-													"External references are not permitted in property aliases ({}: \
-													 {})",
+													"Null references are not permitted in property aliases ({}: {})",
 													entity_id,
 													sub_entity.name
 												)
 											},
-											s_alias_name: alias.original_property.to_owned(),
-											s_property_name: aliased_name.to_owned()
-										})
-									})
-									.collect::<Result<Vec<_>>>()
-							})
-							.collect::<Result<Vec<_>>>()?
-							.into_iter()
-							.flatten()
-							.collect()
-					} else {
-						vec![]
-					},
-					exposed_entities: if sub_entity.exposed_entities.is_some() {
-						sub_entity
-							.exposed_entities
-							.as_ref()
-							.ctx?
-							.iter()
-							.map(|(exposed_name, exposed_entity)| {
-								Ok(resourcelib::ExposedEntity {
-									s_name: exposed_name.to_owned(),
-									b_is_array: exposed_entity.is_array,
-									a_targets: exposed_entity
-										.refers_to
-										.iter()
-										.map(|target| {
-											convert_qn_reference_to_rl(
-												target,
-												&factory,
-												&factory_meta,
-												&entity_id_to_index_mapping
+
+											_ => bail!(
+												"External references are not permitted in property aliases ({}: {})",
+												entity_id,
+												sub_entity.name
 											)
-										})
-										.collect::<Result<_>>()?
+										},
+										s_alias_name: alias.original_property.to_owned(),
+										s_property_name: aliased_name.to_owned()
+									})
 								})
+								.collect::<Result<Vec<_>>>()
+						})
+						.collect::<Result<Vec<_>>>()?
+						.into_iter()
+						.flatten()
+						.collect(),
+					exposed_entities: sub_entity
+						.exposed_entities
+						.iter()
+						.map(|(exposed_name, exposed_entity)| {
+							Ok(resourcelib::ExposedEntity {
+								s_name: exposed_name.to_owned(),
+								b_is_array: exposed_entity.is_array,
+								a_targets: exposed_entity
+									.refers_to
+									.iter()
+									.map(|target| {
+										convert_qn_reference_to_rl(
+											target,
+											&factory,
+											&factory_meta,
+											&entity_id_to_index_mapping
+										)
+									})
+									.collect::<Result<_>>()?
 							})
-							.collect::<Result<_>>()?
-					} else {
-						vec![]
-					},
-					exposed_interfaces: if sub_entity.exposed_interfaces.is_some() {
-						sub_entity
-							.exposed_interfaces
-							.as_ref()
-							.ctx?
-							.iter()
-							.map(|(interface, implementor)| -> Result<_> {
-								Ok((
-									interface.to_owned(),
-									entity_id_to_index_mapping
-										.get(implementor)
-										.context("Exposed interface referenced nonexistent local entity")?
-										.to_owned()
-								))
-							})
-							.collect::<Result<Vec<_>>>()?
-					} else {
-						vec![]
-					},
+						})
+						.collect::<Result<_>>()?,
+					exposed_interfaces: sub_entity
+						.exposed_interfaces
+						.iter()
+						.map(|(interface, implementor)| -> Result<_> {
+							Ok((
+								interface.to_owned(),
+								entity_id_to_index_mapping
+									.get(implementor)
+									.context("Exposed interface referenced nonexistent local entity")?
+									.to_owned()
+							))
+						})
+						.collect::<Result<Vec<_>>>()?,
 					entity_subsets: vec![] // will be mutated later
 				})
 			})
 			.collect::<Result<_>>()?;
 
 		for (entity_index, (_, sub_entity)) in entity.entities.iter().enumerate() {
-			if sub_entity.subsets.is_some() {
-				for (subset, ents) in sub_entity.subsets.as_ref().ctx?.iter() {
-					for ent in ents.iter() {
-						let ent_subs = &mut blueprint
-							.sub_entities
-							.get_mut(
-								*entity_id_to_index_mapping
-									.get(ent)
-									.context("Entity subset referenced nonexistent local entity")?
-							)
-							.ctx?
-							.entity_subsets;
+			for (subset, ents) in sub_entity.subsets.iter() {
+				for ent in ents.iter() {
+					let ent_subs = &mut blueprint
+						.sub_entities
+						.get_mut(
+							*entity_id_to_index_mapping
+								.get(ent)
+								.context("Entity subset referenced nonexistent local entity")?
+						)
+						.ctx?
+						.entity_subsets;
 
-						if let Some((_, subset_entities)) = ent_subs.iter_mut().find(|(s, _)| s == subset) {
-							subset_entities.entities.push(entity_index);
-						} else {
-							ent_subs.push((
-								subset.to_owned(),
-								resourcelib::EntitySubset {
-									entities: vec![entity_index]
-								}
-							));
-						};
-					}
+					if let Some((_, subset_entities)) = ent_subs.iter_mut().find(|(s, _)| s == subset) {
+						subset_entities.entities.push(entity_index);
+					} else {
+						ent_subs.push((
+							subset.to_owned(),
+							resourcelib::EntitySubset {
+								entities: vec![entity_index]
+							}
+						));
+					};
 				}
 			}
 		}
@@ -4205,22 +3729,16 @@ pub fn convert_to_rl(
 			.entities
 			.par_iter()
 			.map(|(&entity_id, sub_entity)| -> Result<_> {
-				if sub_entity.events.is_some() {
-					Ok(sub_entity
-						.events
-						.as_ref()
-						.ctx?
-						.iter()
-						.map(|(evt, triggers)| {
-							pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
-						})
-						.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
-						.into_iter()
-						.flatten()
-						.collect())
-				} else {
-					Ok(vec![])
-				}
+				Ok(sub_entity
+					.events
+					.iter()
+					.map(|(evt, triggers)| {
+						pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
+					})
+					.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
+					.into_iter()
+					.flatten()
+					.collect::<Vec<_>>())
 			})
 			.collect::<Result<Vec<_>>>()?
 			.into_iter()
@@ -4232,22 +3750,16 @@ pub fn convert_to_rl(
 			.entities
 			.par_iter()
 			.map(|(&entity_id, sub_entity)| -> Result<_> {
-				if sub_entity.input_copying.is_some() {
-					Ok(sub_entity
-						.input_copying
-						.as_ref()
-						.ctx?
-						.iter()
-						.map(|(evt, triggers)| {
-							pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
-						})
-						.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
-						.into_iter()
-						.flatten()
-						.collect())
-				} else {
-					Ok(vec![])
-				}
+				Ok(sub_entity
+					.input_copying
+					.iter()
+					.map(|(evt, triggers)| {
+						pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
+					})
+					.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
+					.into_iter()
+					.flatten()
+					.collect::<Vec<_>>())
 			})
 			.collect::<Result<Vec<_>>>()?
 			.into_iter()
@@ -4258,22 +3770,16 @@ pub fn convert_to_rl(
 			.entities
 			.par_iter()
 			.map(|(&entity_id, sub_entity)| -> Result<_> {
-				if sub_entity.output_copying.is_some() {
-					Ok(sub_entity
-						.output_copying
-						.as_ref()
-						.ctx?
-						.iter()
-						.map(|(evt, triggers)| {
-							pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
-						})
-						.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
-						.into_iter()
-						.flatten()
-						.collect())
-				} else {
-					Ok(vec![])
-				}
+				Ok(sub_entity
+					.output_copying
+					.iter()
+					.map(|(evt, triggers)| {
+						pin_connections_for_event(&entity_id_to_index_mapping, entity_id, evt, triggers)
+					})
+					.collect::<Result<Vec<Vec<resourcelib::PinConnection>>>>()?
+					.into_iter()
+					.flatten()
+					.collect::<Vec<_>>())
 			})
 			.collect::<Result<Vec<_>>>()?
 			.into_iter()

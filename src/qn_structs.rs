@@ -278,43 +278,63 @@ pub struct SubEntity {
 	/// Setting this to true will remove the entity from the game as well as all of its organisational (but not coordinate) children.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "editorOnly")]
-	pub editor_only: Option<bool>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "std::ops::Not::not")]
+	pub editor_only: bool,
 
 	/// Properties of the entity.
 	#[serde(rename = "properties")]
-	pub properties: Option<IndexMap<String, Property>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub properties: IndexMap<String, Property>,
 
 	/// Properties to apply conditionally to the entity based on platform.
 	#[serde(rename = "platformSpecificProperties")]
-	pub platform_specific_properties: Option<IndexMap<String, IndexMap<String, Property>>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub platform_specific_properties: IndexMap<String, IndexMap<String, Property>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
-	pub events: Option<IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub events: IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
-	pub input_copying: Option<IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub input_copying: IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
-	pub output_copying: Option<IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub output_copying: IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
-	pub property_aliases: Option<IndexMap<String, Vec<PropertyAlias>>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub property_aliases: IndexMap<String, Vec<PropertyAlias>>,
 
 	/// Entities that can be accessed from this entity.
 	#[serde(rename = "exposedEntities")]
-	pub exposed_entities: Option<IndexMap<String, ExposedEntity>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub exposed_entities: IndexMap<String, ExposedEntity>,
 
 	/// Interfaces implemented by other entities that can be accessed from this entity.
 	#[serde(rename = "exposedInterfaces")]
-	pub exposed_interfaces: Option<IndexMap<String, EntityId>>,
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub exposed_interfaces: IndexMap<String, EntityId>,
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
-	pub subsets: Option<IndexMap<String, Vec<EntityId>>>
+	#[serde(default)]
+	#[serde(skip_serializing_if = "IndexMap::is_empty")]
+	pub subsets: IndexMap<String, Vec<EntityId>>
 }
 
 #[cfg(feature = "rune")]
@@ -327,31 +347,29 @@ impl SubEntity {
 			name,
 			factory,
 			blueprint,
-			editor_only: None,
-			properties: None,
-			platform_specific_properties: None,
-			events: None,
-			input_copying: None,
-			output_copying: None,
-			property_aliases: None,
-			exposed_entities: None,
-			exposed_interfaces: None,
-			subsets: None
+			editor_only: false,
+			properties: Default::default(),
+			platform_specific_properties: Default::default(),
+			events: Default::default(),
+			input_copying: Default::default(),
+			output_copying: Default::default(),
+			property_aliases: Default::default(),
+			exposed_entities: Default::default(),
+			exposed_interfaces: Default::default(),
+			subsets: Default::default()
 		}
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
 		module.field_function(rune::runtime::Protocol::GET, "properties", |s: &Self| {
-			s.properties
-				.to_owned()
-				.map(|x| x.into_iter().collect::<HashMap<_, _>>())
+			s.properties.to_owned().into_iter().collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"properties",
-			|s: &mut Self, value: Option<HashMap<String, Property>>| {
-				s.properties = value.map(|x| x.into_iter().collect());
+			|s: &mut Self, value: HashMap<String, Property>| {
+				s.properties = value.into_iter().collect();
 			}
 		)?;
 
@@ -359,124 +377,131 @@ impl SubEntity {
 			rune::runtime::Protocol::GET,
 			"platform_specific_properties",
 			|s: &Self| {
-				s.platform_specific_properties.to_owned().map(|x| {
-					x.into_iter()
-						.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
-						.collect::<HashMap<_, _>>()
-				})
+				s.platform_specific_properties
+					.to_owned()
+					.into_iter()
+					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+					.collect::<HashMap<_, _>>()
 			}
 		)?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"platform_specific_properties",
-			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Property>>>| {
-				s.platform_specific_properties =
-					value.map(|x| x.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect());
+			|s: &mut Self, value: HashMap<String, HashMap<String, Property>>| {
+				s.platform_specific_properties = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect()
 			}
 		)?;
 
 		module.field_function(rune::runtime::Protocol::GET, "events", |s: &Self| {
-			s.events.to_owned().map(|x| {
-				x.into_iter()
-					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
-					.collect::<HashMap<_, _>>()
-			})
+			s.events
+				.to_owned()
+				.into_iter()
+				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"events",
-			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>| {
-				s.events = value.map(|x| x.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect());
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>| {
+				s.events = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
 			}
 		)?;
 
 		module.field_function(rune::runtime::Protocol::GET, "input_copying", |s: &Self| {
-			s.input_copying.to_owned().map(|x| {
-				x.into_iter()
-					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
-					.collect::<HashMap<_, _>>()
-			})
+			s.input_copying
+				.to_owned()
+				.into_iter()
+				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"input_copying",
-			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>| {
-				s.input_copying = value.map(|x| x.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect());
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>| {
+				s.input_copying = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
 			}
 		)?;
 
 		module.field_function(rune::runtime::Protocol::GET, "output_copying", |s: &Self| {
-			s.output_copying.to_owned().map(|x| {
-				x.into_iter()
-					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
-					.collect::<HashMap<_, _>>()
-			})
+			s.output_copying
+				.to_owned()
+				.into_iter()
+				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"output_copying",
-			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>| {
-				s.output_copying = value.map(|x| x.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect());
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>| {
+				s.output_copying = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
 			}
 		)?;
 
 		module.field_function(rune::runtime::Protocol::GET, "property_aliases", |s: &Self| {
 			s.property_aliases
 				.to_owned()
-				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
+				.into_iter()
+				.map(|(x, y)| (x, y.to_owned()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"property_aliases",
-			|s: &mut Self, value: Option<HashMap<String, Vec<PropertyAlias>>>| {
-				s.property_aliases = value.map(|x| x.into_iter().collect());
+			|s: &mut Self, value: HashMap<String, Vec<PropertyAlias>>| {
+				s.property_aliases = value.into_iter().collect();
 			}
 		)?;
 
 		module.field_function(rune::runtime::Protocol::GET, "exposed_entities", |s: &Self| {
 			s.exposed_entities
 				.to_owned()
-				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
+				.into_iter()
+				.map(|(x, y)| (x, y.to_owned()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"exposed_entities",
-			|s: &mut Self, value: Option<HashMap<String, ExposedEntity>>| {
-				s.exposed_entities = value.map(|x| x.into_iter().collect());
+			|s: &mut Self, value: HashMap<String, ExposedEntity>| {
+				s.exposed_entities = value.into_iter().collect();
 			}
 		)?;
 
 		module.field_function(rune::runtime::Protocol::GET, "exposed_interfaces", |s: &Self| {
 			s.exposed_interfaces
 				.to_owned()
-				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
+				.into_iter()
+				.map(|(x, y)| (x, y.to_owned()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"exposed_interfaces",
-			|s: &mut Self, value: Option<HashMap<String, EntityId>>| {
-				s.exposed_interfaces = value.map(|x| x.into_iter().collect());
+			|s: &mut Self, value: HashMap<String, EntityId>| {
+				s.exposed_interfaces = value.into_iter().collect();
 			}
 		)?;
 
 		module.field_function(rune::runtime::Protocol::GET, "subsets", |s: &Self| {
 			s.subsets
 				.to_owned()
-				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
+				.into_iter()
+				.map(|(x, y)| (x, y.to_owned()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			rune::runtime::Protocol::SET,
 			"subsets",
-			|s: &mut Self, value: Option<HashMap<String, Vec<EntityId>>>| {
-				s.subsets = value.map(|x| x.into_iter().collect());
+			|s: &mut Self, value: HashMap<String, Vec<EntityId>>| {
+				s.subsets = value.into_iter().collect();
 			}
 		)?;
 
@@ -535,12 +560,14 @@ pub struct Property {
 	/// Whether the property should be (presumably) loaded/set after the entity has been initialised.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "postInit")]
-	pub post_init: Option<bool>
+	#[serde(default)]
+	#[serde(skip_serializing_if = "std::ops::Not::not")]
+	pub post_init: bool
 }
 
 #[cfg(feature = "rune")]
 impl Property {
-	fn rune_construct(property_type: String, value: rune::Value, post_init: Option<bool>) -> Self {
+	fn rune_construct(property_type: String, value: rune::Value, post_init: bool) -> Self {
 		Self {
 			property_type,
 			value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
