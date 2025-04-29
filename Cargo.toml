@@ -34,7 +34,6 @@ rune = { version = "0.13.4", optional = true }
 better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", optional = true }
 
 [features]
-default = ["cli"]
 cli = ["dep:env_logger", "dep:clap"]
 rune = ["dep:rune", "dep:better-rune-derive", "hitman-commons/rune"]
 
@@ -42,3 +41,10 @@ rune = ["dep:rune", "dep:better-rune-derive", "hitman-commons/rune"]
 name = "quickentity_rs"
 path = "src/main.rs"
 required-features = ["cli"]
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports", "real_blackbox"] }
+
+[[bench]]
+name = "corpus"
+harness = false

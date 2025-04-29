@@ -15,7 +15,6 @@ use hitman_commons::{
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_string, to_value, Value};
 use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::{collections::HashMap, str::FromStr};
@@ -117,20 +116,29 @@ impl<T> PermissiveUnwrap for Option<T> {
 }
 
 // A frankly terrible implementation of Hash and PartialOrd/Ord for Value
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct DiffableValue(Value);
+#[derive(Debug, Clone)]
+struct DiffableValue {
+	value: Value,
+	text: String
+}
+
+impl DiffableValue {
+	fn new(value: Value) -> Self {
+		let text = to_string(&value).unwrap_or_default();
+
+		Self { value, text }
+	}
+}
 
 impl Hash for DiffableValue {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		to_string(&self.0)
-			.expect("Couldn't serialise DiffableValue!")
-			.hash(state);
+		self.text.hash(state);
 	}
 }
 
 impl PartialEq for DiffableValue {
 	fn eq(&self, other: &Self) -> bool {
-		self.0 == other.0
+		self.text == other.text
 	}
 }
 
@@ -138,27 +146,19 @@ impl Eq for DiffableValue {}
 
 impl PartialOrd for DiffableValue {
 	fn ge(&self, other: &Self) -> bool {
-		to_string(&self.0)
-			.expect("Couldn't serialise DiffableValue 1!")
-			.ge(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+		self.text.ge(&other.text)
 	}
 
 	fn le(&self, other: &Self) -> bool {
-		to_string(&self.0)
-			.expect("Couldn't serialise DiffableValue 1!")
-			.le(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+		self.text.le(&other.text)
 	}
 
 	fn gt(&self, other: &Self) -> bool {
-		to_string(&self.0)
-			.expect("Couldn't serialise DiffableValue 1!")
-			.gt(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+		self.text.gt(&other.text)
 	}
 
 	fn lt(&self, other: &Self) -> bool {
-		to_string(&self.0)
-			.expect("Couldn't serialise DiffableValue 1!")
-			.lt(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+		self.text.lt(&other.text)
 	}
 
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -168,9 +168,7 @@ impl PartialOrd for DiffableValue {
 
 impl Ord for DiffableValue {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		to_string(&self.0)
-			.expect("Couldn't serialise DiffableValue 1!")
-			.cmp(&to_string(other).expect("Couldn't serialise DiffableValue 2!"))
+		self.text.cmp(&other.text)
 	}
 }
 
@@ -1128,7 +1126,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 								.as_array()
 								.ctx?
 								.iter()
-								.map(|x| DiffableValue(x.to_owned()))
+								.map(|x| DiffableValue::new(x.to_owned()))
 								.collect::<Vec<_>>();
 
 							let new_value = new_property_data
@@ -1136,7 +1134,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 								.as_array()
 								.ctx?
 								.iter()
-								.map(|x| DiffableValue(x.to_owned()))
+								.map(|x| DiffableValue::new(x.to_owned()))
 								.collect::<Vec<_>>();
 
 							let mut ops = vec![];
@@ -1151,24 +1149,24 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 									} => {
 										for i in 0..old_len {
 											ops.push(ArrayPatchOperation::RemoveItemByValue(
-												old_value[old_index + i].0.to_owned()
+												old_value[old_index + i].value.to_owned()
 											));
 										}
 
 										for i in (0..new_len).rev() {
 											if let Some(prev) = old_value.get(old_index - 1) {
 												ops.push(ArrayPatchOperation::AddItemAfter(
-													prev.0.to_owned(),
-													new_value[new_index + i].0.to_owned()
+													prev.value.to_owned(),
+													new_value[new_index + i].value.to_owned()
 												));
 											} else if let Some(next) = old_value.get(old_index + 1) {
 												ops.push(ArrayPatchOperation::AddItemBefore(
-													next.0.to_owned(),
-													new_value[new_index + i].0.to_owned()
+													next.value.to_owned(),
+													new_value[new_index + i].value.to_owned()
 												));
 											} else {
 												ops.push(ArrayPatchOperation::AddItem(
-													new_value[new_index + i].0.to_owned()
+													new_value[new_index + i].value.to_owned()
 												));
 											}
 										}
@@ -1177,7 +1175,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 									DiffOp::Delete { old_index, old_len, .. } => {
 										for i in 0..old_len {
 											ops.push(ArrayPatchOperation::RemoveItemByValue(
-												old_value[old_index + i].0.to_owned()
+												old_value[old_index + i].value.to_owned()
 											));
 										}
 									}
@@ -1190,17 +1188,17 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 										for i in (0..new_len).rev() {
 											if let Some(prev) = old_value.get(old_index - 1) {
 												ops.push(ArrayPatchOperation::AddItemAfter(
-													prev.0.to_owned(),
-													new_value[new_index + i].0.to_owned()
+													prev.value.to_owned(),
+													new_value[new_index + i].value.to_owned()
 												));
 											} else if let Some(next) = old_value.first() {
 												ops.push(ArrayPatchOperation::AddItemBefore(
-													next.0.to_owned(),
-													new_value[new_index + i].0.to_owned()
+													next.value.to_owned(),
+													new_value[new_index + i].value.to_owned()
 												));
 											} else {
 												ops.push(ArrayPatchOperation::AddItem(
-													new_value[new_index + i].0.to_owned()
+													new_value[new_index + i].value.to_owned()
 												));
 											}
 										}
@@ -2507,16 +2505,12 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 		// then factories of sub-entities
 		entity
 			.entities
-			.iter()
-			.collect_vec()
 			.par_iter()
 			.map(|(_, sub_entity)| sub_entity.factory.to_owned())
 			.collect(),
 		// then sub-entity ZRuntimeResourceIDs
 		entity
 			.entities
-			.iter()
-			.collect_vec()
 			.par_iter()
 			.map(|(_, sub_entity)| -> Result<_> {
 				Ok(vec![
@@ -2686,10 +2680,11 @@ pub fn convert_to_qn(
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
 		{
-			let mut unique = blueprint.sub_entities.to_owned();
-			unique.dedup_by_key(|x| x.entity_id);
+			let mut ids = blueprint.sub_entities.iter().map(|x| x.entity_id).collect_vec();
+			ids.sort_unstable();
+			ids.dedup();
 
-			if unique.len() != blueprint.sub_entities.len() {
+			if ids.len() != blueprint.sub_entities.len() {
 				bail!("Cannot convert entity with duplicate IDs");
 			}
 		}
@@ -3257,7 +3252,7 @@ pub fn convert_to_rl(
 			root_entity_index: *entity_id_to_index_mapping
 				.get(&entity.root_entity)
 				.context("Root entity was non-existent")?,
-			sub_entities: vec![],
+			sub_entities: Vec::with_capacity(entity.entities.len()),
 			property_overrides: vec![],
 			external_scene_type_indices_in_resource_header: (1..entity.external_scenes.len() + 1).collect()
 		};
@@ -3332,8 +3327,6 @@ pub fn convert_to_rl(
 					.collect::<Result<_>>()?,
 				entity
 					.entities
-					.iter()
-					.collect_vec()
 					.par_iter()
 					.map(|(entity_id, sub_entity)| {
 						Ok(sub_entity
@@ -3528,8 +3521,6 @@ pub fn convert_to_rl(
 
 		factory.sub_entities = entity
 			.entities
-			.iter()
-			.collect_vec()
 			.par_iter()
 			.map(|(_, sub_entity)| {
 				Ok(resourcelib::FactorySubEntity {
