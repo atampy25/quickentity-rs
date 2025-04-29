@@ -362,7 +362,7 @@ impl SubEntity {
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
 		module.field_function(rune::runtime::Protocol::GET, "properties", |s: &Self| {
-			s.properties.to_owned().into_iter().collect::<HashMap<_, _>>()
+			s.properties.clone().into_iter().collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
@@ -378,7 +378,7 @@ impl SubEntity {
 			"platform_specific_properties",
 			|s: &Self| {
 				s.platform_specific_properties
-					.to_owned()
+					.clone()
 					.into_iter()
 					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
 					.collect::<HashMap<_, _>>()
@@ -395,7 +395,7 @@ impl SubEntity {
 
 		module.field_function(rune::runtime::Protocol::GET, "events", |s: &Self| {
 			s.events
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
 				.collect::<HashMap<_, _>>()
@@ -411,7 +411,7 @@ impl SubEntity {
 
 		module.field_function(rune::runtime::Protocol::GET, "input_copying", |s: &Self| {
 			s.input_copying
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
 				.collect::<HashMap<_, _>>()
@@ -427,7 +427,7 @@ impl SubEntity {
 
 		module.field_function(rune::runtime::Protocol::GET, "output_copying", |s: &Self| {
 			s.output_copying
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
 				.collect::<HashMap<_, _>>()
@@ -443,7 +443,7 @@ impl SubEntity {
 
 		module.field_function(rune::runtime::Protocol::GET, "property_aliases", |s: &Self| {
 			s.property_aliases
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.to_owned()))
 				.collect::<HashMap<_, _>>()
@@ -459,7 +459,7 @@ impl SubEntity {
 
 		module.field_function(rune::runtime::Protocol::GET, "exposed_entities", |s: &Self| {
 			s.exposed_entities
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.to_owned()))
 				.collect::<HashMap<_, _>>()
@@ -475,7 +475,7 @@ impl SubEntity {
 
 		module.field_function(rune::runtime::Protocol::GET, "exposed_interfaces", |s: &Self| {
 			s.exposed_interfaces
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.to_owned()))
 				.collect::<HashMap<_, _>>()
@@ -491,7 +491,7 @@ impl SubEntity {
 
 		module.field_function(rune::runtime::Protocol::GET, "subsets", |s: &Self| {
 			s.subsets
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.to_owned()))
 				.collect::<HashMap<_, _>>()

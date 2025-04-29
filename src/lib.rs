@@ -958,7 +958,6 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 
 #[try_fn]
 #[context("Failure applying array patch")]
-#[cfg_attr(feature = "tracing", tracing::instrument(skip(arr, patch)))]
 pub fn apply_array_patch(
 	arr: &mut Value,
 	patch: Vec<ArrayPatchOperation>,
@@ -1368,7 +1367,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							}
 
 							for i in new_refs_data {
-								if !old_refs_data.contains(&i) {
+								if !old_refs_data.contains(i) {
 									patch.push(PatchOperation::SubEntityOperation(
 										entity_id.to_owned(),
 										SubEntityOperation::AddEventConnection(
@@ -1447,7 +1446,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							}
 
 							for i in new_refs_data {
-								if !old_refs_data.contains(&i) {
+								if !old_refs_data.contains(i) {
 									patch.push(PatchOperation::SubEntityOperation(
 										entity_id.to_owned(),
 										SubEntityOperation::AddInputCopyConnection(
@@ -1526,7 +1525,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 							}
 
 							for i in new_refs_data {
-								if !old_refs_data.contains(&i) {
+								if !old_refs_data.contains(i) {
 									patch.push(PatchOperation::SubEntityOperation(
 										entity_id.to_owned(),
 										SubEntityOperation::AddOutputCopyConnection(
@@ -1578,7 +1577,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 			for (alias_name, new_alias_connections) in &new_entity_data.property_aliases {
 				if let Some(old_alias_connections) = old_entity_data.property_aliases.get(alias_name) {
 					for connection in new_alias_connections {
-						if !old_alias_connections.contains(&connection) {
+						if !old_alias_connections.contains(connection) {
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
 								SubEntityOperation::AddPropertyAliasConnection(
@@ -1674,7 +1673,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 					}
 
 					for i in new_refs_data {
-						if !old_refs_data.contains(&i) {
+						if !old_refs_data.contains(i) {
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
 								SubEntityOperation::AddSubset(subset_name.to_owned(), i.to_owned())
