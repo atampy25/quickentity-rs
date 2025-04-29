@@ -51,11 +51,7 @@ pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 }
 
 // Why is this not in the standard library
-trait TryAllTryAny: Iterator {
-	fn try_any<F>(&mut self, f: F) -> Result<bool>
-	where
-		F: FnMut(Self::Item) -> Result<bool>;
-
+trait TryAllTryPos: Iterator {
 	fn try_all<F>(&mut self, f: F) -> Result<bool>
 	where
 		F: FnMut(Self::Item) -> Result<bool>;
@@ -65,7 +61,7 @@ trait TryAllTryAny: Iterator {
 		F: FnMut(Self::Item) -> Result<bool>;
 }
 
-impl<T: Sized> TryAllTryAny for T
+impl<T: Sized> TryAllTryPos for T
 where
 	T: Iterator
 {
@@ -81,20 +77,6 @@ where
 		}
 
 		Ok(true)
-	}
-
-	#[context("Failure in try_any")]
-	fn try_any<F>(&mut self, mut f: F) -> Result<bool>
-	where
-		F: FnMut(Self::Item) -> Result<bool>
-	{
-		for x in self {
-			if f(x)? {
-				return Ok(true);
-			}
-		}
-
-		Ok(false)
 	}
 
 	#[context("Failure in try_position")]
@@ -122,11 +104,11 @@ impl<T> PermissiveUnwrap for Option<T> {
 	fn permit(&self, permissive: bool, message: &str) -> Result<()> {
 		if self.is_none() {
 			if permissive {
-				log::warn!("QuickEntity warning: {}", message);
+				log::warn!("QuickEntity warning: {message}");
 
 				Ok(())
 			} else {
-				Err(anyhow!("Non-permissive mode error: {}", message))
+				Err(anyhow!("Non-permissive mode error: {message}"))
 			}
 		} else {
 			Ok(())
@@ -260,7 +242,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					let entity = entity
 						.entities
 						.get_mut(&entity_id)
-						.with_context(|| format!("SubEntityOperation couldn't find entity ID: {}!", entity_id))?;
+						.with_context(|| format!("SubEntityOperation couldn't find entity ID: {entity_id}!"))?;
 
 					match op {
 						SubEntityOperation::SetParent(value) => {
@@ -2308,7 +2290,7 @@ fn convert_qn_reference_to_rl(
 			external_scene_index: -1,
 			entity_index: entity_id_to_index_mapping
 				.get(ent)
-				.with_context(|| format!("Short ref referred to a nonexistent entity ID: {}", ent))?
+				.with_context(|| format!("Short ref referred to a nonexistent entity ID: {ent}"))?
 				.to_owned() as i32,
 			exposed_entity: "".to_string()
 		},
@@ -2836,7 +2818,7 @@ fn convert_qn_property_to_rl(
 fn convert_string_property_name_to_rl_id(property_name: &str) -> Result<resourcelib::PropertyID> {
 	if let Ok(i) = property_name.parse::<u64>() {
 		let is_crc_length = {
-			let x = format!("{:x}", i).chars().count();
+			let x = format!("{i:x}").chars().count();
 
 			x == 8 || x == 7
 		};
@@ -2892,8 +2874,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 								.iter()
 								.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
 								.map(|(_, prop)| -> Result<_> {
-									Ok(from_value::<ResourceReference>(prop.value.to_owned())
-										.context("ZRuntimeResourceID must be valid ResourceReference")?)
+									from_value::<ResourceReference>(prop.value.to_owned())
+										.context("ZRuntimeResourceID must be valid ResourceReference")
 								})
 								.collect::<Result<Vec<_>>>()?,
 							props
@@ -2907,8 +2889,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 										.context("TArray<ZRuntimeResourceID> must be array")?
 										.iter()
 										.map(|value| -> Result<_> {
-											Ok(from_value::<ResourceReference>(value.to_owned())
-												.context("ZRuntimeResourceID must be valid ResourceReference")?)
+											from_value::<ResourceReference>(value.to_owned())
+												.context("ZRuntimeResourceID must be valid ResourceReference")
 										})
 										.collect::<Result<Vec<_>>>()
 								})
@@ -2932,8 +2914,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 											prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null()
 										})
 										.map(|(_, prop)| -> Result<_> {
-											Ok(from_value::<ResourceReference>(prop.value.to_owned())
-												.context("ZRuntimeResourceID must be valid ResourceReference")?)
+											from_value::<ResourceReference>(prop.value.to_owned())
+												.context("ZRuntimeResourceID must be valid ResourceReference")
 										})
 										.collect::<Result<Vec<_>>>()?,
 									props
@@ -2947,9 +2929,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 												.context("TArray<ZRuntimeResourceID> must be array")?
 												.iter()
 												.map(|value| -> Result<_> {
-													Ok(from_value::<ResourceReference>(value.to_owned()).context(
-														"ZRuntimeResourceID must be valid ResourceReference"
-													)?)
+													from_value::<ResourceReference>(value.to_owned())
+														.context("ZRuntimeResourceID must be valid ResourceReference")
 												})
 												.collect::<Result<Vec<_>>>()
 										})
@@ -2985,8 +2966,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 						.iter()
 						.filter(|(_, prop)| prop.property_type == "ZRuntimeResourceID" && !prop.value.is_null())
 						.map(|(_, prop)| -> Result<_> {
-							Ok(from_value::<ResourceReference>(prop.value.to_owned())
-								.context("ZRuntimeResourceID must be valid ResourceReference")?)
+							from_value::<ResourceReference>(prop.value.to_owned())
+								.context("ZRuntimeResourceID must be valid ResourceReference")
 						})
 						.collect::<Result<Vec<_>>>()?,
 					properties
@@ -2998,8 +2979,8 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<ResourceReference>> {
 								.context("TArray<ZRuntimeResourceID> must be array")?
 								.iter()
 								.map(|value| -> Result<_> {
-									Ok(from_value::<ResourceReference>(value.to_owned())
-										.context("ZRuntimeResourceID must be valid ResourceReference")?)
+									from_value::<ResourceReference>(value.to_owned())
+										.context("ZRuntimeResourceID must be valid ResourceReference")
 								})
 								.collect::<Result<Vec<_>>>()
 						})
@@ -4102,12 +4083,11 @@ pub fn convert_to_rl(
 											entity_id: match &alias.original_entity {
 												Ref::Short(r) => match r {
 													Some(r) => entity_id_to_index_mapping
-														.get(&r)
+														.get(r)
 														.with_context(|| {
 															format!(
 																"Property alias short ref referred to nonexistent \
-																 entity ID: {}",
-																r
+																 entity ID: {r}"
 															)
 														})?
 														.to_owned(),
@@ -4178,7 +4158,7 @@ pub fn convert_to_rl(
 								Ok((
 									interface.to_owned(),
 									entity_id_to_index_mapping
-										.get(&implementor)
+										.get(implementor)
 										.context("Exposed interface referenced nonexistent local entity")?
 										.to_owned()
 								))
@@ -4200,7 +4180,7 @@ pub fn convert_to_rl(
 							.sub_entities
 							.get_mut(
 								*entity_id_to_index_mapping
-									.get(&ent)
+									.get(ent)
 									.context("Entity subset referenced nonexistent local entity")?
 							)
 							.ctx?
@@ -4332,7 +4312,7 @@ fn pin_connections_for_event(
 					Ok(resourcelib::PinConnection {
 						from_id: *entity_id_to_index_mapping.get(&entity_id).ctx?,
 						to_id: *entity_id_to_index_mapping
-							.get(&match &trigger_entity {
+							.get(match &trigger_entity {
 								RefMaybeConstantValue::Ref(Ref::Short(Some(id))) => id,
 
 								RefMaybeConstantValue::RefWithConstantValue(RefWithConstantValue {
