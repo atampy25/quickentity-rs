@@ -139,7 +139,7 @@ impl Type for EntityId {
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 // #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Entity {
@@ -361,9 +361,7 @@ impl SubEntity {
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
 		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
-			s.properties
-				.to_owned()
-				.map(|x| x.into_iter().collect::<HashMap<_, _>>())
+			s.properties.to_owned().into_iter().collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
@@ -395,11 +393,11 @@ impl SubEntity {
 		)?;
 
 		module.field_function(&rune::runtime::Protocol::GET, "events", |s: &Self| {
-			s.events.to_owned().map(|x| {
-				x.into_iter()
-					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
-					.collect::<HashMap<_, _>>()
-			})
+			s.events
+				.to_owned()
+				.into_iter()
+				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
@@ -411,11 +409,11 @@ impl SubEntity {
 		)?;
 
 		module.field_function(&rune::runtime::Protocol::GET, "input_copying", |s: &Self| {
-			s.input_copying.to_owned().map(|x| {
-				x.into_iter()
-					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
-					.collect::<HashMap<_, _>>()
-			})
+			s.input_copying
+				.to_owned()
+				.into_iter()
+				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
@@ -427,11 +425,11 @@ impl SubEntity {
 		)?;
 
 		module.field_function(&rune::runtime::Protocol::GET, "output_copying", |s: &Self| {
-			s.output_copying.to_owned().map(|x| {
-				x.into_iter()
-					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
-					.collect::<HashMap<_, _>>()
-			})
+			s.output_copying
+				.to_owned()
+				.into_iter()
+				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
