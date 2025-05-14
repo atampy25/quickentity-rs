@@ -34,8 +34,7 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
-#[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 pub enum SubType {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Brick,
@@ -49,7 +48,7 @@ pub enum SubType {
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 // #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Entity {
@@ -138,7 +137,7 @@ pub struct Entity {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct CommentEntity {
@@ -154,7 +153,7 @@ pub struct CommentEntity {
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_new))]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
@@ -259,14 +258,14 @@ impl SubEntity {
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(rune::runtime::Protocol::GET, "properties", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
 			s.properties
 				.to_owned()
 				.map(|x| x.into_iter().collect::<HashMap<_, _>>())
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"properties",
 			|s: &mut Self, value: Option<HashMap<String, Property>>| {
 				s.properties = value.map(|x| x.into_iter().collect());
@@ -274,7 +273,7 @@ impl SubEntity {
 		)?;
 
 		module.field_function(
-			rune::runtime::Protocol::GET,
+			&rune::runtime::Protocol::GET,
 			"platform_specific_properties",
 			|s: &Self| {
 				s.platform_specific_properties.to_owned().map(|x| {
@@ -286,7 +285,7 @@ impl SubEntity {
 		)?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"platform_specific_properties",
 			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Property>>>| {
 				s.platform_specific_properties =
@@ -294,7 +293,7 @@ impl SubEntity {
 			}
 		)?;
 
-		module.field_function(rune::runtime::Protocol::GET, "events", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "events", |s: &Self| {
 			s.events.to_owned().map(|x| {
 				x.into_iter()
 					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
@@ -303,14 +302,14 @@ impl SubEntity {
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"events",
 			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>| {
 				s.events = value.map(|x| x.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect());
 			}
 		)?;
 
-		module.field_function(rune::runtime::Protocol::GET, "input_copying", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "input_copying", |s: &Self| {
 			s.input_copying.to_owned().map(|x| {
 				x.into_iter()
 					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
@@ -319,14 +318,14 @@ impl SubEntity {
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"input_copying",
 			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>| {
 				s.input_copying = value.map(|x| x.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect());
 			}
 		)?;
 
-		module.field_function(rune::runtime::Protocol::GET, "output_copying", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "output_copying", |s: &Self| {
 			s.output_copying.to_owned().map(|x| {
 				x.into_iter()
 					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
@@ -335,63 +334,63 @@ impl SubEntity {
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"output_copying",
 			|s: &mut Self, value: Option<HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>>| {
 				s.output_copying = value.map(|x| x.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect());
 			}
 		)?;
 
-		module.field_function(rune::runtime::Protocol::GET, "property_aliases", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "property_aliases", |s: &Self| {
 			s.property_aliases
 				.to_owned()
 				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"property_aliases",
 			|s: &mut Self, value: Option<HashMap<String, Vec<PropertyAlias>>>| {
 				s.property_aliases = value.map(|x| x.into_iter().collect());
 			}
 		)?;
 
-		module.field_function(rune::runtime::Protocol::GET, "exposed_entities", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "exposed_entities", |s: &Self| {
 			s.exposed_entities
 				.to_owned()
 				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"exposed_entities",
 			|s: &mut Self, value: Option<HashMap<String, ExposedEntity>>| {
 				s.exposed_entities = value.map(|x| x.into_iter().collect());
 			}
 		)?;
 
-		module.field_function(rune::runtime::Protocol::GET, "exposed_interfaces", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "exposed_interfaces", |s: &Self| {
 			s.exposed_interfaces
 				.to_owned()
 				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"exposed_interfaces",
 			|s: &mut Self, value: Option<HashMap<String, String>>| {
 				s.exposed_interfaces = value.map(|x| x.into_iter().collect());
 			}
 		)?;
 
-		module.field_function(rune::runtime::Protocol::GET, "subsets", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "subsets", |s: &Self| {
 			s.subsets
 				.to_owned()
 				.map(|x| x.into_iter().map(|(x, y)| (x, y.to_owned())).collect::<HashMap<_, _>>())
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"subsets",
 			|s: &mut Self, value: Option<HashMap<String, Vec<String>>>| {
 				s.subsets = value.map(|x| x.into_iter().collect());
@@ -406,8 +405,7 @@ impl SubEntity {
 #[serde(untagged)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
-#[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 pub enum RefMaybeConstantValue {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	RefWithConstantValue(#[cfg_attr(feature = "rune", rune(get, set))] RefWithConstantValue),
@@ -420,7 +418,7 @@ pub enum RefMaybeConstantValue {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct RefWithConstantValue {
@@ -436,7 +434,7 @@ pub struct RefWithConstantValue {
 /// A property with a type and a value. Can be marked as post-init.
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
@@ -467,12 +465,12 @@ impl Property {
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(rune::runtime::Protocol::GET, "value", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "value", |s: &Self| {
 			serde_json::from_value::<rune::Value>(s.value.clone()).ok()
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"value",
 			|s: &mut Self, value: rune::Value| {
 				s.value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
@@ -488,7 +486,7 @@ impl Property {
 /// Simple properties cannot be marked as post-init. They are used by pin connection overrides, events and input/output copying.
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct SimpleProperty {
@@ -512,12 +510,12 @@ impl SimpleProperty {
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(rune::runtime::Protocol::GET, "value", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "value", |s: &Self| {
 			serde_json::from_value::<rune::Value>(s.value.clone()).ok()
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"value",
 			|s: &mut Self, value: rune::Value| {
 				s.value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
@@ -534,7 +532,7 @@ impl SimpleProperty {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct ExposedEntity {
@@ -553,7 +551,7 @@ pub struct ExposedEntity {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct PropertyAlias {
@@ -569,7 +567,7 @@ pub struct PropertyAlias {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
@@ -601,7 +599,7 @@ pub struct PinConnectionOverride {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
@@ -632,7 +630,7 @@ pub struct PinConnectionOverrideDelete {
 /// A set of overrides for entity properties.
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct PropertyOverride {
@@ -656,12 +654,12 @@ impl PropertyOverride {
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(rune::runtime::Protocol::GET, "properties", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
 			Some(s.properties.clone().into_iter().collect::<HashMap<_, _>>())
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"properties",
 			|s: &mut Self, value: HashMap<String, OverriddenProperty>| {
 				s.properties = value.into_iter().collect();
@@ -674,7 +672,7 @@ impl PropertyOverride {
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct OverriddenProperty {
@@ -698,12 +696,12 @@ impl OverriddenProperty {
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(rune::runtime::Protocol::GET, "value", |s: &Self| {
+		module.field_function(&rune::runtime::Protocol::GET, "value", |s: &Self| {
 			serde_json::from_value::<rune::Value>(s.value.clone()).ok()
 		})?;
 
 		module.field_function(
-			rune::runtime::Protocol::SET,
+			&rune::runtime::Protocol::SET,
 			"value",
 			|s: &mut Self, value: rune::Value| {
 				s.value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
@@ -718,7 +716,7 @@ impl OverriddenProperty {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct FullRef {
@@ -741,8 +739,7 @@ pub struct FullRef {
 #[serde(untagged)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
-#[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 pub enum Ref {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Full(#[cfg_attr(feature = "rune", rune(get, set))] FullRef),
@@ -757,8 +754,7 @@ pub enum Ref {
 #[serde(untagged)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
-#[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 pub enum Dependency {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Full(#[cfg_attr(feature = "rune", rune(get, set))] DependencyWithFlag),
@@ -772,7 +768,7 @@ pub enum Dependency {
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(STRING_DEBUG))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
 pub struct DependencyWithFlag {

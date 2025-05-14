@@ -30,7 +30,7 @@ hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features 
     "specta",
 ] }
 tracing = { version = "0.1.40", optional = true }
-rune = { version = "0.13.4", optional = true }
+rune = { git = "https://github.com/rune-rs/rune", rev = "a8c4f97", optional = true }
 better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", optional = true }
 
 [features]
