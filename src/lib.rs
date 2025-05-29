@@ -34,6 +34,8 @@ use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceI
 pub const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 pub const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
 
+// TODO: Array patches for property override properties? Simple properties in general?
+
 #[cfg(feature = "rune")]
 pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 	ctx.install(qn_structs::rune_module()?)?;
