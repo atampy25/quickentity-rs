@@ -1,4 +1,5 @@
 use std::{
+	collections::HashMap,
 	fmt::{Debug, Display, Formatter},
 	num::ParseIntError,
 	str::FromStr
