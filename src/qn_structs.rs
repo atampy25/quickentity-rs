@@ -28,7 +28,6 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 	module.ty::<PinConnectionOverride>()?;
 	module.ty::<PinConnectionOverrideDelete>()?;
 	module.ty::<PropertyOverride>()?;
-	module.ty::<OverriddenProperty>()?;
 	module.ty::<FullRef>()?;
 	module.ty::<Ref>()?;
 
