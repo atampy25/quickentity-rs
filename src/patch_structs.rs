@@ -4,8 +4,8 @@ use serde_json::Value;
 use specta::Type;
 
 use crate::qn_structs::{
-	CommentEntity, EntityId, ExposedEntity, OverriddenProperty, PinConnectionOverride, PinConnectionOverrideDelete,
-	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SubEntity, SubType
+	CommentEntity, EntityId, ExposedEntity, PinConnectionOverride, PinConnectionOverrideDelete, Property,
+	PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, SimpleProperty, SubEntity, SubType
 };
 
 #[cfg(feature = "rune")]
@@ -447,5 +447,5 @@ pub struct PropertyOverrideConnection {
 
 	/// The overridden property.
 	#[serde(rename = "propertyOverride")]
-	pub property_override: OverriddenProperty
+	pub property_override: SimpleProperty
 }

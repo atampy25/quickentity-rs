@@ -25,11 +25,14 @@ use patch_structs::{
 	SetPropertyValue, SubEntityOperation
 };
 use qn_structs::{
-	Entity, EntityId, ExposedEntity, FullRef, OverriddenProperty, PinConnectionOverride, PinConnectionOverrideDelete,
-	Property, PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, RefWithConstantValue, SimpleProperty,
-	SubEntity, SubType
+	Entity, EntityId, ExposedEntity, FullRef, PinConnectionOverride, PinConnectionOverrideDelete, Property,
+	PropertyAlias, PropertyOverride, Ref, RefMaybeConstantValue, RefWithConstantValue, SimpleProperty, SubEntity,
+	SubType
 };
 use util_structs::{SMatrix43PropertyValue, ZGuidPropertyValue, ZRuntimeResourceIDPropertyValue};
+
+pub const PATCH_VERSION: u8 = 7;
+pub const QN_VERSION: f32 = 3.2;
 
 pub const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
 pub const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
@@ -177,7 +180,7 @@ impl Ord for DiffableValue {
 #[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
-fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenProperty) -> Result<bool> {
+fn property_is_roughly_identical(p1: &SimpleProperty, p2: &SimpleProperty) -> Result<bool> {
 	p1.property_type == p2.property_type && {
 		if p1.property_type == "SMatrix43" {
 			let p1 = p1.value.as_object().ctx?;
@@ -213,6 +216,14 @@ fn property_is_roughly_identical(p1: &OverriddenProperty, p2: &OverriddenPropert
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 #[cfg_attr(feature = "rune", rune::function(keep))]
 pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Result<()> {
+	if patch.patch_version != PATCH_VERSION {
+		bail!(
+			"Invalid patch version; expected {}, got {}",
+			PATCH_VERSION,
+			patch.patch_version
+		);
+	}
+
 	let patch: Vec<PatchOperation> = patch.patch;
 
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
@@ -1857,7 +1868,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 		factory: modified.factory.to_owned(),
 		blueprint: modified.blueprint.to_owned(),
 		patch,
-		patch_version: 7
+		patch_version: PATCH_VERSION
 	}
 }
 
@@ -3189,10 +3200,10 @@ pub fn convert_to_qn(
 						convert_lossless
 					)?;
 
-					OverriddenProperty {
+					SimpleProperty {
 						value: prop.value,
 						property_type: prop.property_type
-					} // no post-init
+					}
 				}
 			)]
 			.into_iter()
@@ -3239,6 +3250,14 @@ pub fn convert_to_rl(
 	resourcelib::EntityBlueprint,
 	ResourceMetadata
 )> {
+	if entity.quick_entity_version != QN_VERSION {
+		bail!(
+			"Invalid QuickEntity version; expected {}, got {}",
+			QN_VERSION,
+			entity.quick_entity_version
+		);
+	}
+
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
 		let entity_id_to_index_mapping: HashMap<EntityId, usize> =

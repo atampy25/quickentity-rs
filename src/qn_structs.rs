@@ -1,5 +1,4 @@
 use std::{
-	collections::HashMap,
 	fmt::{Debug, Display, Formatter},
 	num::ParseIntError,
 	str::FromStr
@@ -140,7 +139,6 @@ impl Type for EntityId {
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ))]
-// #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
@@ -202,7 +200,7 @@ pub struct Entity {
 	/// The QuickEntity format version of this entity. The current version is 3.2.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "quickEntityVersion")]
-	pub quick_entity_version: f64,
+	pub quick_entity_version: f32,
 
 	/// Extra resource references that should be added to the entity's factory when converted to the game's format.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -215,16 +213,12 @@ pub struct Entity {
 	pub extra_blueprint_references: Vec<ResourceReference>,
 
 	/// Comments to be attached to sub-entities.
-	///
-	/// Will be displayed in QuickEntity Editor as tree items with a sticky note icon.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "comments")]
 	pub comments: Vec<CommentEntity>
 }
 
 /// A comment entity.
-///
-/// Will be displayed in QuickEntity Editor as a tree item with a sticky note icon.
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
@@ -750,12 +744,12 @@ pub struct PropertyOverride {
 
 	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
-	pub properties: IndexMap<String, OverriddenProperty>
+	pub properties: IndexMap<String, SimpleProperty>
 }
 
 #[cfg(feature = "rune")]
 impl PropertyOverride {
-	fn rune_construct(entities: Vec<Ref>, properties: HashMap<String, OverriddenProperty>) -> Self {
+	fn rune_construct(entities: Vec<Ref>, properties: HashMap<String, SimpleProperty>) -> Self {
 		Self {
 			entities,
 			properties: properties.into_iter().collect()
@@ -770,50 +764,8 @@ impl PropertyOverride {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"properties",
-			|s: &mut Self, value: HashMap<String, OverriddenProperty>| {
+			|s: &mut Self, value: HashMap<String, SimpleProperty>| {
 				s.properties = value.into_iter().collect();
-			}
-		)?;
-
-		Ok(())
-	}
-}
-
-#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
-#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ))]
-#[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
-pub struct OverriddenProperty {
-	/// The type of the property.
-	#[cfg_attr(feature = "rune", rune(get, set))]
-	#[serde(rename = "type")]
-	pub property_type: String,
-
-	/// The value of the property.
-	#[serde(rename = "value")]
-	pub value: serde_json::Value
-}
-
-#[cfg(feature = "rune")]
-impl OverriddenProperty {
-	fn rune_construct(property_type: String, value: rune::Value) -> Self {
-		Self {
-			property_type,
-			value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
-		}
-	}
-
-	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(&rune::runtime::Protocol::GET, "value", |s: &Self| {
-			serde_json::from_value::<rune::Value>(s.value.clone()).ok()
-		})?;
-
-		module.field_function(
-			&rune::runtime::Protocol::SET,
-			"value",
-			|s: &mut Self, value: rune::Value| {
-				s.value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
 			}
 		)?;
 
