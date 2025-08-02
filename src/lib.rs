@@ -4,7 +4,7 @@ pub mod patch_structs;
 pub mod qn_structs;
 pub mod util_structs;
 
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use auto_context::auto_context;
 use core::hash::Hash;
 use fn_error_context::context;
@@ -15,8 +15,8 @@ use hitman_commons::{
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rayon::prelude::*;
-use serde_json::{from_value, json, to_string, to_value, Value};
-use similar::{capture_diff_slices, Algorithm, DiffOp};
+use serde_json::{Value, from_value, json, to_string, to_value};
+use similar::{Algorithm, DiffOp, capture_diff_slices};
 use std::{collections::HashMap, str::FromStr};
 use tryvial::try_fn;
 
@@ -177,35 +177,63 @@ impl Ord for DiffableValue {
 	}
 }
 
+// TODO: Use for array patches and pin connections
 #[try_fn]
 #[context("Failure checking property is roughly identical")]
 #[auto_context]
 fn property_is_roughly_identical(p1: &SimpleProperty, p2: &SimpleProperty) -> Result<bool> {
 	p1.property_type == p2.property_type && {
-		if p1.property_type == "SMatrix43" {
-			let p1 = p1.value.as_object().ctx?;
-			let p2 = p2.value.as_object().ctx?;
+		if p1.value.is_array() {
+			let mut single_ty = p1.property_type.chars();
+			single_ty.nth(6); // discard TArray<
+			single_ty.next_back(); // discard closing >
+			let single_ty = single_ty.collect::<String>();
 
-			// scale X, Y and Z have the same values (to 2 decimal places) or if either scale doesn't exist assume they're the same
-			let scales_roughly_identical = if p1.get("scale").is_some() && p2.get("scale").is_some() {
-				let p1_scale = &p1["scale"];
-				let p2_scale = &p2["scale"];
+			let p1_arr = p1.value.as_array().ctx?;
+			let p2_arr = p2.value.as_array().ctx?;
 
-				format!("{:.2}", p1_scale.get("x").ctx?.as_f64().ctx?)
-					== format!("{:.2}", p2_scale.get("x").ctx?.as_f64().ctx?)
-					&& format!("{:.2}", p1_scale.get("y").ctx?.as_f64().ctx?)
-						== format!("{:.2}", p2_scale.get("y").ctx?.as_f64().ctx?)
-					&& format!("{:.2}", p1_scale.get("z").ctx?.as_f64().ctx?)
-						== format!("{:.2}", p2_scale.get("z").ctx?.as_f64().ctx?)
-			} else {
-				true
-			};
-
-			p1.get("rotation").ctx? == p2.get("rotation").ctx?
-				&& p1.get("position").ctx? == p2.get("position").ctx?
-				&& scales_roughly_identical
+			p1_arr.len() == p2_arr.len()
+				&& p1_arr.iter().zip(p2_arr).try_all(|(x, y)| {
+					property_is_roughly_identical(
+						// mock a single value for each array element
+						&SimpleProperty {
+							property_type: single_ty.to_owned(),
+							value: x.to_owned()
+						},
+						&SimpleProperty {
+							property_type: single_ty.to_owned(),
+							value: y.to_owned()
+						}
+					)
+				})?
 		} else {
-			p1.value == p2.value
+			if p1.property_type == "SMatrix43" {
+				let p1 = p1.value.as_object().ctx?;
+				let p2 = p2.value.as_object().ctx?;
+
+				// scale X, Y and Z have the same values (to 2 decimal places) or if either scale doesn't exist assume they're the same
+				let scales_roughly_identical = if p1.get("scale").is_some() && p2.get("scale").is_some() {
+					let p1_scale = &p1["scale"];
+					let p2_scale = &p2["scale"];
+
+					format!("{:.2}", p1_scale.get("x").ctx?.as_f64().ctx?)
+						== format!("{:.2}", p2_scale.get("x").ctx?.as_f64().ctx?)
+						&& format!("{:.2}", p1_scale.get("y").ctx?.as_f64().ctx?)
+							== format!("{:.2}", p2_scale.get("y").ctx?.as_f64().ctx?)
+						&& format!("{:.2}", p1_scale.get("z").ctx?.as_f64().ctx?)
+							== format!("{:.2}", p2_scale.get("z").ctx?.as_f64().ctx?)
+				} else {
+					true
+				};
+
+				p1.get("rotation").ctx? == p2.get("rotation").ctx?
+					&& p1.get("position").ctx? == p2.get("position").ctx?
+					&& scales_roughly_identical
+			} else if p1.property_type == "SEntityTemplateReference" {
+				from_value::<Ref>(p1.value.to_owned())? == from_value::<Ref>(p2.value.to_owned())?
+			} else {
+				p1.value == p2.value
+			}
 		}
 	}
 }
@@ -805,7 +833,24 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 					};
 
-					unravelled_overrides.retain(|x| *x != search);
+					let mut retain_result = Ok(());
+					unravelled_overrides.retain(|x| {
+						x.entities != search.entities
+							|| !x.properties.contains_key(&value.property_name)
+							|| !{
+								match property_is_roughly_identical(
+									&x.properties[&value.property_name],
+									&value.property_override
+								) {
+									Ok(x) => x,
+									Err(e) => {
+										retain_result = Err(e);
+										false
+									}
+								}
+							}
+					});
+					retain_result?;
 
 					let mut merged_overrides: Vec<PropertyOverride> = vec![];
 
