@@ -4,7 +4,7 @@ pub mod patch_structs;
 pub mod qn_structs;
 pub mod util_structs;
 
-use anyhow::{Context, Error, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use auto_context::auto_context;
 use core::hash::Hash;
 use fn_error_context::context;
@@ -12,11 +12,11 @@ use hitman_commons::{
 	metadata::{PathedID, ResourceMetadata, ResourceReference},
 	resourcelib
 };
-use indexmap::IndexMap;
 use itertools::Itertools;
+use ordermap::OrderMap;
 use rayon::prelude::*;
-use serde_json::{Value, from_value, json, to_string, to_value};
-use similar::{Algorithm, DiffOp, capture_diff_slices};
+use serde_json::{from_value, json, to_string, to_value, Value};
+use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::{collections::HashMap, str::FromStr};
 use tryvial::try_fn;
 
@@ -267,14 +267,14 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				}
 
 				PatchOperation::RemoveEntityByID(value) => {
-					entity.entities.shift_remove(&value).permit(
+					entity.entities.remove(&value).permit(
 						permissive,
 						"Couldn't remove entity by ID because entity did not exist in target!"
 					)?;
 				}
 
 				PatchOperation::AddEntity(id, data) => {
-					entity.entities.insert(id, data);
+					entity.entities.insert(id, *data);
 				}
 
 				PatchOperation::SubEntityOperation(entity_id, op) => {
@@ -311,7 +311,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemovePropertyByName(name) => {
 							entity
 								.properties
-								.shift_remove(&name)
+								.remove(&name)
 								.permit(permissive, "RemovePropertyByName couldn't find expected property!")?;
 						}
 
@@ -362,7 +362,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
-							entity.platform_specific_properties.shift_remove(&name).permit(
+							entity.platform_specific_properties.remove(&name).permit(
 								permissive,
 								"RemovePSPropertiesForPlatform couldn't find platform to remove!"
 							)?;
@@ -373,11 +373,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.platform_specific_properties
 								.get_mut(&platform)
 								.context("RemovePSPropertyByName couldn't find platform!")?
-								.shift_remove(&name)
+								.remove(&name)
 								.permit(permissive, "RemovePSPropertyByName couldn't find property to remove!")?;
 
 							if entity.platform_specific_properties.get(&platform).ctx?.is_empty() {
-								entity.platform_specific_properties.shift_remove(&platform);
+								entity.platform_specific_properties.remove(&platform);
 							}
 						}
 
@@ -438,7 +438,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveAllEventConnectionsForEvent(event) => {
 							entity
 								.events
-								.shift_remove(&event)
+								.remove(&event)
 								.context("RemoveAllEventConnectionsForEvent couldn't find event!")?;
 						}
 
@@ -447,11 +447,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.events
 								.get_mut(&event)
 								.context("RemoveAllEventConnectionsForTrigger couldn't find event!")?
-								.shift_remove(&trigger)
+								.remove(&trigger)
 								.context("RemoveAllEventConnectionsForTrigger couldn't find trigger!")?;
 
 							if entity.events.get(&event).ctx?.is_empty() {
-								entity.events.shift_remove(&event);
+								entity.events.remove(&event);
 							}
 						}
 
@@ -469,11 +469,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 							entity.events.get_mut(&event).ctx?.get_mut(&trigger).ctx?.remove(ind);
 
 							if entity.events.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
-								entity.events.get_mut(&event).ctx?.shift_remove(&trigger);
+								entity.events.get_mut(&event).ctx?.remove(&trigger);
 							}
 
 							if entity.events.get(&event).ctx?.is_empty() {
-								entity.events.shift_remove(&event);
+								entity.events.remove(&event);
 							}
 						}
 
@@ -502,7 +502,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveAllInputCopyConnectionsForInput(event) => {
 							entity
 								.input_copying
-								.shift_remove(&event)
+								.remove(&event)
 								.context("RemoveAllInputCopyConnectionsForInput couldn't find input!")?;
 						}
 
@@ -511,11 +511,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.input_copying
 								.get_mut(&event)
 								.context("RemoveAllInputCopyConnectionsForTrigger couldn't find input!")?
-								.shift_remove(&trigger)
+								.remove(&trigger)
 								.context("RemoveAllInputCopyConnectionsForTrigger couldn't find trigger!")?;
 
 							if entity.input_copying.get(&event).ctx?.is_empty() {
-								entity.input_copying.shift_remove(&event);
+								entity.input_copying.remove(&event);
 							}
 						}
 
@@ -539,11 +539,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.remove(ind);
 
 							if entity.input_copying.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
-								entity.input_copying.get_mut(&event).ctx?.shift_remove(&trigger);
+								entity.input_copying.get_mut(&event).ctx?.remove(&trigger);
 							}
 
 							if entity.input_copying.get(&event).ctx?.is_empty() {
-								entity.input_copying.shift_remove(&event);
+								entity.input_copying.remove(&event);
 							}
 						}
 
@@ -572,7 +572,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(event) => {
 							entity
 								.output_copying
-								.shift_remove(&event)
+								.remove(&event)
 								.context("RemoveAllOutputCopyConnectionsForOutput couldn't find event!")?;
 						}
 
@@ -581,11 +581,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.output_copying
 								.get_mut(&event)
 								.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find event!")?
-								.shift_remove(&trigger)
+								.remove(&trigger)
 								.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find propagate!")?;
 
 							if entity.output_copying.get(&event).ctx?.is_empty() {
-								entity.output_copying.shift_remove(&event);
+								entity.output_copying.remove(&event);
 							}
 						}
 
@@ -609,11 +609,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								.remove(ind);
 
 							if entity.output_copying.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
-								entity.output_copying.get_mut(&event).ctx?.shift_remove(&trigger);
+								entity.output_copying.get_mut(&event).ctx?.remove(&trigger);
 							}
 
 							if entity.output_copying.get(&event).ctx?.is_empty() {
-								entity.output_copying.shift_remove(&event);
+								entity.output_copying.remove(&event);
 							}
 						}
 
@@ -646,7 +646,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemovePropertyAlias(alias) => {
 							entity
 								.property_aliases
-								.shift_remove(&alias)
+								.remove(&alias)
 								.context("RemovePropertyAlias couldn't find alias!")?;
 						}
 
@@ -662,7 +662,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 							entity.property_aliases.get_mut(&alias).ctx?.remove(connection);
 
 							if entity.property_aliases.get(&alias).ctx?.is_empty() {
-								entity.property_aliases.shift_remove(&alias);
+								entity.property_aliases.remove(&alias);
 							}
 						}
 
@@ -673,7 +673,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveExposedEntity(name) => {
 							entity
 								.exposed_entities
-								.shift_remove(&name)
+								.remove(&name)
 								.context("RemoveExposedEntity couldn't find exposed entity to remove!")?;
 						}
 
@@ -684,7 +684,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveExposedInterface(name) => {
 							entity
 								.exposed_interfaces
-								.shift_remove(&name)
+								.remove(&name)
 								.context("RemoveExposedInterface couldn't find exposed entity to remove!")?;
 						}
 
@@ -707,7 +707,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						SubEntityOperation::RemoveAllSubsetsFor(name) => {
 							entity
 								.subsets
-								.shift_remove(&name)
+								.remove(&name)
 								.context("RemoveAllSubsetsFor couldn't find subset to remove!")?;
 						}
 					}
@@ -738,7 +738,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								unravelled_overrides.push(PropertyOverride {
 									entities: vec![ent.to_owned()],
 									properties: {
-										let mut x = IndexMap::new();
+										let mut x = OrderMap::new();
 										x.insert(prop_name.to_owned(), prop_override.to_owned());
 										x
 									}
@@ -750,7 +750,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					unravelled_overrides.push(PropertyOverride {
 						entities: vec![value.entity],
 						properties: {
-							let mut x = IndexMap::new();
+							let mut x = OrderMap::new();
 							x.insert(value.property_name.to_owned(), value.property_override.to_owned());
 							x
 						}
@@ -815,7 +815,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 								unravelled_overrides.push(PropertyOverride {
 									entities: vec![ent.to_owned()],
 									properties: {
-										let mut x = IndexMap::new();
+										let mut x = OrderMap::new();
 										x.insert(prop_name.to_owned(), prop_override.to_owned());
 										x
 									}
@@ -827,7 +827,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 					let search = PropertyOverride {
 						entities: vec![value.entity.to_owned()],
 						properties: {
-							let mut x = IndexMap::new();
+							let mut x = OrderMap::new();
 							x.insert(value.property_name.to_owned(), value.property_override.to_owned());
 							x
 						}
@@ -1748,7 +1748,7 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 		} else {
 			patch.push(PatchOperation::AddEntity(
 				entity_id.to_owned(),
-				new_entity_data.to_owned()
+				new_entity_data.to_owned().into()
 			));
 		}
 	}
@@ -2827,7 +2827,7 @@ pub fn convert_to_qn(
 									}
 								))
 								.collect::<Result<_>>()?,
-							// Group props by platform, then convert them all and turn into a nested IndexMap structure
+							// Group props by platform, then convert them all and turn into a nested OrderMap structure
 							platform_specific_properties: sub_entity_factory
 								.platform_specific_property_values
 								.iter()
@@ -2931,7 +2931,7 @@ pub fn convert_to_qn(
 						}
 					))
 				})
-				.collect::<Result<IndexMap<EntityId, SubEntity>>>()?,
+				.collect::<Result<OrderMap<EntityId, SubEntity>>>()?,
 			external_scenes: factory
 				.external_scene_type_indices_in_resource_header
 				.par_iter()
@@ -2988,7 +2988,7 @@ pub fn convert_to_qn(
 				0 => SubType::Template,
 				_ => bail!("Invalid subtype {}", blueprint.sub_type)
 			},
-			quick_entity_version: 3.2,
+			quick_entity_version: 3.2.into(),
 			extra_factory_references: vec![],
 			extra_blueprint_references: vec![],
 			comments: vec![]
@@ -3295,11 +3295,11 @@ pub fn convert_to_rl(
 	resourcelib::EntityBlueprint,
 	ResourceMetadata
 )> {
-	if entity.quick_entity_version != QN_VERSION {
+	if *entity.quick_entity_version != QN_VERSION {
 		bail!(
 			"Invalid QuickEntity version; expected {}, got {}",
 			QN_VERSION,
-			entity.quick_entity_version
+			*entity.quick_entity_version
 		);
 	}
 
@@ -3853,7 +3853,7 @@ fn pin_connections_for_event(
 	entity_id_to_index_mapping: &HashMap<EntityId, usize>,
 	entity_id: EntityId,
 	event: &str,
-	triggers: &IndexMap<String, Vec<RefMaybeConstantValue>>
+	triggers: &OrderMap<String, Vec<RefMaybeConstantValue>>
 ) -> Result<Vec<resourcelib::PinConnection>> {
 	triggers
 		.iter()

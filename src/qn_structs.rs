@@ -1,12 +1,13 @@
 use std::{
-	collections::HashMap,
 	fmt::{Debug, Display, Formatter},
+	hash::Hash,
 	num::ParseIntError,
+	ops::Deref,
 	str::FromStr
 };
 
 use hitman_commons::metadata::{PathedID, ResourceReference};
-use indexmap::IndexMap;
+use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -34,7 +35,7 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 	Ok(module)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
@@ -136,10 +137,34 @@ impl Type for EntityId {
 	}
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(transparent)]
+pub struct HashFloat(f32);
+
+impl Hash for HashFloat {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.0.to_bits().hash(state);
+	}
+}
+
+impl Deref for HashFloat {
+	type Target = f32;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl From<f32> for HashFloat {
+	fn from(value: f32) -> Self {
+		Self(value)
+	}
+}
+
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -158,7 +183,7 @@ pub struct Entity {
 
 	/// The sub-entities of this entity.
 	#[serde(rename = "entities")]
-	pub entities: IndexMap<EntityId, SubEntity>,
+	pub entities: OrderMap<EntityId, SubEntity>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
 	///
@@ -200,7 +225,7 @@ pub struct Entity {
 	/// The QuickEntity format version of this entity. The current version is 3.2.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "quickEntityVersion")]
-	pub quick_entity_version: f32,
+	pub quick_entity_version: HashFloat,
 
 	/// Extra resource references that should be added to the entity's factory when converted to the game's format.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -224,7 +249,7 @@ pub struct Entity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct CommentEntity {
 	/// The sub-entity this comment is parented to.
 	pub parent: Ref,
@@ -241,7 +266,7 @@ pub struct CommentEntity {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_new))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubEntity {
 	/// The "logical" or "organisational" parent of the entity, used for tree organisation in graphical editors.
 	///
@@ -278,56 +303,56 @@ pub struct SubEntity {
 	/// Properties of the entity.
 	#[serde(rename = "properties")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub properties: IndexMap<String, Property>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub properties: OrderMap<String, Property>,
 
 	/// Properties to apply conditionally to the entity based on platform.
 	#[serde(rename = "platformSpecificProperties")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub platform_specific_properties: IndexMap<String, IndexMap<String, Property>>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub platform_specific_properties: OrderMap<String, OrderMap<String, Property>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub events: IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub events: OrderMap<String, OrderMap<String, Vec<RefMaybeConstantValue>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub input_copying: IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub input_copying: OrderMap<String, OrderMap<String, Vec<RefMaybeConstantValue>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub output_copying: IndexMap<String, IndexMap<String, Vec<RefMaybeConstantValue>>>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub output_copying: OrderMap<String, OrderMap<String, Vec<RefMaybeConstantValue>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub property_aliases: IndexMap<String, Vec<PropertyAlias>>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub property_aliases: OrderMap<String, Vec<PropertyAlias>>,
 
 	/// Entities that can be accessed from this entity.
 	#[serde(rename = "exposedEntities")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub exposed_entities: IndexMap<String, ExposedEntity>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub exposed_entities: OrderMap<String, ExposedEntity>,
 
 	/// Interfaces implemented by other entities that can be accessed from this entity.
 	#[serde(rename = "exposedInterfaces")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub exposed_interfaces: IndexMap<String, EntityId>,
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub exposed_interfaces: OrderMap<String, EntityId>,
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
 	#[serde(default)]
-	#[serde(skip_serializing_if = "IndexMap::is_empty")]
-	pub subsets: IndexMap<String, Vec<EntityId>>
+	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	pub subsets: OrderMap<String, Vec<EntityId>>
 }
 
 #[cfg(feature = "rune")]
@@ -502,7 +527,7 @@ impl SubEntity {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 #[serde(untagged)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
@@ -521,7 +546,7 @@ pub enum RefMaybeConstantValue {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct RefWithConstantValue {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -538,7 +563,7 @@ pub struct RefWithConstantValue {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct Property {
 	/// The type of the property.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -591,7 +616,7 @@ impl Property {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct SimpleProperty {
 	/// The type of the simple property.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -637,7 +662,7 @@ impl SimpleProperty {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct ExposedEntity {
 	/// Whether there are multiple target entities.
 	#[serde(rename = "isArray")]
@@ -656,7 +681,7 @@ pub struct ExposedEntity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct PropertyAlias {
 	/// The other entity's property that should be accessed from this entity.
 	#[serde(rename = "originalProperty")]
@@ -673,7 +698,7 @@ pub struct PropertyAlias {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
 	///
@@ -705,7 +730,7 @@ pub struct PinConnectionOverride {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -735,7 +760,7 @@ pub struct PinConnectionOverrideDelete {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PropertyOverride {
 	/// An array of references to the entities to override the properties of.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -744,7 +769,7 @@ pub struct PropertyOverride {
 
 	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
-	pub properties: IndexMap<String, SimpleProperty>
+	pub properties: OrderMap<String, SimpleProperty>
 }
 
 #[cfg(feature = "rune")]
@@ -779,7 +804,7 @@ impl PropertyOverride {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct FullRef {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
@@ -796,7 +821,7 @@ pub struct FullRef {
 }
 
 /// A reference to an entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Hash, Eq)]
 #[serde(untagged)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]

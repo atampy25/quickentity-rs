@@ -26,7 +26,7 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Patch {
 	/// The hash of the TEMP file of this entity.
 	#[serde(rename = "factory")]
@@ -44,7 +44,7 @@ pub struct Patch {
 	pub patch_version: u8
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -58,7 +58,7 @@ pub enum PatchOperation {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddEntity(
 		#[cfg_attr(feature = "rune", rune(get, set))] EntityId,
-		#[cfg_attr(feature = "rune", rune(get, set))] SubEntity
+		#[cfg_attr(feature = "rune", rune(get, set, boxed))] Box<SubEntity>
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -127,7 +127,7 @@ pub enum PatchOperation {
 	RemoveComment(#[cfg_attr(feature = "rune", rune(get, set))] CommentEntity)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type, Hash)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -340,7 +340,7 @@ pub enum SubEntityOperation {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch_structs, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Hash, Eq)]
 pub struct SetPropertyValue {
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	pub property_name: String,
@@ -379,7 +379,7 @@ impl SetPropertyValue {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch_structs, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Hash, Eq)]
 pub struct SetPlatformSpecificPropertyValue {
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	pub platform: String,
@@ -417,7 +417,7 @@ impl SetPlatformSpecificPropertyValue {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type, Hash)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -435,7 +435,7 @@ pub enum ArrayPatchOperation {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch_structs))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct PropertyOverrideConnection {
 	/// A reference to an entity to override a property on.
 	#[serde(rename = "entity")]
