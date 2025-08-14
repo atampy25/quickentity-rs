@@ -12,11 +12,15 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 #[cfg(feature = "rune")]
+use std::collections::HashMap;
+
+#[cfg(feature = "rune")]
 pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 	let mut module = rune::Module::with_crate_item("quickentity_rs", ["qn_structs"])?;
 
 	module.ty::<EntityId>()?;
 	module.ty::<SubType>()?;
+	module.ty::<HashFloat>()?;
 	module.ty::<Entity>()?;
 	module.ty::<CommentEntity>()?;
 	module.ty::<SubEntity>()?;
@@ -137,9 +141,12 @@ impl Type for EntityId {
 	}
 }
 
+#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
-pub struct HashFloat(f32);
+pub struct HashFloat(#[cfg_attr(feature = "rune", rune(get, set))] pub f32);
 
 impl Hash for HashFloat {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
