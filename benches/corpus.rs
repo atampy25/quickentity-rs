@@ -1,11 +1,6 @@
 use std::fs;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use hitman_commons::{
-	metadata::ResourceMetadata,
-	resourcelib::{EntityBlueprint, EntityFactory},
-	rpkg_tool::RpkgResourceMeta
-};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use serde_json::from_slice;
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -42,17 +37,10 @@ fn criterion_benchmark(c: &mut Criterion) {
 			.unwrap()
 			.path();
 
-		let fac = from_slice::<EntityFactory>(&fs::read(temp_path).unwrap()).unwrap();
-
-		let fac_meta =
-			ResourceMetadata::try_from(from_slice::<RpkgResourceMeta>(&fs::read(temp_meta_path).unwrap()).unwrap())
-				.unwrap();
-
-		let blu = from_slice::<EntityBlueprint>(&fs::read(tblu_path).unwrap()).unwrap();
-
-		let blu_meta =
-			ResourceMetadata::try_from(from_slice::<RpkgResourceMeta>(&fs::read(tblu_meta_path).unwrap()).unwrap())
-				.unwrap();
+		let fac = from_slice(&fs::read(temp_path).unwrap()).unwrap();
+		let fac_meta = from_slice(&fs::read(temp_meta_path).unwrap()).unwrap();
+		let blu = from_slice(&fs::read(tblu_path).unwrap()).unwrap();
+		let blu_meta = from_slice(&fs::read(tblu_meta_path).unwrap()).unwrap();
 
 		group.bench_function(format!("{} -- convert", item.file_name().to_string_lossy()), |b| {
 			b.iter(|| {

@@ -1,69 +1,12 @@
-use hitman_commons::metadata::ResourceMetadata;
-use hitman_commons::resourcelib::{EntityBlueprint, EntityBlueprintLegacy, EntityFactory, EntityFactoryLegacy};
-use quickentity_rs::patch_structs::Patch;
-use quickentity_rs::qn_structs::Entity;
-
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::ser::Formatter;
-use serde_json::{from_value, Serializer, Value};
+use serde_json::Serializer;
 use std::io;
+use std::path::Path;
 use std::{fs, io::Read};
 
-pub fn read_as_entity(path: &str) -> Entity {
-	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	}))
-	.expect("Failed to parse file")
-}
-
-pub fn read_as_rtfactory(path: &str) -> EntityFactory {
-	let x = fs::read(path).expect("Failed to read file");
-	let val: Value =
-		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
-
-	if val.get("entityTemplates").is_some() {
-		from_value::<EntityFactoryLegacy>(val)
-			.expect("Failed to read file as RT struct")
-			.into_modern()
-	} else {
-		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x))
-			.expect("Failed to read file as RT struct")
-	}
-}
-
-pub fn read_as_rtblueprint(path: &str) -> EntityBlueprint {
-	let x = fs::read(path).expect("Failed to read file");
-	let val: Value =
-		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x)).expect("Failed to parse file");
-
-	if val.get("entityTemplates").is_some() {
-		from_value::<EntityBlueprintLegacy>(val)
-			.expect("Failed to read file as RT struct")
-			.into_modern()
-	} else {
-		serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&x))
-			.expect("Failed to read file as RT struct")
-	}
-}
-
-pub fn read_as_meta(path: &str) -> ResourceMetadata {
-	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
-		let mut vec = Vec::new();
-		fs::File::open(path)
-			.expect("Failed to open file")
-			.read_to_end(&mut vec)
-			.expect("Failed to read file");
-		vec
-	}))
-	.expect("Failed to parse file")
-}
-
-pub fn read_as_patch(path: &str) -> Patch {
+pub fn read_as_json<T: DeserializeOwned>(path: impl AsRef<Path>) -> T {
 	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{
 		let mut vec = Vec::new();
 		fs::File::open(path)

@@ -2,10 +2,10 @@ use std::{
 	fmt::{Debug, Display, Formatter},
 	hash::Hash,
 	num::ParseIntError,
-	ops::Deref,
 	str::FromStr
 };
 
+use educe::Educe;
 use hitman_commons::metadata::{PathedID, ResourceReference};
 use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
@@ -16,16 +16,14 @@ use std::collections::HashMap;
 
 #[cfg(feature = "rune")]
 pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
-	let mut module = rune::Module::with_crate_item("quickentity_rs", ["qn_structs"])?;
+	let mut module = rune::Module::with_crate_item("quickentity_rs", ["entity"])?;
 
-	module.ty::<EntityId>()?;
+	module.ty::<EntityID>()?;
 	module.ty::<SubType>()?;
-	module.ty::<HashFloat>()?;
 	module.ty::<Entity>()?;
 	module.ty::<CommentEntity>()?;
 	module.ty::<SubEntity>()?;
-	module.ty::<RefMaybeConstantValue>()?;
-	module.ty::<RefWithConstantValue>()?;
+	module.ty::<PinConnection>()?;
 	module.ty::<Property>()?;
 	module.ty::<SimpleProperty>()?;
 	module.ty::<ExposedEntity>()?;
@@ -33,7 +31,6 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 	module.ty::<PinConnectionOverride>()?;
 	module.ty::<PinConnectionOverrideDelete>()?;
 	module.ty::<PropertyOverride>()?;
-	module.ty::<FullRef>()?;
 	module.ty::<Ref>()?;
 
 	Ok(module)
@@ -42,7 +39,7 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 pub enum SubType {
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -56,16 +53,16 @@ pub enum SubType {
 }
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DISPLAY_FMT, DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(
 	feature = "rune",
 	rune_functions(Self::r_from_u64, Self::r_from_str, Self::as_u64__meta)
 )]
 #[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct EntityId(u64);
+pub struct EntityID(u64);
 
-impl EntityId {
+impl EntityID {
 	#[cfg(feature = "rune")]
 	#[rune::function(path = Self::from_u64)]
 	pub fn r_from_u64(value: u64) -> Self {
@@ -84,19 +81,19 @@ impl EntityId {
 	}
 }
 
-impl Display for EntityId {
+impl Display for EntityID {
 	fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
 		write!(f, "{:0>16x}", self.as_u64())
 	}
 }
 
-impl Debug for EntityId {
+impl Debug for EntityID {
 	fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
 		write!(f, "{:0>16x}", self.as_u64())
 	}
 }
 
-impl FromStr for EntityId {
+impl FromStr for EntityID {
 	type Err = ParseIntError;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -104,74 +101,52 @@ impl FromStr for EntityId {
 	}
 }
 
-impl From<u64> for EntityId {
+impl From<u64> for EntityID {
 	fn from(value: u64) -> Self {
 		Self(value)
 	}
 }
 
-impl From<EntityId> for u64 {
-	fn from(value: EntityId) -> Self {
+impl From<EntityID> for u64 {
+	fn from(value: EntityID) -> Self {
 		value.0
 	}
 }
 
-impl From<EntityId> for String {
-	fn from(value: EntityId) -> Self {
+impl From<EntityID> for String {
+	fn from(value: EntityID) -> Self {
 		value.to_string()
 	}
 }
 
-impl Serialize for EntityId {
+impl Serialize for EntityID {
 	fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		serializer.serialize_str(&self.to_string())
 	}
 }
 
-impl<'de> Deserialize<'de> for EntityId {
+impl<'de> Deserialize<'de> for EntityID {
 	fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		let s = String::deserialize(deserializer)?;
 		Self::from_str(&s).map_err(serde::de::Error::custom)
 	}
 }
 
-impl Type for EntityId {
+impl Type for EntityID {
 	fn inline(_: &mut specta::TypeMap, _: &[specta::DataType]) -> specta::DataType {
 		specta::DataType::Primitive(specta::datatype::PrimitiveType::String)
 	}
 }
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(transparent)]
-pub struct HashFloat(#[cfg_attr(feature = "rune", rune(get, set))] pub f32);
-
-impl Hash for HashFloat {
-	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-		self.0.to_bits().hash(state);
-	}
-}
-
-impl Deref for HashFloat {
-	type Target = f32;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl From<f32> for HashFloat {
-	fn from(value: f32) -> Self {
-		Self(value)
-	}
-}
-
-#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
+#[cfg_attr(
+	feature = "rune",
+	rune_functions(Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
+)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Educe)]
+#[educe(Hash)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -186,11 +161,11 @@ pub struct Entity {
 	/// The root sub-entity of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "rootEntity")]
-	pub root_entity: EntityId,
+	pub root_entity: EntityID,
 
 	/// The sub-entities of this entity.
 	#[serde(rename = "entities")]
-	pub entities: OrderMap<EntityId, SubEntity>,
+	pub entities: OrderMap<EntityID, SubEntity>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
 	///
@@ -232,7 +207,8 @@ pub struct Entity {
 	/// The QuickEntity format version of this entity. The current version is 3.2.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "quickEntityVersion")]
-	pub quick_entity_version: HashFloat,
+	#[educe(Hash(ignore))]
+	pub quick_entity_version: f32,
 
 	/// Extra resource references that should be added to the entity's factory when converted to the game's format.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -250,16 +226,34 @@ pub struct Entity {
 	pub comments: Vec<CommentEntity>
 }
 
+#[cfg(feature = "rune")]
+impl Entity {
+	#[rune::function(instance, path = Self::get_entity)]
+	fn r_get_entity(&self, id: EntityID) -> Option<SubEntity> {
+		self.entities.get(&id).cloned()
+	}
+
+	#[rune::function(instance, path = Self::insert_entity)]
+	fn r_insert_entity(&mut self, id: EntityID, entity: SubEntity) {
+		self.entities.insert(id, entity);
+	}
+
+	#[rune::function(instance, path = Self::remove_entity)]
+	fn r_remove_entity(&mut self, id: EntityID) {
+		self.entities.remove(&id);
+	}
+}
+
 /// A comment entity.
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct CommentEntity {
 	/// The sub-entity this comment is parented to.
-	pub parent: Ref,
+	pub parent: Option<Ref>,
 
 	/// The name of this comment.
 	pub name: String,
@@ -269,7 +263,7 @@ pub struct CommentEntity {
 }
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_new))]
 #[serde_with::skip_serializing_none]
@@ -280,7 +274,7 @@ pub struct SubEntity {
 	/// Has no effect on the entity in game.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "parent")]
-	pub parent: Ref,
+	pub parent: Option<Ref>,
 
 	/// The name of the entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -290,7 +284,6 @@ pub struct SubEntity {
 	/// The factory of the entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "factory")]
-	#[serde(alias = "template")]
 	pub factory: ResourceReference,
 
 	/// The blueprint of the entity.
@@ -323,19 +316,19 @@ pub struct SubEntity {
 	#[serde(rename = "events")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub events: OrderMap<String, OrderMap<String, Vec<RefMaybeConstantValue>>>,
+	pub events: OrderMap<String, OrderMap<String, Vec<PinConnection>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub input_copying: OrderMap<String, OrderMap<String, Vec<RefMaybeConstantValue>>>,
+	pub input_copying: OrderMap<String, OrderMap<String, Vec<PinConnection>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub output_copying: OrderMap<String, OrderMap<String, Vec<RefMaybeConstantValue>>>,
+	pub output_copying: OrderMap<String, OrderMap<String, Vec<PinConnection>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
@@ -353,20 +346,20 @@ pub struct SubEntity {
 	#[serde(rename = "exposedInterfaces")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub exposed_interfaces: OrderMap<String, EntityId>,
+	pub exposed_interfaces: OrderMap<String, EntityID>,
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub subsets: OrderMap<String, Vec<EntityId>>
+	pub subsets: OrderMap<String, Vec<EntityID>>
 }
 
 #[cfg(feature = "rune")]
 impl SubEntity {
 	/// Constructor function. An actual struct constructor cannot be made as Rune only supports up to five parameters in functions.
 	#[rune::function(path = Self::new)]
-	fn r_new(parent: Ref, name: String, factory: ResourceReference, blueprint: PathedID) -> Self {
+	fn r_new(parent: Option<Ref>, name: String, factory: ResourceReference, blueprint: PathedID) -> Self {
 		Self {
 			parent,
 			name,
@@ -387,7 +380,7 @@ impl SubEntity {
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
 		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
-			s.properties.to_owned().into_iter().collect::<HashMap<_, _>>()
+			s.properties.clone().into_iter().collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
@@ -420,7 +413,7 @@ impl SubEntity {
 
 		module.field_function(&rune::runtime::Protocol::GET, "events", |s: &Self| {
 			s.events
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
 				.collect::<HashMap<_, _>>()
@@ -429,14 +422,14 @@ impl SubEntity {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"events",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>| {
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
 				s.events = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
 			}
 		)?;
 
 		module.field_function(&rune::runtime::Protocol::GET, "input_copying", |s: &Self| {
 			s.input_copying
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
 				.collect::<HashMap<_, _>>()
@@ -445,14 +438,14 @@ impl SubEntity {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"input_copying",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>| {
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
 				s.input_copying = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
 			}
 		)?;
 
 		module.field_function(&rune::runtime::Protocol::GET, "output_copying", |s: &Self| {
 			s.output_copying
-				.to_owned()
+				.clone()
 				.into_iter()
 				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
 				.collect::<HashMap<_, _>>()
@@ -461,7 +454,7 @@ impl SubEntity {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"output_copying",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<RefMaybeConstantValue>>>| {
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
 				s.output_copying = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
 			}
 		)?;
@@ -509,7 +502,7 @@ impl SubEntity {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"exposed_interfaces",
-			|s: &mut Self, value: HashMap<String, EntityId>| {
+			|s: &mut Self, value: HashMap<String, EntityID>| {
 				s.exposed_interfaces = value.into_iter().collect();
 			}
 		)?;
@@ -525,7 +518,7 @@ impl SubEntity {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"subsets",
-			|s: &mut Self, value: HashMap<String, Vec<EntityId>>| {
+			|s: &mut Self, value: HashMap<String, Vec<EntityID>>| {
 				s.subsets = value.into_iter().collect();
 			}
 		)?;
@@ -534,39 +527,65 @@ impl SubEntity {
 	}
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
-#[serde(untagged)]
-#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
-pub enum RefMaybeConstantValue {
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RefWithConstantValue(#[cfg_attr(feature = "rune", rune(get, set))] RefWithConstantValue),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	Ref(#[cfg_attr(feature = "rune", rune(get, set))] Ref)
-}
-
-/// A reference accompanied by a constant value.
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
-pub struct RefWithConstantValue {
-	/// The entity to reference's ID.
+#[serde(from = "PinConnectionProxy", into = "PinConnectionProxy")]
+pub struct PinConnection {
+	/// The entity being referenced.
 	#[serde(rename = "ref")]
 	pub entity_ref: Ref,
 
-	/// The constant value accompanying this reference.
-	#[serde(rename = "value")]
-	pub value: SimpleProperty
+	/// The constant value of the pin connection.
+	pub value: Option<SimpleProperty>
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum PinConnectionProxy {
+	Ref(Ref),
+	RefWithValue {
+		#[serde(rename = "ref")]
+		entity_ref: Ref,
+		value: SimpleProperty
+	}
+}
+
+impl From<PinConnection> for PinConnectionProxy {
+	fn from(pin: PinConnection) -> Self {
+		if let Some(value) = pin.value {
+			Self::RefWithValue {
+				entity_ref: pin.entity_ref,
+				value
+			}
+		} else {
+			Self::Ref(pin.entity_ref)
+		}
+	}
+}
+
+impl From<PinConnectionProxy> for PinConnection {
+	fn from(proxy: PinConnectionProxy) -> Self {
+		match proxy {
+			PinConnectionProxy::Ref(entity_ref) => PinConnection {
+				entity_ref,
+				value: None
+			},
+
+			PinConnectionProxy::RefWithValue { entity_ref, value } => PinConnection {
+				entity_ref,
+				value: Some(value)
+			}
+		}
+	}
 }
 
 /// A property with a type and a value. Can be marked as post-init.
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[serde_with::skip_serializing_none]
@@ -620,7 +639,7 @@ impl Property {
 ///
 /// Simple properties cannot be marked as post-init. They are used by pin connection overrides, events and input/output copying.
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
@@ -666,7 +685,7 @@ impl SimpleProperty {
 /// Exposed entities are accessible when referencing this entity through a property on long-form references.
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
@@ -685,7 +704,7 @@ pub struct ExposedEntity {
 /// Property aliases are used to access properties of other entities through a single entity.
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
@@ -696,12 +715,12 @@ pub struct PropertyAlias {
 
 	/// The other entity whose property will be accessed.
 	#[serde(rename = "originalEntity")]
-	pub original_entity: Ref
+	pub original_entity: EntityID
 }
 
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
@@ -728,12 +747,12 @@ pub struct PinConnectionOverride {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: Option<SimpleProperty> // TODO: Convert simple property values to QN format
+	pub value: Option<SimpleProperty>
 }
 
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
@@ -764,7 +783,7 @@ pub struct PinConnectionOverrideDelete {
 
 /// A set of overrides for entity properties.
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs, install_with = Self::rune_install))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
@@ -805,17 +824,19 @@ impl PropertyOverride {
 	}
 }
 
-/// A long-form reference to an entity, allowing for the specification of external scenes and/or an exposed entity.
+/// A reference to an entity.
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
+#[cfg_attr(feature = "rune", rune_functions(Self::local__meta))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
-pub struct FullRef {
+#[serde(from = "RefProxy", into = "RefProxy")]
+pub struct Ref {
 	/// The entity to reference's ID.
 	#[serde(rename = "ref")]
-	pub entity_ref: EntityId,
+	pub entity_id: EntityID,
 
 	/// The external scene the referenced entity resides in.
 	#[serde(rename = "externalScene")]
@@ -827,17 +848,67 @@ pub struct FullRef {
 	pub exposed_entity: Option<String>
 }
 
-/// A reference to an entity.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Hash, Eq)]
-#[serde(untagged)]
-#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::qn_structs))]
-#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
-pub enum Ref {
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	Full(#[cfg_attr(feature = "rune", rune(get, set))] FullRef),
+impl Ref {
+	#[cfg_attr(feature = "rune", rune::function(keep, path = Self::local))]
+	pub fn local(entity_id: EntityID) -> Self {
+		Self {
+			entity_id,
+			external_scene: None,
+			exposed_entity: None
+		}
+	}
+}
 
-	/// A short-form reference represents either a local reference with no exposed entity or a null reference.
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	Short(#[cfg_attr(feature = "rune", rune(get, set))] Option<EntityId>)
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum RefProxy {
+	Short(EntityID),
+	Full {
+		#[serde(rename = "ref")]
+		entity_ref: EntityID,
+
+		#[serde(rename = "externalScene")]
+		#[serde(skip_serializing_if = "Option::is_none")]
+		external_scene: Option<PathedID>,
+
+		#[serde(rename = "exposedEntity")]
+		#[serde(skip_serializing_if = "Option::is_none")]
+		exposed_entity: Option<String>
+	}
+}
+
+impl From<Ref> for RefProxy {
+	fn from(value: Ref) -> Self {
+		if value.external_scene.is_some() || value.exposed_entity.is_some() {
+			Self::Full {
+				entity_ref: value.entity_id,
+				external_scene: value.external_scene,
+				exposed_entity: value.exposed_entity
+			}
+		} else {
+			Self::Short(value.entity_id)
+		}
+	}
+}
+
+impl From<RefProxy> for Ref {
+	fn from(value: RefProxy) -> Self {
+		match value {
+			RefProxy::Short(entity_ref) => Self {
+				entity_id: entity_ref,
+				external_scene: None,
+				exposed_entity: None
+			},
+
+			RefProxy::Full {
+				entity_ref,
+				external_scene,
+				exposed_entity
+			} => Self {
+				entity_id: entity_ref,
+				external_scene,
+				exposed_entity
+			}
+		}
+	}
 }

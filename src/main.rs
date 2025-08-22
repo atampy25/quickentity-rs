@@ -4,12 +4,12 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use tryvial::try_fn;
 
-use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rl, generate_patch};
+use quickentity_rs::{apply_patch, convert_to_qn, convert_to_rl, entity::Entity, generate_patch, patch::Patch};
 
 use anyhow::Result;
 use serde_json::from_slice;
 
-use io_utils::*;
+use crate::io_utils::{read_as_json, to_vec_float_format};
 
 #[derive(Parser)]
 #[command(author = "Atampy26", version, about = "A tool for parsing ResourceTool/RPKG entity JSON files into a more readable format and back again.", long_about = None)]
@@ -20,7 +20,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-	/// Convert between RT/RPKG source files and QuickEntity entity JSON files.
+	/// Convert between ResourceLib/hitman-commons source files and QuickEntity entity JSON files.
 	Entity {
 		#[command(subcommand)]
 		subcommand: EntityCommand
@@ -30,57 +30,6 @@ enum Command {
 	Patch {
 		#[command(subcommand)]
 		subcommand: PatchCommand
-	},
-
-	/// Convert RT source files, apply a series of QuickEntity patch JSONs and generate RT source files for the result.
-	ConvertPatchGenerate {
-		/// Input factory (TEMP) JSON path.
-		#[arg(short = 'i', long)]
-		input_factory: String,
-
-		/// Input factory (TEMP) meta JSON path.
-		#[arg(short = 'j', long)]
-		input_factory_meta: String,
-
-		/// Input blueprint (TBLU) JSON path.
-		#[arg(short = 'k', long)]
-		input_blueprint: String,
-
-		/// Input blueprint (TBLU) meta JSON path.
-		#[arg(short = 'l', long)]
-		input_blueprint_meta: String,
-
-		/// Patch JSON paths.
-		#[arg(num_args = 1..)]
-		patches: Vec<String>,
-
-		/// Output factory (TEMP) JSON path.
-		#[arg(short = 'o', long)]
-		output_factory: String,
-
-		/// Output factory (TEMP) meta JSON path.
-		#[arg(short = 'p', long)]
-		output_factory_meta: String,
-
-		/// Output blueprint (TBLU) JSON path.
-		#[arg(short = 'q', long)]
-		output_blueprint: String,
-
-		/// Output blueprint (TBLU) meta JSON path.
-		#[arg(short = 'r', long)]
-		output_blueprint_meta: String,
-
-		/// Convert keeping all scale values, no matter if insignificant (1.00 when rounded to 2 d.p.).
-		#[arg(short = 's', long, action)]
-		lossless: bool,
-
-		/// Be more permissive with certain unexpected scenarios in patching, such as properties that should be removed already being gone.
-		#[arg(long, action)]
-		permissive: bool,
-
-		/// Generate RT JSON files compatible with HITMAN (2016).
-		#[arg(long, action)]
-		h1: bool
 	}
 }
 
@@ -135,7 +84,7 @@ enum EntityCommand {
 		#[arg(short = 'r', long)]
 		output_blueprint_meta: String,
 
-		/// Output RT JSON files compatible with HITMAN (2016).
+		/// Output ResourceLib JSON files compatible with HITMAN (2016).
 		#[arg(long, action)]
 		h1: bool
 	},
@@ -208,7 +157,7 @@ enum PatchCommand {
 #[try_fn]
 fn main() -> Result<()> {
 	if std::env::var("RUST_LOG").is_err() {
-		std::env::set_var("RUST_LOG", "info")
+		unsafe { std::env::set_var("RUST_LOG", "info") }
 	}
 
 	env_logger::init();
@@ -227,12 +176,13 @@ fn main() -> Result<()> {
 					lossless
 				}
 		} => {
-			let factory = read_as_rtfactory(&input_factory);
-			let factory_meta = read_as_meta(&input_factory_meta);
-			let blueprint = read_as_rtblueprint(&input_blueprint);
-			let blueprint_meta = read_as_meta(&input_blueprint_meta);
-
-			let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
+			let entity = convert_to_qn(
+				&read_as_json(input_factory),
+				&read_as_json(input_factory_meta),
+				&read_as_json(input_blueprint),
+				&read_as_json(input_blueprint_meta),
+				lossless
+			)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 		}
@@ -248,13 +198,13 @@ fn main() -> Result<()> {
 					h1
 				}
 		} => {
-			let entity = read_as_entity(&input);
-
-			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rl(&entity)?;
+			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
+				convert_to_rl(&read_as_json(input))?;
 
 			fs::write(output_factory, {
 				if h1 {
-					to_vec_float_format(&converted_fac.into_legacy())
+					// to_vec_float_format(&converted_fac.into_legacy())
+					todo!()
 				} else {
 					to_vec_float_format(&converted_fac)
 				}
@@ -265,7 +215,8 @@ fn main() -> Result<()> {
 
 			fs::write(output_blueprint, {
 				if h1 {
-					to_vec_float_format(&converted_blu.into_legacy())
+					// to_vec_float_format(&converted_blu.into_legacy())
+					todo!()
 				} else {
 					to_vec_float_format(&converted_blu)
 				}
@@ -282,10 +233,8 @@ fn main() -> Result<()> {
 				lossless
 			}
 		} => {
-			let mut entity = read_as_entity(&input);
-
-			let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rl(&entity)?;
-			entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
+			let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_rl(&read_as_json(input))?;
+			let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 		}
@@ -298,8 +247,8 @@ fn main() -> Result<()> {
 				format_fix
 			}
 		} => {
-			let mut entity1 = read_as_entity(&input1);
-			let mut entity2 = read_as_entity(&input2);
+			let mut entity1: Entity = read_as_json(input1);
+			let mut entity2: Entity = read_as_json(input2);
 
 			if format_fix {
 				entity1 = from_slice(&to_vec_float_format(&entity1))?;
@@ -323,8 +272,8 @@ fn main() -> Result<()> {
 					format_fix
 				}
 		} => {
-			let mut entity = read_as_entity(&input);
-			let mut patch = read_as_patch(&patch);
+			let mut entity: Entity = read_as_json(input);
+			let mut patch: Patch = read_as_json(patch);
 
 			if format_fix {
 				entity = from_slice(&to_vec_float_format(&entity))?;
@@ -344,58 +293,6 @@ fn main() -> Result<()> {
 			}
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
-		}
-
-		Command::ConvertPatchGenerate {
-			input_factory,
-			input_factory_meta,
-			input_blueprint,
-			input_blueprint_meta,
-			output_factory,
-			output_factory_meta,
-			output_blueprint,
-			output_blueprint_meta,
-			patches,
-			h1,
-			lossless,
-			permissive
-		} => {
-			let factory = read_as_rtfactory(&input_factory);
-			let factory_meta = read_as_meta(&input_factory_meta);
-			let blueprint = read_as_rtblueprint(&input_blueprint);
-			let blueprint_meta = read_as_meta(&input_blueprint_meta);
-
-			let mut entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
-
-			for patch in patches {
-				let patch = read_as_patch(&patch);
-
-				apply_patch(&mut entity, patch, permissive)?;
-			}
-
-			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) = convert_to_rl(&entity)?;
-
-			fs::write(output_factory, {
-				if h1 {
-					to_vec_float_format(&converted_fac.into_legacy())
-				} else {
-					to_vec_float_format(&converted_fac)
-				}
-			})
-			.unwrap();
-
-			fs::write(output_factory_meta, to_vec_float_format(&converted_fac_meta)).unwrap();
-
-			fs::write(output_blueprint, {
-				if h1 {
-					to_vec_float_format(&converted_blu.into_legacy())
-				} else {
-					to_vec_float_format(&converted_blu)
-				}
-			})
-			.unwrap();
-
-			fs::write(output_blueprint_meta, to_vec_float_format(&converted_blu_meta)).unwrap();
 		}
 	}
 }
