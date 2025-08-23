@@ -34,6 +34,7 @@ rune = { git = "https://github.com/rune-rs/rune", rev = "a8c4f97", optional = tr
 better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", optional = true }
 ecow = { version = "0.2.6", features = ["serde"] }
 educe = "0.6.0"
+crc32fast = "1.5.0"
 
 [features]
 cli = ["dep:env_logger", "dep:clap"]

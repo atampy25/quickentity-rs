@@ -3,7 +3,7 @@
 pub mod entity;
 pub mod patch;
 
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use auto_context::auto_context;
 use core::hash::Hash;
 use ecow::EcoString;
@@ -22,8 +22,8 @@ use hitman_commons::metadata::{PathedID, ResourceMetadata, ResourceReference};
 use itertools::Itertools;
 use ordermap::OrderMap;
 use rayon::prelude::*;
-use serde_json::{from_value, json, to_string, to_value, Value};
-use similar::{capture_diff_slices, Algorithm, DiffOp};
+use serde_json::{Value, from_value, json, to_string, to_value};
+use similar::{Algorithm, DiffOp, capture_diff_slices};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Deref,
@@ -2518,10 +2518,10 @@ fn convert_string_property_name_to_id(property_name: &str) -> Result<PropertyID>
 		if is_crc_length {
 			PropertyID::from(i)
 		} else {
-			PropertyID::from_known(property_name).ctx?
+			PropertyID::from(crc32fast::hash(property_name.as_bytes()))
 		}
 	} else {
-		PropertyID::from_known(property_name).ctx?
+		PropertyID::from(crc32fast::hash(property_name.as_bytes()))
 	}
 }
 
@@ -3238,11 +3238,10 @@ pub fn convert_to_qn(
 		let mut pass1: Vec<PropertyOverride> = Vec::default();
 
 		for property_override in &factory.property_overrides {
-			let ents =
-				vec![
-					convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
-						.context("Property override references must not be null")?,
-				];
+			let ents = vec![
+				convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
+					.context("Property override references must not be null")?,
+			];
 
 			let props = [(
 				property_override
