@@ -3,7 +3,7 @@
 pub mod entity;
 pub mod patch;
 
-use anyhow::{Context, Error, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use auto_context::auto_context;
 use core::hash::Hash;
 use ecow::EcoString;
@@ -22,8 +22,8 @@ use hitman_commons::metadata::{PathedID, ResourceMetadata, ResourceReference};
 use itertools::Itertools;
 use ordermap::OrderMap;
 use rayon::prelude::*;
-use serde_json::{Value, from_value, json, to_string, to_value};
-use similar::{Algorithm, DiffOp, capture_diff_slices};
+use serde_json::{from_value, json, to_string, to_value, Value};
+use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Deref,
@@ -2146,7 +2146,10 @@ pub fn convert_variant_to_qn(
 	} else if let Some((first, second)) = property_value.as_ref::<(EcoString, ZVariant)>() {
 		to_value((
 			first,
-			convert_variant_to_qn(second, factory, factory_meta, blueprint, convert_lossless)?
+			json!({
+				"type": second.variant_type(),
+				"value": convert_variant_to_qn(second, factory, factory_meta, blueprint, convert_lossless)?
+			})
 		))?
 	} else if let Some(value) = property_value.as_ref::<SEntityTemplateReference>() {
 		to_value(convert_reference_to_qn(value, factory, blueprint, factory_meta)?)?
@@ -2201,13 +2204,18 @@ pub fn convert_variant_to_qn(
 		))?
 	} else if let Some(value) = property_value.as_ref::<ZRepositoryID>() {
 		to_value(String::from(*value).to_lowercase())?
+	} else if let Some(value) = property_value.as_ref::<ZVariant>() {
+		json!({
+			"type": value.variant_type(),
+			"value": convert_variant_to_qn(value, factory, factory_meta, blueprint, convert_lossless)?
+		})
 	} else {
 		property_value.to_serde()?
 	}
 }
 
 #[try_fn]
-#[context("Failure converting RL property to QN")]
+#[context("Failure converting game property to QN")]
 #[auto_context]
 fn convert_property_to_qn(
 	property: &SEntityTemplateProperty,
@@ -2244,13 +2252,12 @@ pub fn convert_qn_property_value_to_game(
 	match property_type {
 		"SEntityTemplateReference" => to_value(convert_qn_reference_to_game(
 			from_value::<Option<Ref>>(property_value.to_owned())
-				.context("Converting RL ref to QN in property value returned error in parsing")?
+				.context("Invalid entity reference")?
 				.as_ref(),
 			factory,
 			factory_meta,
 			entity_id_to_index_mapping
-		)?)
-		.context("Converting RL ref to QN in property value returned error in serialisation")?,
+		)?)?,
 
 		"ZRuntimeResourceID" => {
 			if property_value.is_null() {
@@ -2419,6 +2426,28 @@ pub fn convert_qn_property_value_to_game(
 			))?
 		}
 
+		"ZVariant" => {
+			let ty = property_value
+				.get("type")
+				.context("ZVariant must have type key")?
+				.as_str()
+				.context("ZVariant type must be string")?;
+
+			let value = property_value.get("value").context("ZVariant must have value key")?;
+
+			json!({
+				"$type": ty,
+				"$val": convert_qn_property_value_to_game(
+					ty,
+					value,
+					factory,
+					factory_meta,
+					entity_id_to_index_mapping,
+					factory_dependencies_index_mapping
+				)?
+			})
+		}
+
 		property_type if property_type.starts_with("TArray<") => {
 			let mut single_type = property_type.chars();
 			single_type.nth(6); // discard TArray<
@@ -2447,7 +2476,7 @@ pub fn convert_qn_property_value_to_game(
 }
 
 #[try_fn]
-#[context("Failure converting QN property to RL")]
+#[context("Failure converting QN property to game format")]
 fn convert_qn_property_to_game(
 	property_name: &str,
 	property_type: String,
@@ -2928,7 +2957,7 @@ pub fn convert_to_qn(
 							Some(SimpleProperty {
 								property_type: x.constant_pin_value.variant_type(),
 								value: convert_variant_to_qn(
-									&x.constant_pin_value,
+									x.constant_pin_value.deref(),
 									factory,
 									factory_meta,
 									blueprint,
@@ -2957,7 +2986,7 @@ pub fn convert_to_qn(
 							Some(SimpleProperty {
 								property_type: x.constant_pin_value.variant_type(),
 								value: convert_variant_to_qn(
-									&x.constant_pin_value,
+									x.constant_pin_value.deref(),
 									factory,
 									factory_meta,
 									blueprint,
@@ -3036,7 +3065,7 @@ pub fn convert_to_qn(
 						Some(SimpleProperty {
 							property_type: pin.constant_pin_value.variant_type(),
 							value: convert_variant_to_qn(
-								&pin.constant_pin_value,
+								pin.constant_pin_value.deref(),
 								factory,
 								factory_meta,
 								blueprint,
@@ -3083,7 +3112,7 @@ pub fn convert_to_qn(
 						Some(SimpleProperty {
 							property_type: pin_connection_override.constant_pin_value.variant_type(),
 							value: convert_variant_to_qn(
-								&pin_connection_override.constant_pin_value,
+								pin_connection_override.constant_pin_value.deref(),
 								factory,
 								factory_meta,
 								blueprint,
@@ -3128,7 +3157,7 @@ pub fn convert_to_qn(
 						Some(SimpleProperty {
 							property_type: forwarding.constant_pin_value.variant_type(),
 							value: convert_variant_to_qn(
-								&forwarding.constant_pin_value,
+								forwarding.constant_pin_value.deref(),
 								factory,
 								factory_meta,
 								blueprint,
@@ -3172,7 +3201,7 @@ pub fn convert_to_qn(
 						Some(SimpleProperty {
 							property_type: forwarding.constant_pin_value.variant_type(),
 							value: convert_variant_to_qn(
-								&forwarding.constant_pin_value,
+								forwarding.constant_pin_value.deref(),
 								factory,
 								factory_meta,
 								blueprint,
@@ -3209,10 +3238,11 @@ pub fn convert_to_qn(
 		let mut pass1: Vec<PropertyOverride> = Vec::default();
 
 		for property_override in &factory.property_overrides {
-			let ents = vec![
-				convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
-					.context("Property override references must not be null")?,
-			];
+			let ents =
+				vec![
+					convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
+						.context("Property override references must not be null")?,
+				];
 
 			let props = [(
 				property_override
@@ -3906,7 +3936,8 @@ fn pin_connections_for_event(
 									entity_id_to_index_mapping,
 									factory_dependencies_index_mapping
 								)?
-							}))?
+							}))
+							.context("Invalid pin value")?
 						} else {
 							ZVariant::new(())
 						}
