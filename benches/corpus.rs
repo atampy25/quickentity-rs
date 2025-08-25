@@ -1,6 +1,7 @@
 use std::fs;
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use hitman_commons::game::GameVersion;
 use serde_json::from_slice;
 
 fn criterion_benchmark(c: &mut Criterion) {
@@ -64,7 +65,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 		.unwrap();
 
 		group.bench_function(format!("{} -- generate", item.file_name().to_string_lossy()), |b| {
-			b.iter(|| quickentity_rs::convert_to_rl(black_box(&converted)))
+			b.iter(|| quickentity_rs::convert_to_game(black_box(&converted), black_box(GameVersion::H3)))
 		});
 	}
 

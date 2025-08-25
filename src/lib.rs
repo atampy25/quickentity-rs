@@ -3,7 +3,7 @@
 pub mod entity;
 pub mod patch;
 
-use anyhow::{Context, Error, Result, anyhow, bail};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use auto_context::auto_context;
 use core::hash::Hash;
 use ecow::EcoString;
@@ -18,12 +18,15 @@ use hitman_bin1::{
 	},
 	types::{property::PropertyID, repository::ZRepositoryID, resource::ZRuntimeResourceID, variant::Variant}
 };
-use hitman_commons::metadata::{PathedID, ResourceMetadata, ResourceReference};
+use hitman_commons::{
+	game::GameVersion,
+	metadata::{PathedID, ResourceMetadata, ResourceReference}
+};
 use itertools::Itertools;
 use ordermap::OrderMap;
 use rayon::prelude::*;
-use serde_json::{Value, from_value, json, to_string, to_value};
-use similar::{Algorithm, DiffOp, capture_diff_slices};
+use serde_json::{from_value, json, to_string, to_value, Value};
+use similar::{capture_diff_slices, Algorithm, DiffOp};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Deref,
@@ -57,7 +60,7 @@ pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 	module.function_meta(apply_patch__meta)?;
 	module.function_meta(generate_patch__meta)?;
 	module.function_meta(r_convert_to_qn)?;
-	module.function_meta(r_convert_to_rl)?;
+	module.function_meta(r_convert_to_game)?;
 	ctx.install(module)?;
 
 	Ok(())
@@ -2475,12 +2478,34 @@ pub fn convert_qn_property_value_to_game(
 	}
 }
 
+/// Deserialize a ZVariant value for the given game version and convert it into a H3 ZVariant, using the same methodology as hitman_bin1::game::conversion.
+#[try_fn]
+#[context("Couldn't parse variant value")]
+fn deserialize_variant(variant: Value, version: GameVersion) -> Result<ZVariant> {
+	match version {
+		GameVersion::H1 => {
+			let variant = from_value::<hitman_bin1::game::h1::ZVariant>(variant)?;
+
+			serde_json::from_value(serde_json::to_value(&variant)?).unwrap_or_else(|_| variant.into_inner().into())
+		}
+
+		GameVersion::H2 => {
+			let variant = from_value::<hitman_bin1::game::h2::ZVariant>(variant)?;
+
+			serde_json::from_value(serde_json::to_value(&variant)?).unwrap_or_else(|_| variant.into_inner().into())
+		}
+
+		GameVersion::H3 => from_value(variant)?
+	}
+}
+
 #[try_fn]
 #[context("Failure converting QN property to game format")]
 fn convert_qn_property_to_game(
 	property_name: &str,
 	property_type: String,
 	property_value: &Value,
+	version: GameVersion,
 	factory: &STemplateEntityFactory,
 	factory_meta: &ResourceMetadata,
 	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
@@ -2497,10 +2522,13 @@ fn convert_qn_property_to_game(
 
 	SEntityTemplateProperty {
 		property_id: convert_string_property_name_to_id(property_name)?,
-		value: from_value(json!({
-			"$type": property_type,
-			"$val": value
-		}))?
+		value: deserialize_variant(
+			json!({
+				"$type": property_type,
+				"$val": value
+			}),
+			version
+		)?
 	}
 }
 
@@ -2708,7 +2736,7 @@ fn get_blueprint_dependencies(entity: &Entity) -> Vec<ResourceReference> {
 }
 
 #[try_fn]
-#[context("Failure converting RL entity to QN")]
+#[context("Failure converting game entity to QN")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 pub fn convert_to_qn(
@@ -3238,10 +3266,11 @@ pub fn convert_to_qn(
 		let mut pass1: Vec<PropertyOverride> = Vec::default();
 
 		for property_override in &factory.property_overrides {
-			let ents = vec![
-				convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
-					.context("Property override references must not be null")?,
-			];
+			let ents =
+				vec![
+					convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
+						.context("Property override references must not be null")?,
+				];
 
 			let props = [(
 				property_override
@@ -3312,11 +3341,12 @@ pub fn r_convert_to_qn(
 }
 
 #[try_fn]
-#[context("Failure converting QN entity to RL")]
+#[context("Failure converting QN entity to game")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
-pub fn convert_to_rl(
-	entity: &Entity
+pub fn convert_to_game(
+	entity: &Entity,
+	version: GameVersion
 ) -> Result<(
 	STemplateEntityFactory,
 	ResourceMetadata,
@@ -3417,17 +3447,20 @@ pub fn convert_to_rl(
 							to_pin_name: pin_connection_override.to_pin.to_owned().into(),
 							constant_pin_value: {
 								if let Some(property) = pin_connection_override.value.as_ref() {
-									from_value(json!({
-										"$type": property.property_type,
-										"$val": convert_qn_property_value_to_game(
-											&property.property_type,
-											&property.value,
-											&factory,
-											&factory_meta,
-											&entity_id_to_index_mapping,
-											&factory_dependencies_index_mapping
-										)?
-									}))?
+									deserialize_variant(
+										json!({
+											"$type": property.property_type,
+											"$val": convert_qn_property_value_to_game(
+												&property.property_type,
+												&property.value,
+												&factory,
+												&factory_meta,
+												&entity_id_to_index_mapping,
+												&factory_dependencies_index_mapping
+											)?
+										}),
+										version
+									)?
 								} else {
 									ZVariant::new(())
 								}
@@ -3468,17 +3501,20 @@ pub fn convert_to_rl(
 													from_pin_name: event.to_owned().into(),
 													to_pin_name: trigger.to_owned().into(),
 													constant_pin_value: if let Some(value) = &trigger_entity.value {
-														from_value(json!({
-															"$type": value.property_type,
-															"$val": convert_qn_property_value_to_game(
-																&value.property_type,
-																&value.value,
-																&factory,
-																&factory_meta,
-																&entity_id_to_index_mapping,
-																&factory_dependencies_index_mapping
-															)?
-														}))?
+														deserialize_variant(
+															json!({
+																"$type": value.property_type,
+																"$val": convert_qn_property_value_to_game(
+																	&value.property_type,
+																	&value.value,
+																	&factory,
+																	&factory_meta,
+																	&entity_id_to_index_mapping,
+																	&factory_dependencies_index_mapping
+																)?
+															}),
+															version
+														)?
 													} else {
 														ZVariant::new(())
 													}
@@ -3523,17 +3559,20 @@ pub fn convert_to_rl(
 						to_pin_name: pin_connection_override_delete.to_pin.to_owned().into(),
 						constant_pin_value: {
 							if let Some(property) = pin_connection_override_delete.value.as_ref() {
-								from_value(json!({
-									"$type": property.property_type,
-									"$val": convert_qn_property_value_to_game(
-										&property.property_type,
-										&property.value,
-										&factory,
-										&factory_meta,
-										&entity_id_to_index_mapping,
-										&factory_dependencies_index_mapping
-									)?
-								}))?
+								deserialize_variant(
+									json!({
+										"$type": property.property_type,
+										"$val": convert_qn_property_value_to_game(
+											&property.property_type,
+											&property.value,
+											&factory,
+											&factory_meta,
+											&entity_id_to_index_mapping,
+											&factory_dependencies_index_mapping
+										)?
+									}),
+									version
+								)?
 							} else {
 								ZVariant::new(())
 							}
@@ -3586,6 +3625,7 @@ pub fn convert_to_rl(
 										property,
 										overridden.property_type.to_owned(),
 										&overridden.value,
+										version,
 										&factory,
 										&factory_meta,
 										&entity_id_to_index_mapping,
@@ -3622,6 +3662,7 @@ pub fn convert_to_rl(
 								x,
 								y.property_type.to_owned(),
 								&y.value,
+								version,
 								&factory,
 								&factory_meta,
 								&entity_id_to_index_mapping,
@@ -3638,6 +3679,7 @@ pub fn convert_to_rl(
 								x,
 								y.property_type.to_owned(),
 								&y.value,
+								version,
 								&factory,
 								&factory_meta,
 								&entity_id_to_index_mapping,
@@ -3662,6 +3704,7 @@ pub fn convert_to_rl(
 											x,
 											y.property_type.to_owned(),
 											&y.value,
+											version,
 											&factory,
 											&factory_meta,
 											&entity_id_to_index_mapping,
@@ -3798,6 +3841,7 @@ pub fn convert_to_rl(
 							entity_id,
 							evt,
 							triggers,
+							version,
 							&factory,
 							&factory_meta,
 							&entity_id_to_index_mapping,
@@ -3827,6 +3871,7 @@ pub fn convert_to_rl(
 							entity_id,
 							evt,
 							triggers,
+							version,
 							&factory,
 							&factory_meta,
 							&entity_id_to_index_mapping,
@@ -3855,6 +3900,7 @@ pub fn convert_to_rl(
 							entity_id,
 							evt,
 							triggers,
+							version,
 							&factory,
 							&factory_meta,
 							&entity_id_to_index_mapping,
@@ -3878,8 +3924,11 @@ pub fn convert_to_rl(
 #[cfg(feature = "rune")]
 #[try_fn]
 #[rune::function]
-pub fn r_convert_to_rl(entity: &Entity) -> Result<(rune::Value, ResourceMetadata, rune::Value, ResourceMetadata)> {
-	let (fac, fac_meta, blu, blu_meta) = convert_to_rl(entity)?;
+pub fn r_convert_to_game(
+	entity: &Entity,
+	version: GameVersion
+) -> Result<(rune::Value, ResourceMetadata, rune::Value, ResourceMetadata)> {
+	let (fac, fac_meta, blu, blu_meta) = convert_to_game(entity, version)?;
 
 	(
 		from_value(to_value(fac)?)?,
@@ -3896,6 +3945,7 @@ fn pin_connections_for_event(
 	entity_id: EntityID,
 	event: &str,
 	triggers: &OrderMap<String, Vec<PinConnection>>,
+	version: GameVersion,
 	factory: &STemplateEntityFactory,
 	factory_meta: &ResourceMetadata,
 	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
@@ -3925,17 +3975,20 @@ fn pin_connections_for_event(
 						from_pin_name: event.to_owned().into(),
 						to_pin_name: trigger.to_owned().into(),
 						constant_pin_value: if let Some(value) = &trigger_entity.value {
-							from_value(json!({
-								"$type": value.property_type,
-								"$val": convert_qn_property_value_to_game(
-									&value.property_type,
-									&value.value,
-									factory,
-									factory_meta,
-									entity_id_to_index_mapping,
-									factory_dependencies_index_mapping
-								)?
-							}))
+							deserialize_variant(
+								json!({
+									"$type": value.property_type,
+									"$val": convert_qn_property_value_to_game(
+										&value.property_type,
+										&value.value,
+										factory,
+										factory_meta,
+										entity_id_to_index_mapping,
+										factory_dependencies_index_mapping
+									)?
+								}),
+								version
+							)
 							.context("Invalid pin value")?
 						} else {
 							ZVariant::new(())
