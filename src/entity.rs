@@ -133,7 +133,7 @@ impl<'de> Deserialize<'de> for EntityID {
 }
 
 impl Type for EntityID {
-	fn inline(_: &mut specta::TypeMap, _: &[specta::DataType]) -> specta::DataType {
+	fn inline(_: &mut specta::TypeMap, _: specta::Generics<'_>) -> specta::DataType {
 		specta::DataType::Primitive(specta::datatype::PrimitiveType::String)
 	}
 }
