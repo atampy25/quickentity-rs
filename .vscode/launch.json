@@ -115,25 +115,6 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug benchmark 'io_utils'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bench=io_utils",
-                    "--package=quickentity-rs"
-                ],
-                "filter": {
-                    "name": "io_utils",
-                    "kind": "bench"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
         }
     ]
 }

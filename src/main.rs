@@ -31,6 +31,15 @@ enum Command {
 	Patch {
 		#[command(subcommand)]
 		subcommand: PatchCommand
+	},
+
+	/// Convert an RPKG tool meta.JSON file to a hitman-commons metadata.json file.
+	ConvertMeta {
+		/// Input RPKG tool meta.JSON path.
+		input: String,
+
+		/// Output hitman-commons metadata.json path.
+		output: String
 	}
 }
 
@@ -295,6 +304,14 @@ fn main() -> Result<()> {
 			}
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
+		}
+
+		Command::ConvertMeta {
+			input,
+			output
+		} => {
+			let meta = hitman_commons::metadata::ResourceMetadata::try_from(read_as_json::<hitman_commons::rpkg_tool::RpkgResourceMeta>(input))?;
+			fs::write(output, to_vec_float_format(&meta)).unwrap();
 		}
 	}
 }

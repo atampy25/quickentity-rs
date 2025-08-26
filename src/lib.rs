@@ -3,7 +3,7 @@
 pub mod entity;
 pub mod patch;
 
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use auto_context::auto_context;
 use core::hash::Hash;
 use ecow::EcoString;
@@ -25,8 +25,8 @@ use hitman_commons::{
 use itertools::Itertools;
 use ordermap::OrderMap;
 use rayon::prelude::*;
-use serde_json::{from_value, json, to_string, to_value, Value};
-use similar::{capture_diff_slices, Algorithm, DiffOp};
+use serde_json::{Value, from_value, json, to_string, to_value};
+use similar::{Algorithm, DiffOp, capture_diff_slices};
 use std::{
 	collections::{HashMap, HashSet},
 	ops::Deref,
@@ -216,12 +216,7 @@ fn property_is_roughly_identical(p1_type: &str, p1_value: &Value, p2_type: &str,
 			p1_arr.len() == 2
 				&& p2_arr.len() == 2
 				&& property_is_roughly_identical("ZString", &p1_arr[0], "ZString", &p2_arr[0])?
-				&& property_is_roughly_identical(
-					p1_arr[1].get("type").ctx?.as_str().ctx?,
-					p1_arr[1].get("value").ctx?,
-					p2_arr[1].get("type").ctx?.as_str().ctx?,
-					p2_arr[1].get("value").ctx?
-				)?
+				&& property_is_roughly_identical("ZVariant", &p1_arr[0], "ZVariant", &p2_arr[0])?
 		} else if p1_type == "SMatrix43" {
 			let p1 = p1_value.as_object().ctx?;
 			let p2 = p2_value.as_object().ctx?;
@@ -245,7 +240,14 @@ fn property_is_roughly_identical(p1_type: &str, p1_value: &Value, p2_type: &str,
 				&& p1.get("position").ctx? == p2.get("position").ctx?
 				&& scales_roughly_identical
 		} else if p1_type == "SEntityTemplateReference" {
-			from_value::<Ref>(p1_value.to_owned())? == from_value::<Ref>(p2_value.to_owned())?
+			from_value::<Option<Ref>>(p1_value.to_owned())? == from_value::<Option<Ref>>(p2_value.to_owned())?
+		} else if p1_type == "ZVariant" {
+			property_is_roughly_identical(
+				p1_value.get("type").ctx?.as_str().ctx?,
+				p1_value.get("value").ctx?,
+				p2_value.get("type").ctx?.as_str().ctx?,
+				p2_value.get("value").ctx?
+			)?
 		} else {
 			p1_value == p2_value
 		}
@@ -1051,7 +1053,7 @@ pub fn apply_array_patch(
 		// It's not unnecessary because what Clippy suggests causes an error due to the borrow from .iter().cloned()
 		#[allow(clippy::unnecessary_to_owned)]
 		for (index, elem) in arr.to_owned().into_iter().enumerate() {
-			arr[index] = to_value(&from_value::<Ref>(elem)?)?;
+			arr[index] = to_value(&from_value::<Option<Ref>>(elem)?)?;
 		}
 	}
 
@@ -1059,7 +1061,7 @@ pub fn apply_array_patch(
 		match op {
 			ArrayPatchOperation::RemoveItemByValue(mut val) => {
 				if is_ref_array {
-					val = to_value(&from_value::<Ref>(val)?)?;
+					val = to_value(&from_value::<Option<Ref>>(val)?)?;
 				}
 
 				arr.retain(|x| *x != val);
@@ -1067,8 +1069,8 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::AddItemAfter(mut val, mut new) => {
 				if is_ref_array {
-					val = to_value(&from_value::<Ref>(val)?)?;
-					new = to_value(&from_value::<Ref>(new)?)?;
+					val = to_value(&from_value::<Option<Ref>>(val)?)?;
+					new = to_value(&from_value::<Option<Ref>>(new)?)?;
 				}
 
 				let new = new.to_owned();
@@ -1085,8 +1087,8 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::AddItemBefore(mut val, mut new) => {
 				if is_ref_array {
-					val = to_value(&from_value::<Ref>(val)?)?;
-					new = to_value(&from_value::<Ref>(new)?)?;
+					val = to_value(&from_value::<Option<Ref>>(val)?)?;
+					new = to_value(&from_value::<Option<Ref>>(new)?)?;
 				}
 
 				let new = new.to_owned();
@@ -1103,7 +1105,7 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::AddItem(mut val) => {
 				if is_ref_array {
-					val = to_value(&from_value::<Ref>(val)?)?;
+					val = to_value(&from_value::<Option<Ref>>(val)?)?;
 				}
 
 				arr.push(val);
@@ -3266,11 +3268,10 @@ pub fn convert_to_qn(
 		let mut pass1: Vec<PropertyOverride> = Vec::default();
 
 		for property_override in &factory.property_overrides {
-			let ents =
-				vec![
-					convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
-						.context("Property override references must not be null")?,
-				];
+			let ents = vec![
+				convert_reference_to_qn(&property_override.property_owner, factory, blueprint, factory_meta)?
+					.context("Property override references must not be null")?,
+			];
 
 			let props = [(
 				property_override
