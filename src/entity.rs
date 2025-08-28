@@ -5,10 +5,12 @@ use std::{
 	str::FromStr
 };
 
+use ecow::EcoString;
 use educe::Educe;
-use hitman_commons::metadata::{PathedID, ResourceReference};
+use hitman_commons::metadata::{ResourceReference, RuntimeID};
 use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
 use specta::Type;
 
 #[cfg(feature = "rune")]
@@ -59,7 +61,7 @@ pub enum SubType {
 	feature = "rune",
 	rune_functions(Self::r_from_u64, Self::r_from_str, Self::as_u64__meta)
 )]
-#[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(SerializeDisplay, DeserializeFromStr, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EntityID(u64);
 
 impl EntityID {
@@ -113,25 +115,6 @@ impl From<EntityID> for u64 {
 	}
 }
 
-impl From<EntityID> for String {
-	fn from(value: EntityID) -> Self {
-		value.to_string()
-	}
-}
-
-impl Serialize for EntityID {
-	fn serialize<S: serde::ser::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		serializer.serialize_str(&self.to_string())
-	}
-}
-
-impl<'de> Deserialize<'de> for EntityID {
-	fn deserialize<D: serde::de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		let s = String::deserialize(deserializer)?;
-		Self::from_str(&s).map_err(serde::de::Error::custom)
-	}
-}
-
 impl Type for EntityID {
 	fn inline(_: &mut specta::TypeMap, _: specta::Generics<'_>) -> specta::DataType {
 		specta::DataType::Primitive(specta::datatype::PrimitiveType::String)
@@ -151,12 +134,12 @@ pub struct Entity {
 	/// The hash of the TEMP file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "factory")]
-	pub factory: PathedID,
+	pub factory: RuntimeID,
 
 	/// The hash of the TBLU file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "blueprint")]
-	pub blueprint: PathedID,
+	pub blueprint: RuntimeID,
 
 	/// The root sub-entity of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -197,7 +180,7 @@ pub struct Entity {
 	/// The external scenes that this entity references.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "externalScenes")]
-	pub external_scenes: Vec<PathedID>,
+	pub external_scenes: Vec<RuntimeID>,
 
 	/// The type of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -253,13 +236,17 @@ impl Entity {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct CommentEntity {
 	/// The sub-entity this comment is parented to.
-	pub parent: Option<Ref>,
+	pub parent: Option<EntityID>,
 
 	/// The name of this comment.
-	pub name: String,
+	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
+	pub name: EcoString,
 
 	/// The text this comment holds.
-	pub text: String
+	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
+	pub text: EcoString
 }
 
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
@@ -277,9 +264,8 @@ pub struct SubEntity {
 	pub parent: Option<Ref>,
 
 	/// The name of the entity.
-	#[cfg_attr(feature = "rune", rune(get, set))]
-	#[serde(rename = "name")]
-	pub name: String,
+	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
+	pub name: EcoString,
 
 	/// The factory of the entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -289,7 +275,7 @@ pub struct SubEntity {
 	/// The blueprint of the entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "blueprint")]
-	pub blueprint: PathedID,
+	pub blueprint: RuntimeID,
 
 	/// Whether the entity is only loaded in IO's editor.
 	///
@@ -304,65 +290,65 @@ pub struct SubEntity {
 	#[serde(rename = "properties")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub properties: OrderMap<String, Property>,
+	pub properties: OrderMap<EcoString, Property>,
 
 	/// Properties to apply conditionally to the entity based on platform.
 	#[serde(rename = "platformSpecificProperties")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub platform_specific_properties: OrderMap<String, OrderMap<String, Property>>,
+	pub platform_specific_properties: OrderMap<EcoString, OrderMap<EcoString, Property>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub events: OrderMap<String, OrderMap<String, Vec<PinConnection>>>,
+	pub events: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub input_copying: OrderMap<String, OrderMap<String, Vec<PinConnection>>>,
+	pub input_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub output_copying: OrderMap<String, OrderMap<String, Vec<PinConnection>>>,
+	pub output_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub property_aliases: OrderMap<String, Vec<PropertyAlias>>,
+	pub property_aliases: OrderMap<EcoString, Vec<PropertyAlias>>,
 
 	/// Entities that can be accessed from this entity.
 	#[serde(rename = "exposedEntities")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub exposed_entities: OrderMap<String, ExposedEntity>,
+	pub exposed_entities: OrderMap<EcoString, ExposedEntity>,
 
 	/// Interfaces implemented by other entities that can be accessed from this entity.
 	#[serde(rename = "exposedInterfaces")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub exposed_interfaces: OrderMap<String, EntityID>,
+	pub exposed_interfaces: OrderMap<EcoString, EntityID>,
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub subsets: OrderMap<String, Vec<EntityID>>
+	pub subsets: OrderMap<EcoString, Vec<EntityID>>
 }
 
 #[cfg(feature = "rune")]
 impl SubEntity {
 	/// Constructor function. An actual struct constructor cannot be made as Rune only supports up to five parameters in functions.
 	#[rune::function(path = Self::new)]
-	fn r_new(parent: Option<Ref>, name: String, factory: ResourceReference, blueprint: PathedID) -> Self {
+	fn r_new(parent: Option<Ref>, name: String, factory: ResourceReference, blueprint: RuntimeID) -> Self {
 		Self {
 			parent,
-			name,
+			name: name.into(),
 			factory,
 			blueprint,
 			editor_only: false,
@@ -380,14 +366,18 @@ impl SubEntity {
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
 		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
-			s.properties.clone().into_iter().collect::<HashMap<_, _>>()
+			s.properties
+				.clone()
+				.into_iter()
+				.map(|(x, y)| (String::from(x), y))
+				.collect::<HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"properties",
 			|s: &mut Self, value: HashMap<String, Property>| {
-				s.properties = value.into_iter().collect();
+				s.properties = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
 
@@ -398,7 +388,14 @@ impl SubEntity {
 				s.platform_specific_properties
 					.clone()
 					.into_iter()
-					.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+					.map(|(x, y)| {
+						(
+							String::from(x),
+							y.into_iter()
+								.map(|(x, y)| (String::from(x), y))
+								.collect::<HashMap<_, _>>()
+						)
+					})
 					.collect::<HashMap<_, _>>()
 			}
 		)?;
@@ -407,7 +404,10 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"platform_specific_properties",
 			|s: &mut Self, value: HashMap<String, HashMap<String, Property>>| {
-				s.platform_specific_properties = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect()
+				s.platform_specific_properties = value
+					.into_iter()
+					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
+					.collect()
 			}
 		)?;
 
@@ -415,7 +415,14 @@ impl SubEntity {
 			s.events
 				.clone()
 				.into_iter()
-				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.map(|(x, y)| {
+					(
+						String::from(x),
+						y.into_iter()
+							.map(|(x, y)| (String::from(x), y))
+							.collect::<HashMap<_, _>>()
+					)
+				})
 				.collect::<HashMap<_, _>>()
 		})?;
 
@@ -423,7 +430,10 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"events",
 			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
-				s.events = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
+				s.events = value
+					.into_iter()
+					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
+					.collect();
 			}
 		)?;
 
@@ -431,7 +441,14 @@ impl SubEntity {
 			s.input_copying
 				.clone()
 				.into_iter()
-				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.map(|(x, y)| {
+					(
+						String::from(x),
+						y.into_iter()
+							.map(|(x, y)| (String::from(x), y))
+							.collect::<HashMap<_, _>>()
+					)
+				})
 				.collect::<HashMap<_, _>>()
 		})?;
 
@@ -439,7 +456,10 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"input_copying",
 			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
-				s.input_copying = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
+				s.input_copying = value
+					.into_iter()
+					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
+					.collect();
 			}
 		)?;
 
@@ -447,7 +467,14 @@ impl SubEntity {
 			s.output_copying
 				.clone()
 				.into_iter()
-				.map(|(x, y)| (x, y.into_iter().collect::<HashMap<_, _>>()))
+				.map(|(x, y)| {
+					(
+						String::from(x),
+						y.into_iter()
+							.map(|(x, y)| (String::from(x), y))
+							.collect::<HashMap<_, _>>()
+					)
+				})
 				.collect::<HashMap<_, _>>()
 		})?;
 
@@ -455,7 +482,10 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"output_copying",
 			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
-				s.output_copying = value.into_iter().map(|(x, y)| (x, y.into_iter().collect())).collect();
+				s.output_copying = value
+					.into_iter()
+					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
+					.collect();
 			}
 		)?;
 
@@ -463,7 +493,7 @@ impl SubEntity {
 			s.property_aliases
 				.clone()
 				.into_iter()
-				.map(|(x, y)| (x, y.to_owned()))
+				.map(|(x, y)| (String::from(x), y.to_owned()))
 				.collect::<HashMap<_, _>>()
 		})?;
 
@@ -471,7 +501,7 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"property_aliases",
 			|s: &mut Self, value: HashMap<String, Vec<PropertyAlias>>| {
-				s.property_aliases = value.into_iter().collect();
+				s.property_aliases = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
 
@@ -479,7 +509,7 @@ impl SubEntity {
 			s.exposed_entities
 				.clone()
 				.into_iter()
-				.map(|(x, y)| (x, y.to_owned()))
+				.map(|(x, y)| (String::from(x), y.to_owned()))
 				.collect::<HashMap<_, _>>()
 		})?;
 
@@ -487,7 +517,7 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"exposed_entities",
 			|s: &mut Self, value: HashMap<String, ExposedEntity>| {
-				s.exposed_entities = value.into_iter().collect();
+				s.exposed_entities = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
 
@@ -495,7 +525,7 @@ impl SubEntity {
 			s.exposed_interfaces
 				.clone()
 				.into_iter()
-				.map(|(x, y)| (x, y.to_owned()))
+				.map(|(x, y)| (String::from(x), y.to_owned()))
 				.collect::<HashMap<_, _>>()
 		})?;
 
@@ -503,7 +533,7 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"exposed_interfaces",
 			|s: &mut Self, value: HashMap<String, EntityID>| {
-				s.exposed_interfaces = value.into_iter().collect();
+				s.exposed_interfaces = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
 
@@ -511,7 +541,7 @@ impl SubEntity {
 			s.subsets
 				.clone()
 				.into_iter()
-				.map(|(x, y)| (x, y.to_owned()))
+				.map(|(x, y)| (String::from(x), y.to_owned()))
 				.collect::<HashMap<_, _>>()
 		})?;
 
@@ -519,7 +549,7 @@ impl SubEntity {
 			&rune::runtime::Protocol::SET,
 			"subsets",
 			|s: &mut Self, value: HashMap<String, Vec<EntityID>>| {
-				s.subsets = value.into_iter().collect();
+				s.subsets = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
 
@@ -592,9 +622,10 @@ impl From<PinConnectionProxy> for PinConnection {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct Property {
 	/// The type of the property.
-	#[cfg_attr(feature = "rune", rune(get, set))]
+	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 	#[serde(rename = "type")]
-	pub property_type: String,
+	#[specta(type = String)]
+	pub property_type: EcoString,
 
 	/// The value of the property.
 	#[serde(rename = "value")]
@@ -612,7 +643,7 @@ pub struct Property {
 impl Property {
 	fn rune_construct(property_type: String, value: rune::Value, post_init: bool) -> Self {
 		Self {
-			property_type,
+			property_type: property_type.into(),
 			value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
 			post_init
 		}
@@ -645,9 +676,10 @@ impl Property {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct SimpleProperty {
 	/// The type of the simple property.
-	#[cfg_attr(feature = "rune", rune(get, set))]
+	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 	#[serde(rename = "type")]
-	pub property_type: String,
+	#[specta(type = String)]
+	pub property_type: EcoString,
 
 	/// The simple property's value.
 	#[serde(rename = "value")]
@@ -658,7 +690,7 @@ pub struct SimpleProperty {
 impl SimpleProperty {
 	fn rune_construct(property_type: String, value: rune::Value) -> Self {
 		Self {
-			property_type,
+			property_type: property_type.into(),
 			value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
 		}
 	}
@@ -711,7 +743,9 @@ pub struct ExposedEntity {
 pub struct PropertyAlias {
 	/// The other entity's property that should be accessed from this entity.
 	#[serde(rename = "originalProperty")]
-	pub original_property: String,
+	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
+	pub original_property: EcoString,
 
 	/// The other entity whose property will be accessed.
 	#[serde(rename = "originalEntity")]
@@ -734,7 +768,9 @@ pub struct PinConnectionOverride {
 
 	/// The name of the event on the fromEntity that will trigger the input on the toEntity.
 	#[serde(rename = "fromPin")]
-	pub from_pin: String,
+	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
+	pub from_pin: EcoString,
 
 	/// The entity whose input will be triggered.
 	#[serde(rename = "toEntity")]
@@ -743,7 +779,9 @@ pub struct PinConnectionOverride {
 	/// The name of the input on the toEntity that will be triggered by the event on the
 	/// fromEntity.
 	#[serde(rename = "toPin")]
-	pub to_pin: String,
+	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
+	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
@@ -765,7 +803,9 @@ pub struct PinConnectionOverrideDelete {
 	/// The name of the event on the fromEntity that will no longer trigger the input on the
 	/// toEntity.
 	#[serde(rename = "fromPin")]
-	pub from_pin: String,
+	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
+	pub from_pin: EcoString,
 
 	/// The entity whose input is triggered.
 	#[serde(rename = "toEntity")]
@@ -774,7 +814,9 @@ pub struct PinConnectionOverrideDelete {
 	/// The name of the input on the toEntity that will no longer be triggered by the event on
 	/// the fromEntity.
 	#[serde(rename = "toPin")]
-	pub to_pin: String,
+	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
+	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
@@ -795,7 +837,7 @@ pub struct PropertyOverride {
 
 	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
-	pub properties: OrderMap<String, SimpleProperty>
+	pub properties: OrderMap<EcoString, SimpleProperty>
 }
 
 #[cfg(feature = "rune")]
@@ -803,20 +845,26 @@ impl PropertyOverride {
 	fn rune_construct(entities: Vec<Ref>, properties: HashMap<String, SimpleProperty>) -> Self {
 		Self {
 			entities,
-			properties: properties.into_iter().collect()
+			properties: properties.into_iter().map(|(x, y)| (x.into(), y)).collect()
 		}
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
 		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
-			Some(s.properties.clone().into_iter().collect::<HashMap<_, _>>())
+			Some(
+				s.properties
+					.clone()
+					.into_iter()
+					.map(|(x, y)| (String::from(x), y))
+					.collect::<HashMap<_, _>>()
+			)
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"properties",
 			|s: &mut Self, value: HashMap<String, SimpleProperty>| {
-				s.properties = value.into_iter().collect();
+				s.properties = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
 
@@ -840,7 +888,7 @@ pub struct Ref {
 
 	/// The external scene the referenced entity resides in.
 	#[serde(rename = "externalScene")]
-	pub external_scene: Option<PathedID>,
+	pub external_scene: Option<RuntimeID>,
 
 	/// The sub-entity to reference that is exposed by the referenced entity.
 	#[serde(rename = "exposedEntity")]
@@ -869,7 +917,7 @@ enum RefProxy {
 
 		#[serde(rename = "externalScene")]
 		#[serde(skip_serializing_if = "Option::is_none")]
-		external_scene: Option<PathedID>,
+		external_scene: Option<RuntimeID>,
 
 		#[serde(rename = "exposedEntity")]
 		#[serde(skip_serializing_if = "Option::is_none")]

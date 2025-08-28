@@ -20,7 +20,7 @@ use hitman_bin1::{
 };
 use hitman_commons::{
 	game::GameVersion,
-	metadata::{PathedID, ResourceMetadata, ResourceReference}
+	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
 };
 use itertools::Itertools;
 use ordermap::OrderMap;
@@ -32,6 +32,7 @@ use std::{
 	ops::Deref,
 	str::FromStr
 };
+use thiserror::Error;
 use tryvial::try_fn;
 
 use entity::{
@@ -51,13 +52,13 @@ pub const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
 
 // TODO: Array patches for property override properties? Simple properties in general?
 
+/// The apply_patch function is not exposed to Rune because of the `emit` argument.
 #[cfg(feature = "rune")]
 pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 	ctx.install(entity::rune_module()?)?;
 	ctx.install(patch::rune_module()?)?;
 
 	let mut module = rune::Module::with_crate("quickentity_rs")?;
-	module.function_meta(apply_patch__meta)?;
 	module.function_meta(generate_patch__meta)?;
 	module.function_meta(r_convert_to_qn)?;
 	module.function_meta(r_convert_to_game)?;
@@ -107,28 +108,6 @@ where
 		}
 
 		Ok(None)
-	}
-}
-
-trait PermissiveUnwrap {
-	/// Throw away the value of this Option. If it was None, return Err or Ok depending on whether permissive mode is enabled, for use with `?`. If it was Some, return Ok.
-	fn permit(&self, permissive: bool, message: &str) -> Result<()>;
-}
-
-impl<T> PermissiveUnwrap for Option<T> {
-	#[context("Permissive unwrap failure")]
-	fn permit(&self, permissive: bool, message: &str) -> Result<()> {
-		if self.is_none() {
-			if permissive {
-				log::warn!("QuickEntity warning: {message}");
-
-				Ok(())
-			} else {
-				Err(anyhow!("Non-permissive mode error: {message}"))
-			}
-		} else {
-			Ok(())
-		}
 	}
 }
 
@@ -254,12 +233,48 @@ fn property_is_roughly_identical(p1_type: &str, p1_value: &Value, p2_type: &str,
 	}
 }
 
+#[derive(Error, Debug)]
+pub enum Diagnostic {
+	#[error("couldn't remove entity {entity} because it did not exist")]
+	EntityAlreadyNonexistent { entity: EntityID },
+
+	#[error("couldn't remove property {property} on {entity} because it did not exist")]
+	PropertyAlreadyNonexistent { entity: EntityID, property: EcoString },
+
+	#[error("couldn't remove platform specific properties for {platform} on {entity} because it did not exist")]
+	PlatformAlreadyNonexistent { entity: EntityID, platform: EcoString },
+
+	#[error("couldn't remove platform specific property {platform}/{property} on {entity} because it did not exist")]
+	PlatformSpecificPropertyAlreadyNonexistent {
+		entity: EntityID,
+		platform: EcoString,
+		property: EcoString
+	},
+
+	#[error("couldn't remove external scene {scene} because it did not exist")]
+	ExternalSceneAlreadyNonexistent { scene: RuntimeID },
+
+	#[error("in patching array {identifier}: {diagnostic}")]
+	ArrayPatch {
+		identifier: EcoString,
+		diagnostic: ArrayPatchDiagnostic
+	}
+}
+
+#[derive(Error, Debug)]
+pub enum ArrayPatchDiagnostic {
+	#[error("can't find element {element} to add before")]
+	NoSuchElementBefore { element: Value },
+
+	#[error("can't find element {element} to add after")]
+	NoSuchElementAfter { element: Value }
+}
+
 #[try_fn]
 #[context("Failure applying patch to entity")]
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
-#[cfg_attr(feature = "rune", rune::function(keep))]
-pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Result<()> {
+pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagnostic) + Send + Sync) -> Result<()> {
 	if patch.patch_version != PATCH_VERSION {
 		bail!(
 			"Invalid patch version; expected {}, got {}",
@@ -283,10 +298,11 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				}
 
 				PatchOperation::RemoveEntityByID(value) => {
-					entity.entities.remove(&value).permit(
-						permissive,
-						"Couldn't remove entity by ID because entity did not exist in target!"
-					)?;
+					let removed = entity.entities.remove(&value);
+
+					if removed.is_none() {
+						emit(Diagnostic::EntityAlreadyNonexistent { entity: value });
+					}
 				}
 
 				PatchOperation::AddEntity(id, data) => {
@@ -325,10 +341,14 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemovePropertyByName(name) => {
-							entity
-								.properties
-								.remove(&name)
-								.permit(permissive, "RemovePropertyByName couldn't find expected property!")?;
+							let removed = entity.properties.remove(&name);
+
+							if removed.is_none() {
+								emit(Diagnostic::PropertyAlreadyNonexistent {
+									entity: entity_id,
+									property: name
+								});
+							}
 						}
 
 						SubEntityOperation::SetPropertyType(name, value) => {
@@ -356,7 +376,8 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 							apply_array_patch(
 								&mut item_to_patch.value,
 								array_patch,
-								permissive,
+								property_name,
+								&mut emit,
 								item_to_patch.property_type == "TArray<SEntityTemplateReference>"
 							)?;
 						}
@@ -378,21 +399,30 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 						}
 
 						SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
-							entity.platform_specific_properties.remove(&name).permit(
-								permissive,
-								"RemovePSPropertiesForPlatform couldn't find platform to remove!"
-							)?;
+							let removed = entity.platform_specific_properties.remove(&name);
+
+							if removed.is_none() {
+								emit(Diagnostic::PlatformAlreadyNonexistent {
+									entity: entity_id,
+									platform: name
+								});
+							}
 						}
 
 						SubEntityOperation::RemovePlatformSpecificPropertyByName(platform, name) => {
-							entity
+							let removed = entity
 								.platform_specific_properties
 								.get_mut(&platform)
 								.context("RemovePSPropertyByName couldn't find platform!")?
-								.remove(&name)
-								.permit(permissive, "RemovePSPropertyByName couldn't find property to remove!")?;
+								.remove(&name);
 
-							if entity.platform_specific_properties.get(&platform).ctx?.is_empty() {
+							if removed.is_none() {
+								emit(Diagnostic::PlatformSpecificPropertyAlreadyNonexistent {
+									entity: entity_id,
+									platform,
+									property: name
+								});
+							} else if entity.platform_specific_properties.get(&platform).ctx?.is_empty() {
 								entity.platform_specific_properties.remove(&platform);
 							}
 						}
@@ -436,7 +466,8 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 							apply_array_patch(
 								&mut item_to_patch.value,
 								array_patch,
-								permissive,
+								property_name,
+								&mut emit,
 								item_to_patch.property_type == "TArray<SEntityTemplateReference>"
 							)?;
 						}
@@ -982,10 +1013,8 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 				PatchOperation::RemoveExternalScene(value) => {
 					if let Some(x) = entity.external_scenes.par_iter().position_any(|x| *x == value) {
 						entity.external_scenes.remove(x);
-					} else if permissive {
-						log::warn!("QuickEntity warning: RemoveExternalScene couldn't find expected value!");
 					} else {
-						bail!("RemoveExternalScene couldn't find expected value!");
+						emit(Diagnostic::ExternalSceneAlreadyNonexistent { scene: value });
 					}
 				}
 
@@ -1033,7 +1062,7 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 			}
 		}
 
-		Ok(())
+		anyhow::Ok(())
 	})?;
 }
 
@@ -1042,7 +1071,8 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, permissive: bool) -> Resul
 pub fn apply_array_patch(
 	arr: &mut Value,
 	patch: Vec<ArrayPatchOperation>,
-	permissive: bool,
+	identifier: EcoString,
+	mut emit: impl FnMut(Diagnostic),
 	is_ref_array: bool
 ) -> Result<()> {
 	let arr = arr
@@ -1050,9 +1080,7 @@ pub fn apply_array_patch(
 		.context("Array patch was given a non-array value to patch!")?;
 
 	if is_ref_array {
-		// It's not unnecessary because what Clippy suggests causes an error due to the borrow from .iter().cloned()
-		#[allow(clippy::unnecessary_to_owned)]
-		for (index, elem) in arr.to_owned().into_iter().enumerate() {
+		for (index, elem) in arr.clone().into_iter().enumerate() {
 			arr[index] = to_value(&from_value::<Option<Ref>>(elem)?)?;
 		}
 	}
@@ -1077,11 +1105,13 @@ pub fn apply_array_patch(
 
 				if let Some(pos) = arr.iter().position(|x| *x == val) {
 					arr.insert(pos + 1, new);
-				} else if permissive {
-					log::warn!("QuickEntity warning: couldn't find value to add after in array patch");
-					arr.push(new);
 				} else {
-					bail!("Couldn't find value to add after in array patch!");
+					emit(Diagnostic::ArrayPatch {
+						identifier: identifier.to_owned(),
+						diagnostic: ArrayPatchDiagnostic::NoSuchElementAfter { element: val }
+					});
+
+					arr.push(new);
 				}
 			}
 
@@ -1095,11 +1125,13 @@ pub fn apply_array_patch(
 
 				if let Some(pos) = arr.iter().position(|x| *x == val) {
 					arr.insert(pos, new);
-				} else if permissive {
-					log::warn!("QuickEntity warning: couldn't find value to add before in array patch");
-					arr.push(new);
 				} else {
-					bail!("Couldn't find value to add before in array patch!");
+					emit(Diagnostic::ArrayPatch {
+						identifier: identifier.to_owned(),
+						diagnostic: ArrayPatchDiagnostic::NoSuchElementBefore { element: val }
+					});
+
+					arr.push(new);
 				}
 			}
 
@@ -2231,7 +2263,7 @@ fn convert_property_to_qn(
 	convert_lossless: bool
 ) -> Result<Property> {
 	Property {
-		property_type: property.value.variant_type(),
+		property_type: property.value.variant_type().into(),
 		value: convert_variant_to_qn(
 			property.value.deref(),
 			factory,
@@ -2252,7 +2284,7 @@ pub fn convert_qn_property_value_to_game(
 	factory: &STemplateEntityFactory,
 	factory_meta: &ResourceMetadata,
 	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
-	factory_dependencies_index_mapping: &HashMap<PathedID, usize>
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
 ) -> Result<Value> {
 	match property_type {
 		"SEntityTemplateReference" => to_value(convert_qn_reference_to_game(
@@ -2273,12 +2305,12 @@ pub fn convert_qn_property_value_to_game(
 			} else if property_value.is_string() {
 				json!({
 					"m_IDHigh": 0, // I doubt we'll ever have that many dependencies
-					"m_IDLow": factory_dependencies_index_mapping.get(&PathedID::from_str(property_value.as_str().ctx?)?).ctx?
+					"m_IDLow": factory_dependencies_index_mapping.get(&RuntimeID::from_str(property_value.as_str().ctx?)?).ctx?
 				})
 			} else if property_value.is_object() {
 				json!({
 					"m_IDHigh": 0,
-					"m_IDLow": factory_dependencies_index_mapping.get(&PathedID::from_str(property_value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?)?).ctx?
+					"m_IDLow": factory_dependencies_index_mapping.get(&RuntimeID::from_str(property_value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?)?).ctx?
 				})
 			} else {
 				bail!("ZRuntimeResourceID was not of a valid type")
@@ -2505,13 +2537,13 @@ fn deserialize_variant(variant: Value, version: GameVersion) -> Result<ZVariant>
 #[context("Failure converting QN property to game format")]
 fn convert_qn_property_to_game(
 	property_name: &str,
-	property_type: String,
+	property_type: EcoString,
 	property_value: &Value,
 	version: GameVersion,
 	factory: &STemplateEntityFactory,
 	factory_meta: &ResourceMetadata,
 	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
-	factory_dependencies_index_mapping: &HashMap<PathedID, usize>
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
 ) -> Result<SEntityTemplateProperty> {
 	let value = convert_qn_property_value_to_game(
 		&property_type,
@@ -2538,20 +2570,12 @@ fn convert_qn_property_to_game(
 #[context("Failure converting string property name to ID")]
 #[auto_context]
 fn convert_string_property_name_to_id(property_name: &str) -> Result<PropertyID> {
-	if let Ok(i) = property_name.parse::<u32>() {
-		let is_crc_length = {
-			let x = format!("{i:x}").chars().count();
-
-			x == 8 || x == 7
-		};
-
-		if is_crc_length {
-			PropertyID::from(i)
-		} else {
-			PropertyID::from(crc32fast::hash(property_name.as_bytes()))
-		}
+	if let Ok(i) = property_name.parse::<u32>()
+		&& PropertyID(i).as_known().is_none()
+	{
+		PropertyID::from(i)
 	} else {
-		PropertyID::from(crc32fast::hash(property_name.as_bytes()))
+		PropertyID::from(property_name)
 	}
 }
 
@@ -2782,7 +2806,7 @@ pub fn convert_to_qn(
 					Ok((
 						sub_entity_blueprint.entity_id.into(),
 						SubEntity {
-							name: sub_entity_blueprint.entity_name.to_owned().into(),
+							name: sub_entity_blueprint.entity_name.to_owned(),
 							factory: factory_meta
 								.references
 								.get(sub_entity_factory.entity_type_resource_index as usize)
@@ -2810,7 +2834,7 @@ pub fn convert_to_qn(
 											.property_id
 											.as_name()
 											.map(|x| x.to_owned())
-											.unwrap_or_else(|| property.property_id.0.to_string()), // key
+											.unwrap_or_else(|| property.property_id.0.to_string().into()), // key
 										convert_property_to_qn(
 											property,
 											false,
@@ -2829,7 +2853,7 @@ pub fn convert_to_qn(
 												.property_id
 												.as_name()
 												.map(|x| x.to_owned())
-												.unwrap_or_else(|| property.property_id.0.to_string()),
+												.unwrap_or_else(|| property.property_id.0.to_string().into()),
 											convert_property_to_qn(
 												property,
 												true,
@@ -2853,7 +2877,7 @@ pub fn convert_to_qn(
 										<&str>::from(platform).into(),
 										properties
 											.into_iter()
-											.map(|property| -> Result<(String, Property)> {
+											.map(|property| -> Result<_> {
 												Ok((
 													// we do a little code duplication
 													property
@@ -2862,7 +2886,7 @@ pub fn convert_to_qn(
 														.as_name()
 														.map(|x| x.to_owned())
 														.unwrap_or_else(|| {
-															property.property_value.property_id.0.to_string()
+															property.property_value.property_id.0.to_string().into()
 														}),
 													convert_property_to_qn(
 														&property.property_value,
@@ -2889,12 +2913,12 @@ pub fn convert_to_qn(
 								.map(|(property_name, aliases)| {
 									Ok({
 										(
-											property_name.into(),
+											property_name,
 											aliases
 												.into_iter()
 												.map(|alias| {
 													Ok(PropertyAlias {
-														original_property: alias.alias_name.to_owned().into(),
+														original_property: alias.alias_name.to_owned(),
 														original_entity: blueprint
 															.sub_entities
 															.get(alias.entity_id as usize)
@@ -2915,7 +2939,7 @@ pub fn convert_to_qn(
 								.iter()
 								.map(|exposed_entity| -> Result<_> {
 									Ok((
-										exposed_entity.name.to_owned().into(),
+										exposed_entity.name.to_owned(),
 										ExposedEntity {
 											is_array: exposed_entity.is_array.to_owned(),
 											refers_to: exposed_entity
@@ -2935,7 +2959,7 @@ pub fn convert_to_qn(
 								.iter()
 								.map(|(interface, entity_index)| {
 									Ok((
-										interface.to_owned().into(),
+										interface.to_owned(),
 										blueprint
 											.sub_entities
 											.get(*entity_index as usize)
@@ -2979,13 +3003,13 @@ pub fn convert_to_qn(
 							.context("Pin connection override delete references must not be null")?,
 						to_entity: convert_reference_to_qn(&x.to_entity, factory, blueprint, factory_meta)?
 							.context("Pin connection override delete references must not be null")?,
-						from_pin: x.from_pin_name.to_owned().into(),
-						to_pin: x.to_pin_name.to_owned().into(),
+						from_pin: x.from_pin_name.to_owned(),
+						to_pin: x.to_pin_name.to_owned(),
 						value: if x.constant_pin_value.is::<()>() {
 							None
 						} else {
 							Some(SimpleProperty {
-								property_type: x.constant_pin_value.variant_type(),
+								property_type: x.constant_pin_value.variant_type().into(),
 								value: convert_variant_to_qn(
 									x.constant_pin_value.deref(),
 									factory,
@@ -3008,13 +3032,13 @@ pub fn convert_to_qn(
 							.context("Pin connection override references must not be null")?,
 						to_entity: convert_reference_to_qn(&x.to_entity, factory, blueprint, factory_meta)?
 							.context("Pin connection override references must not be null")?,
-						from_pin: x.from_pin_name.to_owned().into(),
-						to_pin: x.to_pin_name.to_owned().into(),
+						from_pin: x.from_pin_name.to_owned(),
+						to_pin: x.to_pin_name.to_owned(),
 						value: if x.constant_pin_value.is::<()>() {
 							None
 						} else {
 							Some(SimpleProperty {
-								property_type: x.constant_pin_value.variant_type(),
+								property_type: x.constant_pin_value.variant_type().into(),
 								value: convert_variant_to_qn(
 									x.constant_pin_value.deref(),
 									factory,
@@ -3076,9 +3100,9 @@ pub fn convert_to_qn(
 
 			relevant_sub_entity
 				.events
-				.entry(pin.from_pin_name.to_owned().into())
+				.entry(pin.from_pin_name.to_owned())
 				.or_default()
-				.entry(pin.to_pin_name.to_owned().into())
+				.entry(pin.to_pin_name.to_owned())
 				.or_default()
 				.push(PinConnection {
 					entity_ref: Ref::local(
@@ -3093,7 +3117,7 @@ pub fn convert_to_qn(
 						None
 					} else {
 						Some(SimpleProperty {
-							property_type: pin.constant_pin_value.variant_type(),
+							property_type: pin.constant_pin_value.variant_type().into(),
 							value: convert_variant_to_qn(
 								pin.constant_pin_value.deref(),
 								factory,
@@ -3124,9 +3148,9 @@ pub fn convert_to_qn(
 
 			relevant_sub_entity
 				.events
-				.entry(pin_connection_override.from_pin_name.to_owned().into())
+				.entry(pin_connection_override.from_pin_name.to_owned())
 				.or_default()
-				.entry(pin_connection_override.to_pin_name.to_owned().into())
+				.entry(pin_connection_override.to_pin_name.to_owned())
 				.or_default()
 				.push(PinConnection {
 					entity_ref: convert_reference_to_qn(
@@ -3140,7 +3164,7 @@ pub fn convert_to_qn(
 						None
 					} else {
 						Some(SimpleProperty {
-							property_type: pin_connection_override.constant_pin_value.variant_type(),
+							property_type: pin_connection_override.constant_pin_value.variant_type().into(),
 							value: convert_variant_to_qn(
 								pin_connection_override.constant_pin_value.deref(),
 								factory,
@@ -3168,9 +3192,9 @@ pub fn convert_to_qn(
 
 			relevant_sub_entity
 				.input_copying
-				.entry(forwarding.from_pin_name.to_owned().into())
+				.entry(forwarding.from_pin_name.to_owned())
 				.or_default()
-				.entry(forwarding.to_pin_name.to_owned().into())
+				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
 				.push(PinConnection {
 					entity_ref: Ref::local(
@@ -3185,7 +3209,7 @@ pub fn convert_to_qn(
 						None
 					} else {
 						Some(SimpleProperty {
-							property_type: forwarding.constant_pin_value.variant_type(),
+							property_type: forwarding.constant_pin_value.variant_type().into(),
 							value: convert_variant_to_qn(
 								forwarding.constant_pin_value.deref(),
 								factory,
@@ -3212,9 +3236,9 @@ pub fn convert_to_qn(
 
 			relevant_sub_entity
 				.output_copying
-				.entry(forwarding.from_pin_name.to_owned().into())
+				.entry(forwarding.from_pin_name.to_owned())
 				.or_default()
-				.entry(forwarding.to_pin_name.to_owned().into())
+				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
 				.push(PinConnection {
 					entity_ref: Ref::local(
@@ -3229,7 +3253,7 @@ pub fn convert_to_qn(
 						None
 					} else {
 						Some(SimpleProperty {
-							property_type: forwarding.constant_pin_value.variant_type(),
+							property_type: forwarding.constant_pin_value.variant_type().into(),
 							value: convert_variant_to_qn(
 								forwarding.constant_pin_value.deref(),
 								factory,
@@ -3258,7 +3282,7 @@ pub fn convert_to_qn(
 
 					relevant_qn
 						.subsets
-						.entry(subset.to_owned().into())
+						.entry(subset.to_owned())
 						.or_default()
 						.push(sub_entity.entity_id.into());
 				}
@@ -3279,7 +3303,7 @@ pub fn convert_to_qn(
 					.property_id
 					.as_name()
 					.map(|x| x.to_owned())
-					.unwrap_or_else(|| property_override.property_value.property_id.0.to_string()),
+					.unwrap_or_else(|| property_override.property_value.property_id.0.to_string().into()),
 				{
 					let prop = convert_property_to_qn(
 						&property_override.property_value,
@@ -3394,7 +3418,7 @@ pub fn convert_to_game(
 			.concat()
 		};
 
-		let factory_dependencies_index_mapping: HashMap<PathedID, usize> = factory_meta
+		let factory_dependencies_index_mapping: HashMap<RuntimeID, usize> = factory_meta
 			.references
 			.par_iter()
 			.enumerate()
@@ -3444,8 +3468,8 @@ pub fn convert_to_game(
 								&factory_meta,
 								&entity_id_to_index_mapping
 							)?,
-							from_pin_name: pin_connection_override.from_pin.to_owned().into(),
-							to_pin_name: pin_connection_override.to_pin.to_owned().into(),
+							from_pin_name: pin_connection_override.from_pin.to_owned(),
+							to_pin_name: pin_connection_override.to_pin.to_owned(),
 							constant_pin_value: {
 								if let Some(property) = pin_connection_override.value.as_ref() {
 									deserialize_variant(
@@ -3499,8 +3523,8 @@ pub fn convert_to_game(
 														&factory_meta,
 														&entity_id_to_index_mapping
 													)?,
-													from_pin_name: event.to_owned().into(),
-													to_pin_name: trigger.to_owned().into(),
+													from_pin_name: event.to_owned(),
+													to_pin_name: trigger.to_owned(),
 													constant_pin_value: if let Some(value) = &trigger_entity.value {
 														deserialize_variant(
 															json!({
@@ -3556,8 +3580,8 @@ pub fn convert_to_game(
 							&factory_meta,
 							&entity_id_to_index_mapping
 						)?,
-						from_pin_name: pin_connection_override_delete.from_pin.to_owned().into(),
-						to_pin_name: pin_connection_override_delete.to_pin.to_owned().into(),
+						from_pin_name: pin_connection_override_delete.from_pin.to_owned(),
+						to_pin_name: pin_connection_override_delete.to_pin.to_owned(),
 						constant_pin_value: {
 							if let Some(property) = pin_connection_override_delete.value.as_ref() {
 								deserialize_variant(
@@ -3596,7 +3620,7 @@ pub fn convert_to_game(
 			.concat()
 		};
 
-		let blueprint_dependencies_index_mapping: HashMap<PathedID, usize> = blueprint_meta
+		let blueprint_dependencies_index_mapping: HashMap<RuntimeID, usize> = blueprint_meta
 			.references
 			.par_iter()
 			.enumerate()
@@ -3735,7 +3759,7 @@ pub fn convert_to_game(
 						as i32,
 					entity_id: (*entity_id).into(),
 					editor_only: sub_entity.editor_only,
-					entity_name: sub_entity.name.to_owned().into(),
+					entity_name: sub_entity.name.to_owned(),
 					property_aliases: sub_entity
 						.property_aliases
 						.iter()
@@ -3753,8 +3777,8 @@ pub fn convert_to_game(
 												)
 											})?
 											.to_owned() as i32,
-										alias_name: alias.original_property.to_owned().into(),
-										property_name: aliased_name.to_owned().into()
+										alias_name: alias.original_property.to_owned(),
+										property_name: aliased_name.to_owned()
 									})
 								})
 								.collect::<Result<Vec<_>>>()
@@ -3768,7 +3792,7 @@ pub fn convert_to_game(
 						.iter()
 						.map(|(exposed_name, exposed_entity)| {
 							Ok(SEntityTemplateExposedEntity {
-								name: exposed_name.to_owned().into(),
+								name: exposed_name.to_owned(),
 								is_array: exposed_entity.is_array,
 								targets: exposed_entity
 									.refers_to
@@ -3790,7 +3814,7 @@ pub fn convert_to_game(
 						.iter()
 						.map(|(interface, implementor)| -> Result<_> {
 							Ok((
-								interface.to_owned().into(),
+								interface.to_owned(),
 								entity_id_to_index_mapping
 									.get(implementor)
 									.context("Exposed interface referenced nonexistent local entity")?
@@ -3820,7 +3844,7 @@ pub fn convert_to_game(
 						subset_entities.entities.push(entity_index as i32);
 					} else {
 						ent_subs.push((
-							subset.to_owned().into(),
+							subset.to_owned(),
 							SEntityTemplateEntitySubset {
 								entities: vec![entity_index as i32]
 							}
@@ -3944,13 +3968,13 @@ pub fn r_convert_to_game(
 #[auto_context]
 fn pin_connections_for_event(
 	entity_id: EntityID,
-	event: &str,
-	triggers: &OrderMap<String, Vec<PinConnection>>,
+	event: &EcoString,
+	triggers: &OrderMap<EcoString, Vec<PinConnection>>,
 	version: GameVersion,
 	factory: &STemplateEntityFactory,
 	factory_meta: &ResourceMetadata,
 	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
-	factory_dependencies_index_mapping: &HashMap<PathedID, usize>
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
 ) -> Result<Vec<SEntityTemplatePinConnection>> {
 	triggers
 		.iter()
@@ -3973,8 +3997,8 @@ fn pin_connections_for_event(
 									trigger_entity.entity_ref.entity_id
 								)
 							})? as i32,
-						from_pin_name: event.to_owned().into(),
-						to_pin_name: trigger.to_owned().into(),
+						from_pin_name: event.to_owned(),
+						to_pin_name: trigger.to_owned(),
 						constant_pin_value: if let Some(value) = &trigger_entity.value {
 							deserialize_variant(
 								json!({

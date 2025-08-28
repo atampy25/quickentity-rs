@@ -296,7 +296,17 @@ fn main() -> Result<()> {
 				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
-			apply_patch(&mut entity, patch, permissive)?;
+			let mut diagnostics_result = None;
+
+			apply_patch(&mut entity, patch, |diagnostic| {
+				if permissive {
+					log::warn!("QuickEntity warning: {diagnostic}");
+				} else {
+					diagnostics_result.get_or_insert(diagnostic);
+				}
+			})?;
+
+			diagnostics_result.map_or(Ok(()), |e| Err(e))?;
 
 			if normalise {
 				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_game(&entity, GameVersion::H3)?;
@@ -306,11 +316,10 @@ fn main() -> Result<()> {
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 		}
 
-		Command::ConvertMeta {
-			input,
-			output
-		} => {
-			let meta = hitman_commons::metadata::ResourceMetadata::try_from(read_as_json::<hitman_commons::rpkg_tool::RpkgResourceMeta>(input))?;
+		Command::ConvertMeta { input, output } => {
+			let meta = hitman_commons::metadata::ResourceMetadata::try_from(read_as_json::<
+				hitman_commons::rpkg_tool::RpkgResourceMeta
+			>(input))?;
 			fs::write(output, to_vec_float_format(&meta)).unwrap();
 		}
 	}

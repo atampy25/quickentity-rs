@@ -7,13 +7,12 @@ license = "LGPL-3.0-only"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.2.4", features = ["derive"], optional = true }
-itertools = "0.10.3"
-md5 = "0.7.0"
+clap = { version = "4.5.46", features = ["derive"], optional = true }
+itertools = "0.14.0"
 rayon = "1.8.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = { version = "1.0.81", features = ["preserve_order"] }
-serde_with = "2.0.1"
+serde_with = "3.14.0"
 similar = "2.2.1"
 anyhow = "1.0.70"
 tryvial = "0.2.0"
@@ -21,8 +20,7 @@ fn-error-context = "0.2.1"
 auto_context = { path = "auto_context" }
 ordermap = { version = "0.5.8", features = ["serde", "rayon"] }
 serde_path_to_error = "0.1.14"
-env_logger = { version = "0.10.1", optional = true }
-log = "0.4.20"
+env_logger = { version = "0.11.8", optional = true }
 specta = { version = "=2.0.0-rc.22", features = ["serde_json"] }
 hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features = [
     "serde",
@@ -35,9 +33,11 @@ better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", o
 ecow = { version = "0.2.6", features = ["serde"] }
 educe = "0.6.0"
 crc32fast = "1.5.0"
+thiserror = "2.0.16"
+log = { version = "0.4.27", optional = true }
 
 [features]
-cli = ["dep:env_logger", "dep:clap"]
+cli = ["dep:log", "dep:env_logger", "dep:clap"]
 rune = ["dep:rune", "dep:better-rune-derive", "hitman-commons/rune"]
 
 [[bin]]
