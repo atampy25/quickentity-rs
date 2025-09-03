@@ -576,12 +576,12 @@ pub struct PinConnection {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum PinConnectionProxy {
-	Ref(Ref),
 	RefWithValue {
 		#[serde(rename = "ref")]
 		entity_ref: Ref,
 		value: SimpleProperty
-	}
+	},
+	Ref(Ref)
 }
 
 impl From<PinConnection> for PinConnectionProxy {
