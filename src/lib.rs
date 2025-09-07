@@ -2571,7 +2571,7 @@ fn convert_qn_property_to_game(
 #[auto_context]
 fn convert_string_property_name_to_id(property_name: &str) -> Result<PropertyID> {
 	if let Ok(i) = property_name.parse::<u32>()
-		&& PropertyID(i).as_known().is_none()
+		&& !PropertyID::is_known(property_name)
 	{
 		PropertyID::from(i)
 	} else {
