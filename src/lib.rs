@@ -8,6 +8,7 @@ use auto_context::auto_context;
 use core::hash::Hash;
 use ecow::EcoString;
 use fn_error_context::context;
+use glam::{DAffine3, DMat3, DQuat, DVec3, EulerRot};
 use hitman_bin1::{
 	game::h3::{
 		SColorRGB, SColorRGBA, SEntityTemplateEntitySubset, SEntityTemplateExposedEntity, SEntityTemplatePinConnection,
@@ -2024,7 +2025,7 @@ fn convert_reference_to_qn(
 						.to_owned()
 				)
 			},
-			exposed_entity: (!reference.exposed_entity.is_empty()).then(|| reference.exposed_entity.to_owned().into())
+			exposed_entity: (!reference.exposed_entity.is_empty()).then(|| reference.exposed_entity.to_owned())
 		})
 	}
 }
@@ -2066,7 +2067,7 @@ fn convert_qn_reference_to_game(
 						})?
 						.try_into()?,
 					entity_index: -2,
-					exposed_entity: exposed_entity.to_owned().unwrap_or_default().into()
+					exposed_entity: exposed_entity.to_owned().unwrap_or_default()
 				}
 			} else {
 				SEntityTemplateReference {
@@ -2076,7 +2077,7 @@ fn convert_qn_reference_to_game(
 						.get(entity_id)
 						.with_context(|| format!("Reference referred to a nonexistent entity ID: {entity_id}"))?
 						.to_owned() as i32,
-					exposed_entity: exposed_entity.to_owned().unwrap_or_default().into()
+					exposed_entity: exposed_entity.to_owned().unwrap_or_default()
 				}
 			}
 		}
@@ -2084,77 +2085,55 @@ fn convert_qn_reference_to_game(
 }
 
 pub fn convert_matrix(value: &SMatrix43, convert_lossless: bool) -> Value {
-	// this is all from three.js
-	let mut n11 = value.x_axis.x as f64;
-	let mut n12 = value.x_axis.y as f64;
-	let mut n13 = value.x_axis.z as f64;
-	let n14 = 0.0;
-	let n21 = value.y_axis.x as f64;
-	let mut n22 = value.y_axis.y as f64;
-	let mut n23 = value.y_axis.z as f64;
-	let n24 = 0.0;
-	let n31 = value.z_axis.x as f64;
-	let mut n32 = value.z_axis.y as f64;
-	let mut n33 = value.z_axis.z as f64;
-	let n34 = 0.0;
-	let n41 = value.trans.x as f64;
-	let n42 = value.trans.y as f64;
-	let n43 = value.trans.z as f64;
-	let n44 = 1.0;
+	let transform = DAffine3::from_mat3_translation(
+		DMat3 {
+			x_axis: DVec3 {
+				x: value.x_axis.x as f64,
+				y: value.x_axis.y as f64,
+				z: value.x_axis.z as f64
+			},
+			y_axis: DVec3 {
+				x: value.y_axis.x as f64,
+				y: value.y_axis.y as f64,
+				z: value.y_axis.z as f64
+			},
+			z_axis: DVec3 {
+				x: value.z_axis.x as f64,
+				y: value.z_axis.y as f64,
+				z: value.z_axis.z as f64
+			}
+		},
+		DVec3 {
+			x: value.trans.x as f64,
+			y: value.trans.y as f64,
+			z: value.trans.z as f64
+		}
+	);
 
-	let det = n41
-		* (n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34)
-		+ n42
-			* (n11 * n23 * n34 - n11 * n24 * n33 + n14 * n21 * n33 - n13 * n21 * n34 + n13 * n24 * n31
-				- n14 * n23 * n31)
-		+ n43
-			* (n11 * n24 * n32 - n11 * n22 * n34 - n14 * n21 * n32 + n12 * n21 * n34 + n14 * n22 * n31
-				- n12 * n24 * n31)
-		+ n44
-			* (-n13 * n22 * n31 - n11 * n23 * n32 + n11 * n22 * n33 + n13 * n21 * n32 - n12 * n21 * n33
-				+ n12 * n23 * n31);
-
-	let mut sx = n11 * n11 + n21 * n21 + n31 * n31;
-	let sy = n12 * n12 + n22 * n22 + n32 * n32;
-	let sz = n13 * n13 + n23 * n23 + n33 * n33;
-
-	if det < 0.0 {
-		sx = -sx
-	};
-
-	let inv_sx = 1.0 / sx;
-	let inv_sy = 1.0 / sy;
-	let inv_sz = 1.0 / sz;
-
-	n11 *= inv_sx;
-	n12 *= inv_sy;
-	n22 *= inv_sy;
-	n32 *= inv_sy;
-	n13 *= inv_sz;
-	n23 *= inv_sz;
-	n33 *= inv_sz;
+	let (scale, rotation, translation) = transform.to_scale_rotation_translation();
+	let (rotation_x, rotation_y, rotation_z) = rotation.to_euler(EulerRot::XYZ);
 
 	let rotation = json!({
-		"x": (if n13.abs() < 0.9999999 { (- n23).atan2(n33) } else { (n32).atan2(n22) }) * RAD2DEG,
-		"y": n13.clamp(-1.0, 1.0).asin() * RAD2DEG,
-		"z": (if n13.abs() < 0.9999999 { (- n12).atan2(n11) } else { 0.0 }) * RAD2DEG
+		"x": rotation_x * RAD2DEG,
+		"y": rotation_y * RAD2DEG,
+		"z": rotation_z * RAD2DEG
 	});
 
-	let position = json!({ "x": n41, "y": n42, "z": n43 });
+	let position = json!({ "x": translation.x, "y": translation.y, "z": translation.z });
 
 	let scale_important = if convert_lossless {
 		// In lossless mode, preserve exact scale
-		sx != 1.0 || sy != 1.0 || sz != 1.0
+		scale.x != 1.0 || scale.y != 1.0 || scale.z != 1.0
 	} else {
 		// Otherwise only emit if scale is not equal to 1.00 (to 2 d.p.)
-		(sx * 100.0).round() != 100.0 || (sy * 100.0).round() != 100.0 || (sz * 100.0).round() != 100.0
+		(scale.x * 100.0).round() != 100.0 || (scale.y * 100.0).round() != 100.0 || (scale.z * 100.0).round() != 100.0
 	};
 
 	if scale_important {
 		json!({
 			"rotation": rotation,
 			"position": position,
-			"scale": json!({ "x": sx, "y": sy, "z": sz })
+			"scale": json!({ "x": scale.x, "y": scale.y, "z": scale.z })
 		})
 	} else {
 		json!({
@@ -2318,90 +2297,100 @@ pub fn convert_qn_property_value_to_game(
 		}
 
 		"SMatrix43" => {
-			// this is from three.js
-
 			let obj = property_value.as_object().context("SMatrix43 must be object")?;
 
-			let x = obj.get("rotation").ctx?.get("x").ctx?.as_f64().ctx? * DEG2RAD;
-			let y = obj.get("rotation").ctx?.get("y").ctx?.as_f64().ctx? * DEG2RAD;
-			let z = obj.get("rotation").ctx?.get("z").ctx?.as_f64().ctx? * DEG2RAD;
-
-			let c1 = (x / 2.0).cos();
-			let c2 = (y / 2.0).cos();
-			let c3 = (z / 2.0).cos();
-
-			let s1 = (x / 2.0).sin();
-			let s2 = (y / 2.0).sin();
-			let s3 = (z / 2.0).sin();
-
-			let quat_x = s1 * c2 * c3 + c1 * s2 * s3;
-			let quat_y = c1 * s2 * c3 - s1 * c2 * s3;
-			let quat_z = c1 * c2 * s3 + s1 * s2 * c3;
-			let quat_w = c1 * c2 * c3 - s1 * s2 * s3;
-
-			let x2 = quat_x + quat_x;
-			let y2 = quat_y + quat_y;
-			let z2 = quat_z + quat_z;
-			let xx = quat_x * x2;
-			let xy = quat_x * y2;
-			let xz = quat_x * z2;
-			let yy = quat_y * y2;
-			let yz = quat_y * z2;
-			let zz = quat_z * z2;
-			let wx = quat_w * x2;
-			let wy = quat_w * y2;
-			let wz = quat_w * z2;
-
-			let sx = if let Some(scale) = obj.get("scale") {
-				scale
-					.get("x")
-					.context("Scale must have x value")?
-					.as_f64()
-					.context("Scale must be number")?
+			let scale = if let Some(scale) = obj.get("scale") {
+				DVec3 {
+					x: scale
+						.get("x")
+						.context("Scale must have x value")?
+						.as_f64()
+						.context("Scale must be number")?,
+					y: scale
+						.get("y")
+						.context("Scale must have y value")?
+						.as_f64()
+						.context("Scale must be number")?,
+					z: scale
+						.get("z")
+						.context("Scale must have z value")?
+						.as_f64()
+						.context("Scale must be number")?
+				}
 			} else {
-				1.0
+				DVec3 { x: 1.0, y: 1.0, z: 1.0 }
 			};
 
-			let sy = if let Some(scale) = obj.get("scale") {
-				scale
-					.get("y")
-					.context("Scale must have y value")?
-					.as_f64()
-					.context("Scale must be number")?
-			} else {
-				1.0
+			let rotation = {
+				let rotation = obj.get("rotation").context("SMatrix43 must have rotation")?;
+
+				DQuat::from_euler(
+					EulerRot::XYZ,
+					rotation
+						.get("x")
+						.context("Rotation must have x value")?
+						.as_f64()
+						.context("Rotation must be number")?
+						* DEG2RAD,
+					rotation
+						.get("y")
+						.context("Rotation must have y value")?
+						.as_f64()
+						.context("Rotation must be number")?
+						* DEG2RAD,
+					rotation
+						.get("z")
+						.context("Rotation must have z value")?
+						.as_f64()
+						.context("Rotation must be number")?
+						* DEG2RAD
+				)
 			};
 
-			let sz = if let Some(scale) = obj.get("scale") {
-				scale
-					.get("z")
-					.context("Scale must have z value")?
-					.as_f64()
-					.context("Scale must be number")?
-			} else {
-				1.0
+			let translation = {
+				let position = obj.get("position").context("SMatrix43 must have position")?;
+
+				DVec3 {
+					x: position
+						.get("x")
+						.context("Position must have x value")?
+						.as_f64()
+						.context("Position must be number")?,
+					y: position
+						.get("y")
+						.context("Position must have y value")?
+						.as_f64()
+						.context("Position must be number")?,
+					z: position
+						.get("z")
+						.context("Position must have z value")?
+						.as_f64()
+						.context("Position must be number")?
+				}
 			};
+
+			let transform = DAffine3::from_scale_rotation_translation(scale, rotation, translation);
 
 			json!({
 				"XAxis": {
-					"x": (1.0 - (yy + zz)) * sx,
-					"y": (xy - wz) * sy,
-					"z": (xz + wy) * sz
+					"x": transform.matrix3.x_axis.x,
+					"y": transform.matrix3.x_axis.y,
+					"z": transform.matrix3.x_axis.z
 				},
 				"YAxis": {
-					"x": (xy + wz) * sx,
-					"y": (1.0 - (xx + zz)) * sy,
-					"z": (yz - wx) * sz
+					"x": transform.matrix3.y_axis.x,
+					"y": transform.matrix3.y_axis.y,
+					"z": transform.matrix3.y_axis.z
 				},
 				"ZAxis": {
-					"x": (xz - wy) * sx,
-					"y": (yz + wx) * sy,
-					"z": (1.0 - (xx + yy)) * sz
+					"x": transform.matrix3.z_axis.x,
+					"y": transform.matrix3.z_axis.y,
+					"z": transform.matrix3.z_axis.z
 				},
 				"Trans": {
-					"x": obj.get("position").ctx?.get("x").ctx?.as_f64().ctx?,
-					"y": obj.get("position").ctx?.get("y").ctx?.as_f64().ctx?,
-					"z": obj.get("position").ctx?.get("z").ctx?.as_f64().ctx?
+					"x": transform.translation.x,
+					"y": transform.translation.y,
+					"z": transform.translation.z
 				}
 			})
 		}

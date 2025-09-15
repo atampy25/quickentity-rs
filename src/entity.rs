@@ -562,7 +562,7 @@ impl SubEntity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(from = "PinConnectionProxy", into = "PinConnectionProxy")]
 pub struct PinConnection {
 	/// The entity being referenced.
@@ -720,7 +720,7 @@ impl SimpleProperty {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExposedEntity {
 	/// Whether there are multiple target entities.
 	#[serde(rename = "isArray")]
@@ -758,7 +758,7 @@ pub struct PropertyAlias {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
 	///
@@ -769,7 +769,6 @@ pub struct PinConnectionOverride {
 	/// The name of the event on the fromEntity that will trigger the input on the toEntity.
 	#[serde(rename = "fromPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
-	#[specta(type = String)]
 	pub from_pin: EcoString,
 
 	/// The entity whose input will be triggered.
@@ -780,7 +779,6 @@ pub struct PinConnectionOverride {
 	/// fromEntity.
 	#[serde(rename = "toPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
-	#[specta(type = String)]
 	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
@@ -794,7 +792,7 @@ pub struct PinConnectionOverride {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -804,7 +802,6 @@ pub struct PinConnectionOverrideDelete {
 	/// toEntity.
 	#[serde(rename = "fromPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
-	#[specta(type = String)]
 	pub from_pin: EcoString,
 
 	/// The entity whose input is triggered.
@@ -815,7 +812,6 @@ pub struct PinConnectionOverrideDelete {
 	/// the fromEntity.
 	#[serde(rename = "toPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
-	#[specta(type = String)]
 	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
@@ -873,27 +869,55 @@ impl PropertyOverride {
 }
 
 /// A reference to an entity.
-#[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
-#[cfg_attr(feature = "rune", rune_functions(Self::local__meta))]
-#[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
+#[cfg_attr(
+	feature = "rune",
+	rune_functions(Self::local__meta, Self::is_local__meta, Self::as_local__meta, Self::to_local__meta)
+)]
+#[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(from = "RefProxy", into = "RefProxy")]
 pub struct Ref {
 	/// The entity to reference's ID.
-	#[serde(rename = "ref")]
+	#[cfg_attr(feature = "rune", rune(get, set))]
 	pub entity_id: EntityID,
 
 	/// The external scene the referenced entity resides in.
-	#[serde(rename = "externalScene")]
+	#[cfg_attr(feature = "rune", rune(get, set))]
 	pub external_scene: Option<RuntimeID>,
 
 	/// The sub-entity to reference that is exposed by the referenced entity.
-	#[serde(rename = "exposedEntity")]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub exposed_entity: Option<String>
+	pub exposed_entity: Option<EcoString>
+}
+
+#[cfg(feature = "rune")]
+impl Ref {
+	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
+		module.field_function(&rune::runtime::Protocol::GET, "exposed_entity", |s: &Self| {
+			s.exposed_entity.clone().map(|x| String::from(x))
+		})?;
+
+		module.field_function(
+			&rune::runtime::Protocol::SET,
+			"exposed_entity",
+			|s: &mut Self, value: Option<String>| {
+				s.exposed_entity = value.map(|x| x.into());
+			}
+		)?;
+
+		Ok(())
+	}
+
+	fn rune_construct(entity_id: EntityID, external_scene: Option<RuntimeID>, exposed_entity: Option<String>) -> Self {
+		Self {
+			entity_id,
+			external_scene,
+			exposed_entity: exposed_entity.map(|x| x.into())
+		}
+	}
 }
 
 impl Ref {
@@ -905,6 +929,25 @@ impl Ref {
 			exposed_entity: None
 		}
 	}
+
+	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::is_local))]
+	pub fn is_local(&self) -> bool {
+		self.external_scene.is_none()
+	}
+
+	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::as_local))]
+	pub fn as_local(&self) -> Option<EntityID> {
+		if self.is_local() { Some(self.entity_id) } else { None }
+	}
+
+	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::to_local))]
+	pub fn to_local(&self, entity_id: EntityID) -> Self {
+		Self {
+			entity_id,
+			external_scene: None,
+			exposed_entity: self.exposed_entity.to_owned()
+		}
+	}
 }
 
 #[derive(Serialize, Deserialize)]
@@ -913,7 +956,7 @@ enum RefProxy {
 	Short(EntityID),
 	Full {
 		#[serde(rename = "ref")]
-		entity_ref: EntityID,
+		entity_id: EntityID,
 
 		#[serde(rename = "externalScene")]
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -921,7 +964,7 @@ enum RefProxy {
 
 		#[serde(rename = "exposedEntity")]
 		#[serde(skip_serializing_if = "Option::is_none")]
-		exposed_entity: Option<String>
+		exposed_entity: Option<EcoString>
 	}
 }
 
@@ -929,7 +972,7 @@ impl From<Ref> for RefProxy {
 	fn from(value: Ref) -> Self {
 		if value.external_scene.is_some() || value.exposed_entity.is_some() {
 			Self::Full {
-				entity_ref: value.entity_id,
+				entity_id: value.entity_id,
 				external_scene: value.external_scene,
 				exposed_entity: value.exposed_entity
 			}
@@ -942,18 +985,18 @@ impl From<Ref> for RefProxy {
 impl From<RefProxy> for Ref {
 	fn from(value: RefProxy) -> Self {
 		match value {
-			RefProxy::Short(entity_ref) => Self {
-				entity_id: entity_ref,
+			RefProxy::Short(entity_id) => Self {
+				entity_id,
 				external_scene: None,
 				exposed_entity: None
 			},
 
 			RefProxy::Full {
-				entity_ref,
+				entity_id,
 				external_scene,
 				exposed_entity
 			} => Self {
-				entity_id: entity_ref,
+				entity_id,
 				external_scene,
 				exposed_entity
 			}

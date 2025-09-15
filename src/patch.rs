@@ -439,7 +439,7 @@ pub enum ArrayPatchOperation {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PropertyOverrideConnection {
 	/// A reference to an entity to override a property on.
 	#[serde(rename = "entity")]
@@ -448,7 +448,6 @@ pub struct PropertyOverrideConnection {
 	/// The property to override.
 	#[serde(rename = "propertyName")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
-	#[specta(type = String)]
 	pub property_name: EcoString,
 
 	/// The overridden property.
