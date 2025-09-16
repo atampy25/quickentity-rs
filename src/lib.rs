@@ -2111,7 +2111,7 @@ pub fn convert_matrix(value: &SMatrix43, convert_lossless: bool) -> Value {
 	);
 
 	let (scale, rotation, translation) = transform.to_scale_rotation_translation();
-	let (rotation_x, rotation_y, rotation_z) = rotation.to_euler(EulerRot::XYZ);
+	let (rotation_x, rotation_y, rotation_z) = rotation.normalize().to_euler(EulerRot::XYZ);
 
 	let rotation = json!({
 		"x": rotation_x * RAD2DEG,
