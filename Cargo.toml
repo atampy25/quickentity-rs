@@ -26,7 +26,11 @@ hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features 
     "serde",
     "specta",
 ] }
-hitman-bin1 = { git = "https://github.com/atampy25/hitman-bin1" }
+hitman-bin1 = { git = "https://github.com/atampy25/hitman-bin1", features = [
+    "all-games",
+    "TBLU",
+    "TEMP",
+] }
 tracing = { version = "0.1.40", optional = true }
 rune = { git = "https://github.com/rune-rs/rune", rev = "a8c4f97", optional = true }
 better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", optional = true }

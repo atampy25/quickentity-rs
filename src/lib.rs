@@ -2189,7 +2189,7 @@ pub fn convert_variant_to_qn(
 	} else if let Some(value) = property_value.as_ref::<SMatrix43>() {
 		convert_matrix(value, convert_lossless)
 	} else if let Some(value) = property_value.as_ref::<ZGuid>() {
-		to_value(format!(
+		format!(
 			"{:0>8x}-{:0>4x}-{:0>4x}-{:0>2x}{:0>2x}-{:0>2x}{:0>2x}{:0>2x}{:0>2x}{:0>2x}{:0>2x}",
 			value._a,
 			value._b,
@@ -2202,24 +2202,27 @@ pub fn convert_variant_to_qn(
 			value._i,
 			value._j,
 			value._k
-		))?
+		)
+		.into()
 	} else if let Some(value) = property_value.as_ref::<SColorRGB>() {
-		to_value(format!(
+		format!(
 			"#{:0>2x}{:0>2x}{:0>2x}",
 			(value.r * 255.0).round() as u8,
 			(value.g * 255.0).round() as u8,
 			(value.b * 255.0).round() as u8
-		))?
+		)
+		.into()
 	} else if let Some(value) = property_value.as_ref::<SColorRGBA>() {
-		to_value(format!(
+		format!(
 			"#{:0>2x}{:0>2x}{:0>2x}{:0>2x}",
 			(value.r * 255.0).round() as u8,
 			(value.g * 255.0).round() as u8,
 			(value.b * 255.0).round() as u8,
 			(value.a * 255.0).round() as u8
-		))?
+		)
+		.into()
 	} else if let Some(value) = property_value.as_ref::<ZRepositoryID>() {
-		to_value(String::from(*value).to_lowercase())?
+		value.to_string().to_lowercase().into()
 	} else if let Some(value) = property_value.as_ref::<ZVariant>() {
 		json!({
 			"type": value.variant_type(),
@@ -2423,8 +2426,7 @@ pub fn convert_qn_property_value_to_game(
 		}),
 
 		"ZRepositoryID" => to_value(
-			ZRepositoryID::try_from(property_value.as_str().ctx?.to_uppercase().as_str())
-				.context("Invalid ZRepositoryID")?
+			ZRepositoryID::from_str(&property_value.as_str().ctx?.to_uppercase()).context("Invalid ZRepositoryID")?
 		)?,
 
 		"TPair<ZString,ZVariant>" => {
