@@ -2176,15 +2176,12 @@ pub fn convert_variant_to_qn(
 				id_low: u32::MAX
 			} => Value::Null,
 
-			ZRuntimeResourceID { id_low, .. } => {
-				// We ignore the id_high as no resource in the game has that many depends
-				to_value(
-					factory_meta
-						.references
-						.get(*id_low as usize)
-						.context("ZRuntimeResourceID m_IDLow referred to non-existent dependency")?
-				)?
-			}
+			id => to_value(
+				factory_meta
+					.references
+					.get(id.as_u64() as usize)
+					.context("ZRuntimeResourceID referred to non-existent dependency")?
+			)?
 		}
 	} else if let Some(value) = property_value.as_ref::<SMatrix43>() {
 		convert_matrix(value, convert_lossless)
@@ -2280,20 +2277,25 @@ pub fn convert_qn_property_value_to_game(
 
 		"ZRuntimeResourceID" => {
 			if property_value.is_null() {
-				json!({
-					"m_IDHigh": 4294967295u32,
-					"m_IDLow": 4294967295u32
-				})
+				to_value(ZRuntimeResourceID::from_u64(u64::MAX))?
 			} else if property_value.is_string() {
-				json!({
-					"m_IDHigh": 0, // I doubt we'll ever have that many dependencies
-					"m_IDLow": factory_dependencies_index_mapping.get(&RuntimeID::from_str(property_value.as_str().ctx?)?).ctx?
-				})
+				let &idx = factory_dependencies_index_mapping
+					.get(&RuntimeID::from_str(property_value.as_str().ctx?)?)
+					.ctx?;
+
+				to_value(ZRuntimeResourceID::from_u64(idx as u64))?
 			} else if property_value.is_object() {
-				json!({
-					"m_IDHigh": 0,
-					"m_IDLow": factory_dependencies_index_mapping.get(&RuntimeID::from_str(property_value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?)?).ctx?
-				})
+				let &idx = factory_dependencies_index_mapping
+					.get(&RuntimeID::from_str(
+						property_value
+							.get("resource")
+							.context("ZRuntimeResourceID didn't have resource despite being object")?
+							.as_str()
+							.context("ZRuntimeResourceID resource must be string")?
+					)?)
+					.ctx?;
+
+				to_value(ZRuntimeResourceID::from_u64(idx as u64))?
 			} else {
 				bail!("ZRuntimeResourceID was not of a valid type")
 			}
