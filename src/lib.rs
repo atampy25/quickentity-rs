@@ -51,7 +51,7 @@ pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 }
 
 // Why is this not in the standard library
-trait TryAllTryAny: Iterator {
+trait TryIter: Iterator {
 	fn try_any<F>(&mut self, f: F) -> Result<bool>
 	where
 		F: FnMut(Self::Item) -> Result<bool>;
@@ -65,7 +65,7 @@ trait TryAllTryAny: Iterator {
 		F: FnMut(Self::Item) -> Result<bool>;
 }
 
-impl<T: Sized> TryAllTryAny for T
+impl<T: Sized> TryIter for T
 where
 	T: Iterator
 {
@@ -2392,7 +2392,7 @@ fn convert_rt_reference_to_qn(
 						)
 						.context("Expected an external scene to be in the TEMP meta")?
 						.hash
-						.to_owned()
+						.to_string()
 				),
 				_ => bail!("Uhh this external scene is not valid at all")
 			},
@@ -2460,7 +2460,8 @@ fn convert_qn_reference_to_rt(
 								.hash_reference_data
 								.get(*x)
 								.context("TEMP referenced external scene not found in meta in externalScenes")?
-								.hash == *extscene)
+								.hash
+								.to_string() == *extscene)
 						})?
 						.context("TEMP referenced external scene not found in externalScenes in sub-entity")?
 						.try_into()
@@ -2996,29 +2997,33 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 	vec![
 		// blueprint first
 		vec![RpkgResourceReference {
-			hash: entity.blueprint_hash.to_owned(),
+			hash: entity.blueprint_hash.parse()?,
 			flag: "1F".to_string()
 		}],
 		// then external scenes
 		entity
 			.external_scenes
 			.par_iter()
-			.map(|scene| RpkgResourceReference {
-				hash: scene.to_owned(),
-				flag: "1F".to_string()
+			.map(|scene| {
+				Ok(RpkgResourceReference {
+					hash: scene.parse()?,
+					flag: "1F".to_string()
+				})
 			})
-			.collect(),
+			.collect::<Result<_>>()?,
 		// then factories of sub-entities
 		entity
 			.entities
 			.iter()
 			.collect_vec()
 			.par_iter()
-			.map(|(_, sub_entity)| RpkgResourceReference {
-				hash: sub_entity.factory.to_owned(),
-				flag: sub_entity.factory_flag.to_owned().unwrap_or_else(|| "1F".to_string()) // this is slightly more efficient
+			.map(|(_, sub_entity)| {
+				Ok(RpkgResourceReference {
+					hash: sub_entity.factory.parse()?,
+					flag: sub_entity.factory_flag.to_owned().unwrap_or_else(|| "1F".to_string()) // this is slightly more efficient
+				})
 			})
-			.collect(),
+			.collect::<Result<_>>()?,
 		// then sub-entity ZRuntimeResourceIDs
 		entity
 			.entities
@@ -3035,7 +3040,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 								.map(|(_, prop)| -> Result<_> {
 									Ok(if prop.value.is_string() {
 										RpkgResourceReference {
-											hash: prop.value.as_str().ctx?.to_string(),
+											hash: prop.value.as_str().ctx?.parse()?,
 											flag: "1F".to_string()
 										}
 									} else {
@@ -3046,7 +3051,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 												.context("ZRuntimeResourceID must have resource")?
 												.as_str()
 												.context("ZRuntimeResourceID resource must be string")?
-												.to_string(),
+												.parse()?,
 											flag: prop
 												.value
 												.get("flag")
@@ -3071,7 +3076,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 										.map(|value| -> Result<_> {
 											Ok(if value.is_string() {
 												RpkgResourceReference {
-													hash: value.as_str().ctx?.to_string(),
+													hash: value.as_str().ctx?.parse()?,
 													flag: "1F".to_string()
 												}
 											} else {
@@ -3081,7 +3086,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 														.context("ZRuntimeResourceID must have resource")?
 														.as_str()
 														.context("ZRuntimeResourceID resource must be string")?
-														.to_string(),
+														.parse()?,
 													flag: value
 														.get("flag")
 														.context("ZRuntimeResourceID must have flag")?
@@ -3115,7 +3120,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 										.map(|(_, prop)| -> Result<_> {
 											Ok(if prop.value.is_string() {
 												RpkgResourceReference {
-													hash: prop.value.as_str().ctx?.to_string(),
+													hash: prop.value.as_str().ctx?.parse()?,
 													flag: "1F".to_string()
 												}
 											} else {
@@ -3126,7 +3131,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 														.context("ZRuntimeResourceID must have resource")?
 														.as_str()
 														.context("ZRuntimeResourceID resource must be string")?
-														.to_string(),
+														.parse()?,
 													flag: prop
 														.value
 														.get("flag")
@@ -3151,7 +3156,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 												.map(|value| -> Result<_> {
 													Ok(if value.is_string() {
 														RpkgResourceReference {
-															hash: value.as_str().ctx?.to_string(),
+															hash: value.as_str().ctx?.parse()?,
 															flag: "1F".to_string()
 														}
 													} else {
@@ -3161,7 +3166,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 																.context("ZRuntimeResourceID must have resource")?
 																.as_str()
 																.context("ZRuntimeResourceID resource must be string")?
-																.to_string(),
+																.parse()?,
 															flag: value
 																.get("flag")
 																.context("ZRuntimeResourceID must have flag")?
@@ -3207,7 +3212,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 						.map(|(_, prop)| -> Result<_> {
 							Ok(if prop.value.is_string() {
 								RpkgResourceReference {
-									hash: prop.value.as_str().ctx?.to_string(),
+									hash: prop.value.as_str().ctx?.parse()?,
 									flag: "1F".to_string()
 								}
 							} else {
@@ -3218,7 +3223,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 										.context("ZRuntimeResourceID must have resource")?
 										.as_str()
 										.context("ZRuntimeResourceID resource must be string")?
-										.to_string(),
+										.parse()?,
 									flag: prop
 										.value
 										.get("flag")
@@ -3241,7 +3246,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 								.map(|value| -> Result<_> {
 									Ok(if value.is_string() {
 										RpkgResourceReference {
-											hash: value.as_str().ctx?.to_string(),
+											hash: value.as_str().ctx?.parse()?,
 											flag: "1F".to_string()
 										}
 									} else {
@@ -3251,7 +3256,7 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 												.context("ZRuntimeResourceID must have resource")?
 												.as_str()
 												.context("ZRuntimeResourceID resource must be string")?
-												.to_string(),
+												.parse()?,
 											flag: value
 												.get("flag")
 												.context("ZRuntimeResourceID must have flag")?
@@ -3282,24 +3287,30 @@ fn get_factory_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference
 	.collect()
 }
 
-fn get_blueprint_dependencies(entity: &Entity) -> Vec<RpkgResourceReference> {
+#[try_fn]
+#[context("Failure getting blueprint dependencies")]
+fn get_blueprint_dependencies(entity: &Entity) -> Result<Vec<RpkgResourceReference>> {
 	vec![
 		entity
 			.external_scenes
 			.par_iter()
-			.map(|scene| RpkgResourceReference {
-				hash: scene.to_owned(),
-				flag: "1F".to_string()
+			.map(|scene| {
+				Ok(RpkgResourceReference {
+					hash: scene.parse()?,
+					flag: "1F".to_string()
+				})
 			})
-			.collect::<Vec<RpkgResourceReference>>(),
+			.collect::<Result<Vec<RpkgResourceReference>>>()?,
 		entity
 			.entities
 			.iter()
-			.map(|(_, sub_entity)| RpkgResourceReference {
-				hash: sub_entity.blueprint.to_owned(),
-				flag: "1F".to_string()
+			.map(|(_, sub_entity)| {
+				Ok(RpkgResourceReference {
+					hash: sub_entity.blueprint.parse()?,
+					flag: "1F".to_string()
+				})
 			})
-			.collect(),
+			.collect::<Result<_>>()?,
 	]
 	.into_iter()
 	.concat()
@@ -3332,8 +3343,8 @@ pub fn convert_to_qn(
 		}
 
 		let mut entity = Entity {
-			factory_hash: factory_meta.hash_value.to_owned(),
-			blueprint_hash: blueprint_meta.hash_value.to_owned(),
+			factory_hash: factory_meta.hash_value.to_hash(),
+			blueprint_hash: blueprint_meta.hash_value.to_hash(),
 			root_entity: format!(
 				"{:0>16x}",
 				blueprint
@@ -3361,13 +3372,13 @@ pub fn convert_to_qn(
 						format!("{:0>16x}", sub_entity_blueprint.entity_id),
 						SubEntity {
 							name: sub_entity_blueprint.entity_name.to_owned(),
-							factory: factory_dependency.hash.to_owned(),
+							factory: factory_dependency.hash.to_string(),
 							blueprint: blueprint_meta
 								.hash_reference_data
 								.get(sub_entity_blueprint.entity_type_resource_index)
 								.context("Entity resource index referred to nonexistent dependency")?
 								.hash
-								.to_owned(),
+								.to_string(),
 							parent: convert_rt_reference_to_qn(
 								&sub_entity_factory.logical_parent,
 								factory,
@@ -3578,7 +3589,7 @@ pub fn convert_to_qn(
 			external_scenes: factory
 				.external_scene_type_indices_in_resource_header
 				.par_iter()
-				.map(|scene_index| Ok(factory_meta.hash_reference_data.get(*scene_index).ctx?.hash.to_owned()))
+				.map(|scene_index| Ok(factory_meta.hash_reference_data.get(*scene_index).ctx?.hash.to_string()))
 				.collect::<Result<_>>()?,
 			override_deletes: blueprint
 				.override_deletes
@@ -3643,27 +3654,11 @@ pub fn convert_to_qn(
 			entity.extra_factory_dependencies = factory_meta
 				.hash_reference_data
 				.iter()
-				.filter(|x| {
-					if x.hash.contains(':') {
-						!depends.contains(&RpkgResourceReference {
-							hash: format!(
-								"00{}",
-								format!("{:X}", md5::compute(&x.hash))
-									.chars()
-									.skip(2)
-									.take(14)
-									.collect::<String>()
-							),
-							flag: x.flag.to_owned()
-						}) && !depends.contains(x)
-					} else {
-						!depends.contains(x)
-					}
-				})
+				.filter(|x| !depends.contains(x))
 				.map(|x| match x {
-					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
+					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_string()),
 					RpkgResourceReference { hash, flag } => Dependency::Full(DependencyWithFlag {
-						resource: hash.to_owned(),
+						resource: hash.to_string(),
 						flag: flag.to_owned()
 					})
 				})
@@ -3671,32 +3666,16 @@ pub fn convert_to_qn(
 		}
 
 		{
-			let depends = get_blueprint_dependencies(&entity);
+			let depends = get_blueprint_dependencies(&entity)?;
 
 			entity.extra_blueprint_dependencies = blueprint_meta
 				.hash_reference_data
 				.iter()
-				.filter(|x| {
-					if x.hash.contains(':') {
-						!depends.contains(&RpkgResourceReference {
-							hash: format!(
-								"00{}",
-								format!("{:X}", md5::compute(&x.hash))
-									.chars()
-									.skip(2)
-									.take(14)
-									.collect::<String>()
-							),
-							flag: x.flag.to_owned()
-						}) && !depends.contains(x)
-					} else {
-						!depends.contains(x)
-					}
-				})
+				.filter(|x| !depends.contains(x))
 				.map(|x| match x {
-					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_owned()),
+					RpkgResourceReference { hash, flag } if flag == "1F" => Dependency::Short(hash.to_string()),
 					RpkgResourceReference { hash, flag } => Dependency::Full(DependencyWithFlag {
-						resource: hash.to_owned(),
+						resource: hash.to_string(),
 						flag: flag.to_owned()
 					})
 				})
@@ -4048,27 +4027,29 @@ pub fn convert_to_rt(
 				entity
 					.extra_factory_dependencies
 					.iter()
-					.map(|x| match x {
-						Dependency::Short(hash) => RpkgResourceReference {
-							hash: hash.to_owned(),
-							flag: "1F".to_string()
-						},
-						Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
-							hash: resource.to_owned(),
-							flag: flag.to_owned()
-						}
+					.map(|x| {
+						Ok(match x {
+							Dependency::Short(hash) => RpkgResourceReference {
+								hash: hash.parse()?,
+								flag: "1F".to_string()
+							},
+							Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
+								hash: resource.parse()?,
+								flag: flag.to_owned()
+							}
+						})
 					})
-					.collect()
+					.collect::<Result<_>>()?
 			]
 			.concat(),
 			hash_reference_table_dummy: 0,
 			hash_reference_table_size: 193,
-			hash_resource_type: "TEMP".to_string(),
+			hash_resource_type: "TEMP".try_into()?,
 			hash_size: 2147484657,
 			hash_size_final: 2377,
 			hash_size_in_memory: 1525,
 			hash_size_in_video_memory: 4294967295,
-			hash_value: entity.factory_hash.to_owned(),
+			hash_value: entity.factory_hash.parse()?,
 			hash_path: None
 		};
 
@@ -4257,31 +4238,33 @@ pub fn convert_to_rt(
 		let blueprint_meta = RpkgResourceMeta {
 			hash_offset: 1367,
 			hash_reference_data: [
-				get_blueprint_dependencies(entity),
+				get_blueprint_dependencies(entity)?,
 				entity
 					.extra_blueprint_dependencies
 					.iter()
-					.map(|x| match x {
-						Dependency::Short(hash) => RpkgResourceReference {
-							hash: hash.to_owned(),
-							flag: "1F".to_string()
-						},
-						Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
-							hash: resource.to_owned(),
-							flag: flag.to_owned()
-						}
+					.map(|x| {
+						Ok(match x {
+							Dependency::Short(hash) => RpkgResourceReference {
+								hash: hash.parse()?,
+								flag: "1F".to_string()
+							},
+							Dependency::Full(DependencyWithFlag { resource, flag }) => RpkgResourceReference {
+								hash: resource.parse()?,
+								flag: flag.to_owned()
+							}
+						})
 					})
-					.collect()
+					.collect::<Result<_>>()?
 			]
 			.concat(),
 			hash_reference_table_dummy: 0,
 			hash_reference_table_size: 193,
-			hash_resource_type: "TBLU".to_string(),
+			hash_resource_type: "TBLU".try_into()?,
 			hash_size: 2147484657,
 			hash_size_final: 2377,
 			hash_size_in_memory: 1525,
 			hash_size_in_video_memory: 4294967295,
-			hash_value: entity.blueprint_hash.to_owned(),
+			hash_value: entity.blueprint_hash.parse()?,
 			hash_path: None
 		};
 
@@ -4289,14 +4272,14 @@ pub fn convert_to_rt(
 			.hash_reference_data
 			.par_iter()
 			.enumerate()
-			.map(|(x, y)| (y.hash.to_owned(), x.to_owned()))
+			.map(|(x, y)| (y.hash.to_string(), x.to_owned()))
 			.collect();
 
 		let blueprint_dependencies_index_mapping: HashMap<String, usize> = blueprint_meta
 			.hash_reference_data
 			.par_iter()
 			.enumerate()
-			.map(|(x, y)| (y.hash.to_owned(), x.to_owned()))
+			.map(|(x, y)| (y.hash.to_string(), x.to_owned()))
 			.collect();
 
 		factory.property_overrides = entity
