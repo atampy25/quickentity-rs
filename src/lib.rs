@@ -9,6 +9,7 @@ use auto_context::auto_context;
 use core::hash::Hash;
 use fn_error_context::context;
 use hitman_commons::{
+	metadata::RuntimeID,
 	resourcelib,
 	rpkg_tool::{RpkgResourceMeta, RpkgResourceReference}
 };
@@ -2761,7 +2762,7 @@ pub fn convert_qn_property_value_to_rt(
 	factory: &resourcelib::EntityFactory,
 	factory_meta: &RpkgResourceMeta,
 	entity_id_to_index_mapping: &HashMap<String, usize>,
-	factory_dependencies_index_mapping: &HashMap<String, usize>
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
 ) -> Result<Value> {
 	match property.property_type.as_str() {
 		"SEntityTemplateReference" => to_value(convert_qn_reference_to_rt(
@@ -2782,12 +2783,12 @@ pub fn convert_qn_property_value_to_rt(
 			} else if property.value.is_string() {
 				json!({
 					"m_IDHigh": 0, // I doubt we'll ever have that many dependencies
-					"m_IDLow": factory_dependencies_index_mapping.get(property.value.as_str().ctx?).ctx?
+					"m_IDLow": factory_dependencies_index_mapping.get(&property.value.as_str().ctx?.parse()?).ctx?
 				})
 			} else if property.value.is_object() {
 				json!({
 					"m_IDHigh": 0,
-					"m_IDLow": factory_dependencies_index_mapping.get(property.value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?).ctx?
+					"m_IDLow": factory_dependencies_index_mapping.get(&property.value.get("resource").context("ZRuntimeResourceID didn't have resource despite being object")?.as_str().context("ZRuntimeResourceID resource must be string")?.parse()?).ctx?
 				})
 			} else {
 				bail!("ZRuntimeResourceID was not of a valid type")
@@ -2923,7 +2924,7 @@ fn convert_qn_property_to_rt(
 	factory: &resourcelib::EntityFactory,
 	factory_meta: &RpkgResourceMeta,
 	entity_id_to_index_mapping: &HashMap<String, usize>,
-	factory_dependencies_index_mapping: &HashMap<String, usize>
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
 ) -> Result<resourcelib::Property> {
 	resourcelib::Property {
 		n_property_id: convert_string_property_name_to_rt_id(property_name)?,
@@ -4268,18 +4269,18 @@ pub fn convert_to_rt(
 			hash_path: None
 		};
 
-		let factory_dependencies_index_mapping: HashMap<String, usize> = factory_meta
+		let factory_dependencies_index_mapping: HashMap<RuntimeID, usize> = factory_meta
 			.hash_reference_data
-			.par_iter()
+			.iter()
 			.enumerate()
-			.map(|(x, y)| (y.hash.to_string(), x.to_owned()))
+			.map(|(x, y)| (y.hash, x.to_owned()))
 			.collect();
 
-		let blueprint_dependencies_index_mapping: HashMap<String, usize> = blueprint_meta
+		let blueprint_dependencies_index_mapping: HashMap<RuntimeID, usize> = blueprint_meta
 			.hash_reference_data
-			.par_iter()
+			.iter()
 			.enumerate()
-			.map(|(x, y)| (y.hash.to_string(), x.to_owned()))
+			.map(|(x, y)| (y.hash, x.to_owned()))
 			.collect();
 
 		factory.property_overrides = entity
@@ -4345,7 +4346,9 @@ pub fn convert_to_rt(
 						&factory_meta,
 						&entity_id_to_index_mapping
 					)?,
-					entity_type_resource_index: *factory_dependencies_index_mapping.get(&sub_entity.factory).ctx?,
+					entity_type_resource_index: *factory_dependencies_index_mapping
+						.get(&sub_entity.factory.parse()?)
+						.ctx?,
 					property_values: if let Some(props) = sub_entity.properties.to_owned() {
 						props
 							.iter()
@@ -4427,7 +4430,9 @@ pub fn convert_to_rt(
 						&factory_meta,
 						&entity_id_to_index_mapping
 					)?,
-					entity_type_resource_index: *blueprint_dependencies_index_mapping.get(&sub_entity.blueprint).ctx?,
+					entity_type_resource_index: *blueprint_dependencies_index_mapping
+						.get(&sub_entity.blueprint.parse()?)
+						.ctx?,
 					entity_id: u64::from_str_radix(entity_id, 16).context("entity_id must be valid hex")?,
 					editor_only: sub_entity.editor_only.unwrap_or(false),
 					entity_name: sub_entity.name.to_owned(),
