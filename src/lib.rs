@@ -3715,7 +3715,7 @@ pub fn convert_to_game(
 									Ok(SEntityTemplatePlatformSpecificProperty {
 										platform: platform
 											.as_str()
-											.try_into()
+											.parse()
 											.map_err(|_| anyhow!("Invalid platform ID: {platform}"))?,
 										post_init: y.post_init,
 										property_value: convert_qn_property_to_game(
