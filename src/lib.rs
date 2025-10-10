@@ -2461,8 +2461,7 @@ fn convert_qn_reference_to_rt(
 								.hash_reference_data
 								.get(*x)
 								.context("TEMP referenced external scene not found in meta in externalScenes")?
-								.hash
-								.to_string() == *extscene)
+								.hash == extscene.parse()?)
 						})?
 						.context("TEMP referenced external scene not found in externalScenes in sub-entity")?
 						.try_into()
