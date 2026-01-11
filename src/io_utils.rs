@@ -1,10 +1,11 @@
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use serde_json::ser::Formatter;
-use serde_json::Serializer;
-use std::io;
-use std::path::Path;
-use std::{fs, io::Read};
+use std::{
+	fs,
+	io::{self, Read},
+	path::Path
+};
+
+use serde::{Serialize, de::DeserializeOwned};
+use serde_json::{Serializer, ser::Formatter};
 
 pub fn read_as_json<T: DeserializeOwned>(path: impl AsRef<Path>) -> T {
 	serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_slice(&{

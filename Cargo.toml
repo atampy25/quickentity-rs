@@ -13,7 +13,6 @@ rayon = "1.8.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = { version = "1.0.81", features = ["preserve_order"] }
 serde_with = "3.14.0"
-similar = "2.2.1"
 anyhow = "1.0.70"
 tryvial = "0.2.0"
 fn-error-context = "0.2.1"
@@ -40,10 +39,15 @@ crc32fast = "1.5.0"
 thiserror = "2.0.16"
 log = { version = "0.4.27", optional = true }
 glam = { version = "0.30.5", features = ["glam-assert"] }
+uuid = { version = "1.19.0", features = ["serde"] }
+hotpath = "0.9"
 
 [features]
 cli = ["dep:log", "dep:env_logger", "dep:clap"]
 rune = ["dep:rune", "dep:better-rune-derive", "hitman-commons/rune"]
+
+hotpath = ["hotpath/hotpath"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
 
 [[bin]]
 name = "quickentity_rs"

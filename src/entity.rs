@@ -1,20 +1,23 @@
 use std::{
+	collections::HashMap,
 	fmt::{Debug, Display, Formatter},
 	hash::Hash,
 	num::ParseIntError,
 	str::FromStr
 };
 
+use anyhow::{Context, Result};
 use ecow::EcoString;
-use educe::Educe;
-use hitman_commons::metadata::{ResourceReference, RuntimeID};
+use fn_error_context::context;
+use hitman_bin1::game::h3::{SEntityTemplateReference, STemplateEntityBlueprint, STemplateEntityFactory};
+use hitman_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use specta::Type;
+use tryvial::try_fn;
 
-#[cfg(feature = "rune")]
-use std::collections::HashMap;
+use crate::variant::Variant;
 
 #[cfg(feature = "rune")]
 pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
@@ -27,7 +30,6 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 	module.ty::<SubEntity>()?;
 	module.ty::<PinConnection>()?;
 	module.ty::<Property>()?;
-	module.ty::<SimpleProperty>()?;
 	module.ty::<ExposedEntity>()?;
 	module.ty::<PropertyAlias>()?;
 	module.ty::<PinConnectionOverride>()?;
@@ -128,8 +130,7 @@ impl Type for EntityID {
 	feature = "rune",
 	rune_functions(Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
 )]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Educe)]
-#[educe(Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Entity {
 	/// The hash of the TEMP file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -190,8 +191,7 @@ pub struct Entity {
 	/// The QuickEntity format version of this entity. The current version is 3.2.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "quickEntityVersion")]
-	#[educe(Hash(ignore))]
-	pub quick_entity_version: f32,
+	pub quickentity_version: f32,
 
 	/// Extra resource references that should be added to the entity's factory when converted to the game's format.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -254,7 +254,7 @@ pub struct CommentEntity {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_new))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SubEntity {
 	/// The "logical" or "organisational" parent of the entity, used for tree organisation in graphical editors.
 	///
@@ -562,7 +562,7 @@ impl SubEntity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(from = "PinConnectionProxy", into = "PinConnectionProxy")]
 pub struct PinConnection {
 	/// The entity being referenced.
@@ -570,7 +570,7 @@ pub struct PinConnection {
 	pub entity_ref: Ref,
 
 	/// The constant value of the pin connection.
-	pub value: Option<SimpleProperty>
+	pub value: Option<Variant>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -579,7 +579,7 @@ enum PinConnectionProxy {
 	RefWithValue {
 		#[serde(rename = "ref")]
 		entity_ref: Ref,
-		value: SimpleProperty
+		value: Variant
 	},
 	Ref(Ref)
 }
@@ -615,21 +615,15 @@ impl From<PinConnectionProxy> for PinConnection {
 
 /// A property with a type and a value. Can be marked as post-init.
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
-#[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
+#[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Property {
-	/// The type of the property.
-	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-	#[serde(rename = "type")]
-	#[specta(type = String)]
-	pub property_type: EcoString,
-
-	/// The value of the property.
-	#[serde(rename = "value")]
-	pub value: serde_json::Value,
+	#[cfg_attr(feature = "rune", rune(get, set))]
+	#[serde(flatten)]
+	pub value: Variant,
 
 	/// Whether the property should be (presumably) loaded/set after the entity has been initialised.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -637,79 +631,6 @@ pub struct Property {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "std::ops::Not::not")]
 	pub post_init: bool
-}
-
-#[cfg(feature = "rune")]
-impl Property {
-	fn rune_construct(property_type: String, value: rune::Value, post_init: bool) -> Self {
-		Self {
-			property_type: property_type.into(),
-			value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null),
-			post_init
-		}
-	}
-
-	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(&rune::runtime::Protocol::GET, "value", |s: &Self| {
-			serde_json::from_value::<rune::Value>(s.value.clone()).ok()
-		})?;
-
-		module.field_function(
-			&rune::runtime::Protocol::SET,
-			"value",
-			|s: &mut Self, value: rune::Value| {
-				s.value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
-			}
-		)?;
-
-		Ok(())
-	}
-}
-
-/// A simple property.
-///
-/// Simple properties cannot be marked as post-init. They are used by pin connection overrides, events and input/output copying.
-#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
-#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
-#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
-#[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
-pub struct SimpleProperty {
-	/// The type of the simple property.
-	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-	#[serde(rename = "type")]
-	#[specta(type = String)]
-	pub property_type: EcoString,
-
-	/// The simple property's value.
-	#[serde(rename = "value")]
-	pub value: serde_json::Value
-}
-
-#[cfg(feature = "rune")]
-impl SimpleProperty {
-	fn rune_construct(property_type: String, value: rune::Value) -> Self {
-		Self {
-			property_type: property_type.into(),
-			value: serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
-		}
-	}
-
-	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
-		module.field_function(&rune::runtime::Protocol::GET, "value", |s: &Self| {
-			serde_json::from_value::<rune::Value>(s.value.clone()).ok()
-		})?;
-
-		module.field_function(
-			&rune::runtime::Protocol::SET,
-			"value",
-			|s: &mut Self, value: rune::Value| {
-				s.value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
-			}
-		)?;
-
-		Ok(())
-	}
 }
 
 /// An exposed entity.
@@ -758,7 +679,7 @@ pub struct PropertyAlias {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
 	///
@@ -783,7 +704,7 @@ pub struct PinConnectionOverride {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: Option<SimpleProperty>
+	pub value: Option<Variant>
 }
 
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
@@ -792,7 +713,7 @@ pub struct PinConnectionOverride {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -816,7 +737,7 @@ pub struct PinConnectionOverrideDelete {
 
 	/// The constant value of the input to the toEntity.
 	#[serde(rename = "value")]
-	pub value: Option<SimpleProperty>
+	pub value: Option<Variant>
 }
 
 /// A set of overrides for entity properties.
@@ -824,7 +745,7 @@ pub struct PinConnectionOverrideDelete {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PropertyOverride {
 	/// An array of references to the entities to override the properties of.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -833,12 +754,12 @@ pub struct PropertyOverride {
 
 	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
-	pub properties: OrderMap<EcoString, SimpleProperty>
+	pub properties: OrderMap<EcoString, Variant>
 }
 
 #[cfg(feature = "rune")]
 impl PropertyOverride {
-	fn rune_construct(entities: Vec<Ref>, properties: HashMap<String, SimpleProperty>) -> Self {
+	fn rune_construct(entities: Vec<Ref>, properties: HashMap<String, Variant>) -> Self {
 		Self {
 			entities,
 			properties: properties.into_iter().map(|(x, y)| (x.into(), y)).collect()
@@ -859,7 +780,7 @@ impl PropertyOverride {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"properties",
-			|s: &mut Self, value: HashMap<String, SimpleProperty>| {
+			|s: &mut Self, value: HashMap<String, Variant>| {
 				s.properties = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
@@ -920,6 +841,7 @@ impl Ref {
 	}
 }
 
+#[hotpath::measure_all]
 impl Ref {
 	#[cfg_attr(feature = "rune", rune::function(keep, path = Self::local))]
 	pub fn local(entity_id: EntityID) -> Self {
@@ -946,6 +868,103 @@ impl Ref {
 			entity_id,
 			external_scene: None,
 			exposed_entity: self.exposed_entity.to_owned()
+		}
+	}
+
+	#[try_fn]
+	#[context("Failure converting reference to QN")]
+	pub fn from_game(
+		reference: &SEntityTemplateReference,
+		factory: &STemplateEntityFactory,
+		blueprint: &STemplateEntityBlueprint,
+		factory_meta: &ResourceMetadata
+	) -> Result<Option<Self>> {
+		if reference.entity_index == -1 {
+			None
+		} else {
+			Some(Ref {
+				entity_id: if reference.entity_index == -2 {
+					reference.entity_id.into()
+				} else {
+					blueprint
+						.sub_entities
+						.get(reference.entity_index as usize)
+						.with_context(|| format!("Invalid entity index {} for reference", reference.entity_index))?
+						.entity_id
+						.into()
+				},
+				external_scene: if reference.external_scene_index == -1 {
+					None
+				} else {
+					Some(
+						factory_meta
+							.references
+							.get(
+								factory
+									.external_scene_type_indices_in_resource_header
+									.get(reference.external_scene_index as usize)
+									.context("No such external scene in factory")?
+									.to_owned() as usize
+							)
+							.context("External scene type index does not exist in factory metadata")?
+							.resource
+							.to_owned()
+					)
+				},
+				exposed_entity: (!reference.exposed_entity.is_empty()).then(|| reference.exposed_entity.to_owned())
+			})
+		}
+	}
+
+	#[try_fn]
+	#[context("Invalid reference")]
+	pub fn to_game(
+		&self,
+		factory: &STemplateEntityFactory,
+		factory_meta: &ResourceMetadata,
+		entity_id_to_index_mapping: &HashMap<EntityID, usize>
+	) -> Result<SEntityTemplateReference> {
+		if let Some(external_scene) = &self.external_scene {
+			SEntityTemplateReference {
+				entity_id: self.entity_id.as_u64(),
+				external_scene_index: factory
+					.external_scene_type_indices_in_resource_header
+					.iter()
+					.position(|x| factory_meta.references.get(*x as usize).unwrap().resource == *external_scene)
+					.with_context(|| format!("External scene {external_scene} is not listed in externalScenes"))?
+					.try_into()?,
+				entity_index: -2,
+				exposed_entity: self.exposed_entity.to_owned().unwrap_or_default()
+			}
+		} else {
+			SEntityTemplateReference {
+				entity_id: u64::MAX,
+				external_scene_index: -1,
+				entity_index: entity_id_to_index_mapping
+					.get(&self.entity_id)
+					.with_context(|| format!("Entity {} does not exist", self.entity_id))?
+					.to_owned() as i32,
+				exposed_entity: self.exposed_entity.to_owned().unwrap_or_default()
+			}
+		}
+	}
+
+	#[try_fn]
+	pub fn to_game_opt(
+		value: Option<&Self>,
+		factory: &STemplateEntityFactory,
+		factory_meta: &ResourceMetadata,
+		entity_id_to_index_mapping: &HashMap<EntityID, usize>
+	) -> Result<SEntityTemplateReference> {
+		match value {
+			None => SEntityTemplateReference {
+				entity_id: u64::MAX,
+				external_scene_index: -1,
+				entity_index: -1,
+				exposed_entity: "".into()
+			},
+
+			Some(value) => value.to_game(factory, factory_meta, entity_id_to_index_mapping)?
 		}
 	}
 }

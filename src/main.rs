@@ -165,6 +165,7 @@ enum PatchCommand {
 }
 
 #[try_fn]
+#[hotpath::main]
 fn main() -> Result<()> {
 	if std::env::var("RUST_LOG").is_err() {
 		unsafe { std::env::set_var("RUST_LOG", "info") }
