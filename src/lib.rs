@@ -1072,8 +1072,6 @@ fn generate_array_patch(original: &[Variant], modified: &[Variant]) -> Vec<Array
 		}
 	}
 
-	actions.reverse();
-
 	let mut ops: Vec<ArrayPatchOperation> = Vec::new();
 	let mut working = original.to_vec();
 
