@@ -29,19 +29,19 @@ use hitman_commons::{
 };
 use itertools::Itertools;
 use ordermap::OrderMap;
-use patch::{
-	ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SetPropertyValue, SubEntityOperation
-};
+use patch::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
 use rayon::prelude::*;
 use thiserror::Error;
 use tryvial::try_fn;
 
-use crate::{entity::Property, patch::ItemSelector, variant::Variant};
+use crate::{
+	entity::Property,
+	patch::{ItemSelector, VariantPatch},
+	variant::Variant
+};
 
 pub const PATCH_VERSION: u8 = 7;
 pub const ENTITY_VERSION: f32 = 3.2;
-
-// TODO: Array patches for property override properties? Simple properties in general?
 
 /// The apply_patch function is not exposed to Rune because of the `emit` argument.
 #[cfg(feature = "rune")]
@@ -57,50 +57,6 @@ pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 	ctx.install(module)?;
 
 	Ok(())
-}
-
-// Why is this not in the standard library
-trait TryAllTryPos: Iterator {
-	fn try_all<F>(&mut self, f: F) -> Result<bool>
-	where
-		F: FnMut(Self::Item) -> Result<bool>;
-
-	fn try_position<F>(&mut self, f: F) -> Result<Option<usize>>
-	where
-		F: FnMut(Self::Item) -> Result<bool>;
-}
-
-impl<T: Sized> TryAllTryPos for T
-where
-	T: Iterator
-{
-	#[context("Failure in try_all")]
-	fn try_all<F>(&mut self, mut f: F) -> Result<bool>
-	where
-		F: FnMut(Self::Item) -> Result<bool>
-	{
-		for x in self {
-			if !(f(x)?) {
-				return Ok(false);
-			}
-		}
-
-		Ok(true)
-	}
-
-	#[context("Failure in try_position")]
-	fn try_position<F>(&mut self, mut f: F) -> Result<Option<usize>>
-	where
-		F: FnMut(Self::Item) -> Result<bool>
-	{
-		for (i, x) in self.enumerate() {
-			if f(x)? {
-				return Ok(Some(i));
-			}
-		}
-
-		Ok(None)
-	}
 }
 
 #[derive(Error, Debug)]
@@ -228,25 +184,25 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagn
 							}
 						}
 
-						SubEntityOperation::SetPropertyValue(SetPropertyValue { property_name, value }) => {
-							entity
+						SubEntityOperation::PatchPropertyValue(property_name, patch) => {
+							let property = entity
 								.properties
 								.get_mut(&property_name)
-								.context("SetPropertyValue couldn't find expected property!")?
-								.value = value;
-						}
+								.context("PatchPropertyValue couldn't find expected property!")?;
 
-						SubEntityOperation::PatchArrayPropertyValue(property_name, array_patch) => {
-							let item_to_patch = entity
-								.properties
-								.get_mut(&property_name)
-								.context("PatchArrayPropertyValue couldn't find expected property!")?;
+							match patch {
+								VariantPatch::Set(value) => {
+									property.value = value;
+								}
 
-							let Variant::Array(_, value) = &mut item_to_patch.value else {
-								bail!("PatchArrayPropertyValue expected property to be an array!");
-							};
+								VariantPatch::ArrayPatch(patch) => {
+									let Variant::Array(_, value) = &mut property.value else {
+										bail!("PatchPropertyValue expected property to be an array!");
+									};
 
-							apply_array_patch(value, array_patch, property_name, &mut emit)?;
+									apply_array_patch(value, patch, property_name, &mut emit)?;
+								}
+							}
 						}
 
 						SubEntityOperation::SetPropertyPostInit(name, value) => {
@@ -294,33 +250,27 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagn
 							}
 						}
 
-						SubEntityOperation::SetPlatformSpecificPropertyValue(platform, property_name, value) => {
-							entity
+						SubEntityOperation::PatchPlatformSpecificPropertyValue(platform, property_name, patch) => {
+							let property = entity
 								.platform_specific_properties
 								.get_mut(&platform)
-								.context("SetPSPropertyValue couldn't find expected platform!")?
+								.context("PatchPlatformSpecificPropertyValue couldn't find expected platform!")?
 								.get_mut(&property_name)
-								.context("SetPSPropertyValue couldn't find expected property!")?
-								.value = value;
-						}
+								.context("PatchPlatformSpecificPropertyValue couldn't find expected property!")?;
 
-						SubEntityOperation::PatchPlatformSpecificArrayPropertyValue(
-							platform,
-							property_name,
-							array_patch
-						) => {
-							let item_to_patch = entity
-								.platform_specific_properties
-								.get_mut(&platform)
-								.context("PatchPSArrayPropertyValue couldn't find expected platform!")?
-								.get_mut(&property_name)
-								.context("PatchPSArrayPropertyValue couldn't find expected property!")?;
+							match patch {
+								VariantPatch::Set(value) => {
+									property.value = value;
+								}
 
-							let Variant::Array(_, value) = &mut item_to_patch.value else {
-								bail!("PatchArrayPropertyValue expected property to be an array!");
-							};
+								VariantPatch::ArrayPatch(patch) => {
+									let Variant::Array(_, value) = &mut property.value else {
+										bail!("PatchPlatformSpecificPropertyValue expected property to be an array!");
+									};
 
-							apply_array_patch(value, array_patch, property_name, &mut emit)?;
+									apply_array_patch(value, patch, property_name, &mut emit)?;
+								}
+							}
 						}
 
 						SubEntityOperation::SetPlatformSpecificPropertyPostInit(platform, name, value) => {
@@ -1214,15 +1164,18 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
-								SubEntityOperation::PatchArrayPropertyValue(property_name.to_owned(), ops)
+								SubEntityOperation::PatchPropertyValue(
+									property_name.to_owned(),
+									VariantPatch::ArrayPatch(ops)
+								)
 							));
 						} else {
 							patch.push(PatchOperation::SubEntityOperation(
 								entity_id.to_owned(),
-								SubEntityOperation::SetPropertyValue(SetPropertyValue {
-									property_name: property_name.to_owned(),
-									value: new_property_data.value.to_owned()
-								})
+								SubEntityOperation::PatchPropertyValue(
+									property_name.to_owned(),
+									VariantPatch::Set(new_property_data.value.to_owned())
+								)
 							));
 						}
 					}
@@ -1270,15 +1223,30 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 
 					for (property_name, new_property_data) in new_properties_data {
 						if let Some(old_property_data) = old_properties_data.get(property_name) {
-							if old_property_data.value != new_property_data.value {
-								patch.push(PatchOperation::SubEntityOperation(
-									entity_id.to_owned(),
-									SubEntityOperation::SetPlatformSpecificPropertyValue(
-										platform_name.to_owned(),
-										property_name.to_owned(),
-										new_property_data.value.to_owned()
-									)
-								));
+							if !old_property_data.value.rough_eq(&new_property_data.value) {
+								if let Variant::Array(_, old_value) = &old_property_data.value
+									&& let Variant::Array(_, new_value) = &new_property_data.value
+								{
+									let ops = generate_array_patch(old_value, new_value);
+
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::PatchPlatformSpecificPropertyValue(
+											platform_name.to_owned(),
+											property_name.to_owned(),
+											VariantPatch::ArrayPatch(ops)
+										)
+									));
+								} else {
+									patch.push(PatchOperation::SubEntityOperation(
+										entity_id.to_owned(),
+										SubEntityOperation::PatchPlatformSpecificPropertyValue(
+											platform_name.to_owned(),
+											property_name.to_owned(),
+											VariantPatch::Set(new_property_data.value.to_owned())
+										)
+									));
+								}
 							}
 
 							if old_property_data.post_init != new_property_data.post_init {
@@ -2613,6 +2581,7 @@ pub fn r_convert_to_qn(
 #[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 #[hotpath::measure]
+#[allow(unused)]
 pub fn convert_to_game(
 	entity: &Entity,
 	version: GameVersion

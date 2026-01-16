@@ -658,7 +658,7 @@ impl Serialize for Variant {
 						Self::PairStringVariant(first, second) => to_value((first, second)),
 						Self::Variant(value) => to_value(value),
 						Self::Array(_, items) => to_value(items),
-						Self::Raw(value) => to_value(value)
+						Self::Raw(value) => value.to_serde()
 					})
 					.collect::<Result<Vec<_>, _>>()
 					.map_err(S::Error::custom)?
@@ -739,6 +739,7 @@ impl<'de> Deserialize<'de> for Variant {
 
 #[derive(Type)]
 #[specta(rename = "Variant")]
+#[allow(unused)]
 struct VariantProxy {
 	#[specta(rename = "type")]
 	ty: String,

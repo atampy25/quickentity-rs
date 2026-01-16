@@ -130,6 +130,8 @@ pub enum PatchOperation {
 	RemoveComment(#[cfg_attr(feature = "rune", rune(get, set))] CommentEntity)
 }
 
+// TODO: Robustness improvements like adding expected post-initness to PatchPropertyValue?
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
@@ -157,12 +159,9 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetPropertyValue(#[cfg_attr(feature = "rune", rune(get, set))] SetPropertyValue),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	PatchArrayPropertyValue(
+	PatchPropertyValue(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] Vec<ArrayPatchOperation>
+		#[cfg_attr(feature = "rune", rune(get, set))] VariantPatch
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -182,17 +181,10 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetPlatformSpecificPropertyValue(
+	PatchPlatformSpecificPropertyValue(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] Variant
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	PatchPlatformSpecificArrayPropertyValue(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] Vec<ArrayPatchOperation>
+		#[cfg_attr(feature = "rune", rune(get, set))] VariantPatch
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -331,19 +323,16 @@ pub enum SubEntityOperation {
 	RemoveAllSubsetsFor(#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString)
 }
 
-/// A property name and value to set on an entity.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
-#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
-#[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
-pub struct SetPropertyValue {
-	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-	#[specta(type = String)]
-	pub property_name: EcoString,
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
+pub enum VariantPatch {
+	#[cfg_attr(feature = "rune", rune(constructor))]
+	Set(#[cfg_attr(feature = "rune", rune(get, set))] Variant),
 
-	#[cfg_attr(feature = "rune", rune(get, set))]
-	pub value: Variant
+	#[cfg_attr(feature = "rune", rune(constructor))]
+	ArrayPatch(#[cfg_attr(feature = "rune", rune(get, set))] Vec<ArrayPatchOperation>)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
@@ -351,7 +340,10 @@ pub struct SetPropertyValue {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-pub struct ItemSelector(pub Variant, pub usize);
+pub struct ItemSelector(
+	#[cfg_attr(feature = "rune", rune(get, set))] pub Variant,
+	#[cfg_attr(feature = "rune", rune(get, set))] pub usize
+);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
@@ -361,16 +353,30 @@ pub enum ArrayPatchOperation {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Add {
 		/// Preferred over `after`.
+		#[cfg_attr(feature = "rune", rune(get, set))]
 		before: Option<ItemSelector>,
+
+		#[cfg_attr(feature = "rune", rune(get, set))]
 		after: Option<ItemSelector>,
+
+		#[cfg_attr(feature = "rune", rune(get, set))]
 		item: Variant
 	},
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	Remove { item: ItemSelector },
+	Remove {
+		#[cfg_attr(feature = "rune", rune(get, set))]
+		item: ItemSelector
+	},
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	Replace { item: ItemSelector, new: Variant }
+	Replace {
+		#[cfg_attr(feature = "rune", rune(get, set))]
+		item: ItemSelector,
+
+		#[cfg_attr(feature = "rune", rune(get, set))]
+		new: Variant
+	}
 }
 
 /// A single entity-property override.
