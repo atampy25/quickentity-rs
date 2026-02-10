@@ -2020,6 +2020,10 @@ pub fn convert_to_qn(
 			}
 		}
 
+		if factory.sub_entities.len() != blueprint.sub_entities.len() {
+			bail!("Factory and blueprint have different sub-entity counts");
+		}
+
 		let mut entity = Entity {
 			factory: factory_meta.id.to_owned(),
 			blueprint: blueprint_meta.id.to_owned(),
@@ -2102,76 +2106,74 @@ pub fn convert_to_qn(
 										}
 									))
 									.collect::<Result<_>>()?,
-								// Group props by platform, then convert them all and turn into a nested OrderMap structure
-								platform_specific_properties: sub_entity_factory
-									.platform_specific_property_values
-									.iter()
-									.into_group_map_by(|property| property.platform.to_owned())
-									.into_iter()
-									.map(|(platform, properties)| -> Result<_> {
-										Ok((
-											<&str>::from(platform).into(),
-											properties
-												.into_iter()
-												.map(|property| -> Result<_> {
-													Ok((
-														// we do a little code duplication
-														property
-															.property_value
-															.property_id
-															.as_name()
-															.map(|x| x.to_owned())
-															.unwrap_or_else(|| {
-																property.property_value.property_id.0.to_string().into()
-															}),
-														Property {
-															value: Variant::from_game(
-																&property.property_value.value,
-																factory,
-																factory_meta,
-																blueprint,
-																convert_lossless
-															)?,
-															post_init: property.post_init
-														}
-													))
-												})
-												.collect::<Result<_>>()?
-										))
-									})
-									.collect::<Result<_>>()?,
+								platform_specific_properties: {
+									let mut properties: OrderMap<EcoString, OrderMap<EcoString, Property>> =
+										Default::default();
+
+									for item in
+										sub_entity_factory
+											.platform_specific_property_values
+											.iter()
+											.map(|property| {
+												anyhow::Ok((
+													property.platform,
+													property
+														.property_value
+														.property_id
+														.as_name()
+														.map(|x| x.to_owned())
+														.unwrap_or_else(|| {
+															property.property_value.property_id.0.to_string().into()
+														}),
+													Property {
+														value: Variant::from_game(
+															&property.property_value.value,
+															factory,
+															factory_meta,
+															blueprint,
+															convert_lossless
+														)?,
+														post_init: property.post_init
+													}
+												))
+											}) {
+										let (platform, property_name, property) = item?;
+										properties
+											.entry(<&str>::from(platform).into())
+											.or_default()
+											.insert(property_name, property);
+									}
+
+									properties
+								},
 								events: Default::default(),         // will be mutated later
 								input_copying: Default::default(),  // will be mutated later
 								output_copying: Default::default(), // will be mutated later
-								property_aliases: sub_entity_blueprint
-									.property_aliases
-									.iter()
-									.into_group_map_by(|alias| alias.property_name.to_owned())
-									.into_iter()
-									.map(|(property_name, aliases)| {
-										Ok({
+								property_aliases: {
+									let mut aliases: OrderMap<EcoString, Vec<PropertyAlias>> = Default::default();
+
+									for item in sub_entity_blueprint.property_aliases.iter().map(|alias| {
+										anyhow::Ok({
 											(
-												property_name,
-												aliases
-													.into_iter()
-													.map(|alias| {
-														Ok(PropertyAlias {
-															original_property: alias.alias_name.to_owned(),
-															original_entity: blueprint
-																.sub_entities
-																.get(alias.entity_id as usize)
-																.context(
-																	"Property alias referred to nonexistent sub-entity"
-																)?
-																.entity_id
-																.into()
-														})
-													})
-													.collect::<Result<_>>()?
+												alias.property_name.to_owned(),
+												PropertyAlias {
+													original_property: alias.alias_name.to_owned(),
+													original_entity: blueprint
+														.sub_entities
+														.get(alias.entity_id as usize)
+														.context("Property alias referred to nonexistent sub-entity")?
+														.entity_id
+														.into()
+												}
 											)
 										})
-									})
-									.collect::<Result<_>>()?,
+									}) {
+										let (property_name, alias) = item?;
+										aliases.entry(property_name).or_default().push(alias);
+									}
+
+									aliases
+								},
 								exposed_entities: sub_entity_blueprint
 									.exposed_entities
 									.iter()

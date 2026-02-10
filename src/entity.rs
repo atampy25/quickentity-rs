@@ -304,6 +304,7 @@ pub struct SubEntity {
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	pub events: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
+	// TODO: Input and output forwarding do not support external references so shouldn't use PinConnection
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
 	#[serde(default)]
