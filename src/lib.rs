@@ -104,7 +104,6 @@ pub enum ArrayPatchDiagnostic {
 
 #[try_fn]
 #[context("Failure applying patch to entity")]
-#[auto_context]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 #[hotpath::measure]
 pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagnostic) + Send + Sync) -> Result<()> {
@@ -120,721 +119,718 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagn
 
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
-		for operation in patch {
-			match operation {
-				PatchOperation::SetRootEntity(value) => {
-					entity.root_entity = value;
-				}
-
-				PatchOperation::SetSubType(value) => {
-					entity.sub_type = value;
-				}
-
-				PatchOperation::RemoveEntityByID(value) => {
-					let removed = entity.entities.remove(&value);
-
-					if removed.is_none() {
-						emit(Diagnostic::EntityAlreadyNonexistent { entity: value });
-					}
-				}
-
-				PatchOperation::AddEntity(id, data) => {
-					entity.entities.insert(id, *data);
-				}
-
-				PatchOperation::SubEntityOperation(entity_id, op) => {
-					let entity = entity
-						.entities
-						.get_mut(&entity_id)
-						.with_context(|| format!("SubEntityOperation couldn't find entity ID: {entity_id}!"))?;
-
-					match op {
-						SubEntityOperation::SetParent(value) => {
-							entity.parent = value;
-						}
-
-						SubEntityOperation::SetName(value) => {
-							entity.name = value;
-						}
-
-						SubEntityOperation::SetFactory(value) => {
-							entity.factory = value;
-						}
-
-						SubEntityOperation::SetBlueprint(value) => {
-							entity.blueprint = value;
-						}
-
-						SubEntityOperation::SetEditorOnly(value) => {
-							entity.editor_only = value;
-						}
-
-						SubEntityOperation::AddProperty(name, data) => {
-							entity.properties.insert(name, data);
-						}
-
-						SubEntityOperation::RemovePropertyByName(name) => {
-							let removed = entity.properties.remove(&name);
-
-							if removed.is_none() {
-								emit(Diagnostic::PropertyAlreadyNonexistent {
-									entity: entity_id,
-									property: name
-								});
-							}
-						}
-
-						SubEntityOperation::PatchPropertyValue(property_name, patch) => {
-							let property = entity
-								.properties
-								.get_mut(&property_name)
-								.context("PatchPropertyValue couldn't find expected property!")?;
-
-							match patch {
-								VariantPatch::Set(value) => {
-									property.value = value;
-								}
-
-								VariantPatch::ArrayPatch(patch) => {
-									let Variant::Array(_, value) = &mut property.value else {
-										bail!("PatchPropertyValue expected property to be an array!");
-									};
-
-									apply_array_patch(value, patch, property_name, &mut emit)?;
-								}
-							}
-						}
-
-						SubEntityOperation::SetPropertyPostInit(name, value) => {
-							entity
-								.properties
-								.get_mut(&name)
-								.context("SetPropertyPostInit couldn't find expected property!")?
-								.post_init = value;
-						}
-
-						SubEntityOperation::AddPlatformSpecificProperty(platform, name, data) => {
-							entity
-								.platform_specific_properties
-								.entry(platform)
-								.or_default()
-								.insert(name, data);
-						}
-
-						SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
-							let removed = entity.platform_specific_properties.remove(&name);
-
-							if removed.is_none() {
-								emit(Diagnostic::PlatformAlreadyNonexistent {
-									entity: entity_id,
-									platform: name
-								});
-							}
-						}
-
-						SubEntityOperation::RemovePlatformSpecificPropertyByName(platform, name) => {
-							let removed = entity
-								.platform_specific_properties
-								.get_mut(&platform)
-								.context("RemovePSPropertyByName couldn't find platform!")?
-								.remove(&name);
-
-							if removed.is_none() {
-								emit(Diagnostic::PlatformSpecificPropertyAlreadyNonexistent {
-									entity: entity_id,
-									platform,
-									property: name
-								});
-							} else if entity.platform_specific_properties.get(&platform).ctx?.is_empty() {
-								entity.platform_specific_properties.remove(&platform);
-							}
-						}
-
-						SubEntityOperation::PatchPlatformSpecificPropertyValue(platform, property_name, patch) => {
-							let property = entity
-								.platform_specific_properties
-								.get_mut(&platform)
-								.context("PatchPlatformSpecificPropertyValue couldn't find expected platform!")?
-								.get_mut(&property_name)
-								.context("PatchPlatformSpecificPropertyValue couldn't find expected property!")?;
-
-							match patch {
-								VariantPatch::Set(value) => {
-									property.value = value;
-								}
-
-								VariantPatch::ArrayPatch(patch) => {
-									let Variant::Array(_, value) = &mut property.value else {
-										bail!("PatchPlatformSpecificPropertyValue expected property to be an array!");
-									};
-
-									apply_array_patch(value, patch, property_name, &mut emit)?;
-								}
-							}
-						}
-
-						SubEntityOperation::SetPlatformSpecificPropertyPostInit(platform, name, value) => {
-							entity
-								.platform_specific_properties
-								.get_mut(&platform)
-								.context("SetPSPropertyPostInit couldn't find expected platform!")?
-								.get_mut(&name)
-								.context("SetPSPropertyPostInit couldn't find expected property!")?
-								.post_init = value;
-						}
-
-						SubEntityOperation::RemoveAllEventConnectionsForEvent(event) => {
-							entity
-								.events
-								.remove(&event)
-								.context("RemoveAllEventConnectionsForEvent couldn't find event!")?;
-						}
-
-						SubEntityOperation::RemoveAllEventConnectionsForTrigger(event, trigger) => {
-							entity
-								.events
-								.get_mut(&event)
-								.context("RemoveAllEventConnectionsForTrigger couldn't find event!")?
-								.remove(&trigger)
-								.context("RemoveAllEventConnectionsForTrigger couldn't find trigger!")?;
-
-							if entity.events.get(&event).ctx?.is_empty() {
-								entity.events.remove(&event);
-							}
-						}
-
-						SubEntityOperation::RemoveEventConnection(event, trigger, reference) => {
-							let ind = entity
-								.events
-								.get(&event)
-								.context("RemoveEventConnection couldn't find event!")?
-								.get(&trigger)
-								.context("RemoveEventConnection couldn't find trigger!")?
-								.iter()
-								.position(|x| *x == reference)
-								.context("RemoveEventConnection couldn't find reference!")?;
-
-							entity.events.get_mut(&event).ctx?.get_mut(&trigger).ctx?.remove(ind);
-
-							if entity.events.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
-								entity.events.get_mut(&event).ctx?.remove(&trigger);
-							}
-
-							if entity.events.get(&event).ctx?.is_empty() {
-								entity.events.remove(&event);
-							}
-						}
-
-						SubEntityOperation::AddEventConnection(event, trigger, reference) => {
-							if entity.events.get(&event).is_none() {
-								entity.events.insert(event.to_owned(), Default::default());
-							}
-
-							if entity.events.get(&event).ctx?.get(&trigger).is_none() {
-								entity
-									.events
-									.get_mut(&event)
-									.ctx?
-									.insert(trigger.to_owned(), Default::default());
-							}
-
-							entity
-								.events
-								.get_mut(&event)
-								.ctx?
-								.get_mut(&trigger)
-								.ctx?
-								.push(reference);
-						}
-
-						SubEntityOperation::RemoveAllInputCopyConnectionsForInput(event) => {
-							entity
-								.input_copying
-								.remove(&event)
-								.context("RemoveAllInputCopyConnectionsForInput couldn't find input!")?;
-						}
-
-						SubEntityOperation::RemoveAllInputCopyConnectionsForTrigger(event, trigger) => {
-							entity
-								.input_copying
-								.get_mut(&event)
-								.context("RemoveAllInputCopyConnectionsForTrigger couldn't find input!")?
-								.remove(&trigger)
-								.context("RemoveAllInputCopyConnectionsForTrigger couldn't find trigger!")?;
-
-							if entity.input_copying.get(&event).ctx?.is_empty() {
-								entity.input_copying.remove(&event);
-							}
-						}
-
-						SubEntityOperation::RemoveInputCopyConnection(event, trigger, reference) => {
-							let ind = entity
-								.input_copying
-								.get(&event)
-								.context("RemoveInputCopyConnection couldn't find input!")?
-								.get(&trigger)
-								.context("RemoveInputCopyConnection couldn't find trigger!")?
-								.iter()
-								.position(|x| *x == reference)
-								.context("RemoveInputCopyConnection couldn't find reference!")?;
-
-							entity
-								.input_copying
-								.get_mut(&event)
-								.ctx?
-								.get_mut(&trigger)
-								.ctx?
-								.remove(ind);
-
-							if entity.input_copying.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
-								entity.input_copying.get_mut(&event).ctx?.remove(&trigger);
-							}
-
-							if entity.input_copying.get(&event).ctx?.is_empty() {
-								entity.input_copying.remove(&event);
-							}
-						}
-
-						SubEntityOperation::AddInputCopyConnection(event, trigger, reference) => {
-							if entity.input_copying.get(&event).is_none() {
-								entity.input_copying.insert(event.to_owned(), Default::default());
-							}
-
-							if entity.input_copying.get(&event).ctx?.get(&trigger).is_none() {
-								entity
-									.input_copying
-									.get_mut(&event)
-									.ctx?
-									.insert(trigger.to_owned(), Default::default());
-							}
-
-							entity
-								.input_copying
-								.get_mut(&event)
-								.ctx?
-								.get_mut(&trigger)
-								.ctx?
-								.push(reference);
-						}
-
-						SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(event) => {
-							entity
-								.output_copying
-								.remove(&event)
-								.context("RemoveAllOutputCopyConnectionsForOutput couldn't find event!")?;
-						}
-
-						SubEntityOperation::RemoveAllOutputCopyConnectionsForPropagate(event, trigger) => {
-							entity
-								.output_copying
-								.get_mut(&event)
-								.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find event!")?
-								.remove(&trigger)
-								.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find propagate!")?;
-
-							if entity.output_copying.get(&event).ctx?.is_empty() {
-								entity.output_copying.remove(&event);
-							}
-						}
-
-						SubEntityOperation::RemoveOutputCopyConnection(event, trigger, reference) => {
-							let ind = entity
-								.output_copying
-								.get(&event)
-								.context("RemoveOutputCopyConnection couldn't find event!")?
-								.get(&trigger)
-								.context("RemoveOutputCopyConnection couldn't find propagate!")?
-								.iter()
-								.position(|x| *x == reference)
-								.context("RemoveOutputCopyConnection couldn't find reference!")?;
-
-							entity
-								.output_copying
-								.get_mut(&event)
-								.ctx?
-								.get_mut(&trigger)
-								.ctx?
-								.remove(ind);
-
-							if entity.output_copying.get(&event).ctx?.get(&trigger).ctx?.is_empty() {
-								entity.output_copying.get_mut(&event).ctx?.remove(&trigger);
-							}
-
-							if entity.output_copying.get(&event).ctx?.is_empty() {
-								entity.output_copying.remove(&event);
-							}
-						}
-
-						SubEntityOperation::AddOutputCopyConnection(event, trigger, reference) => {
-							if entity.output_copying.get(&event).is_none() {
-								entity.output_copying.insert(event.to_owned(), Default::default());
-							}
-
-							if entity.output_copying.get(&event).ctx?.get(&trigger).is_none() {
-								entity
-									.output_copying
-									.get_mut(&event)
-									.ctx?
-									.insert(trigger.to_owned(), Default::default());
-							}
-
-							entity
-								.output_copying
-								.get_mut(&event)
-								.ctx?
-								.get_mut(&trigger)
-								.ctx?
-								.push(reference);
-						}
-
-						SubEntityOperation::AddPropertyAliasConnection(alias, data) => {
-							entity.property_aliases.entry(alias).or_default().push(data);
-						}
-
-						SubEntityOperation::RemovePropertyAlias(alias) => {
-							entity
-								.property_aliases
-								.remove(&alias)
-								.context("RemovePropertyAlias couldn't find alias!")?;
-						}
-
-						SubEntityOperation::RemoveConnectionForPropertyAlias(alias, data) => {
-							let connection = entity
-								.property_aliases
-								.get(&alias)
-								.context("RemoveConnectionForPropertyAlias couldn't find alias!")?
-								.iter()
-								.position(|x| *x == data)
-								.context("RemoveConnectionForPropertyAlias couldn't find connection!")?;
-
-							entity.property_aliases.get_mut(&alias).ctx?.remove(connection);
-
-							if entity.property_aliases.get(&alias).ctx?.is_empty() {
-								entity.property_aliases.remove(&alias);
-							}
-						}
-
-						SubEntityOperation::SetExposedEntity(name, data) => {
-							entity.exposed_entities.insert(name, data);
-						}
-
-						SubEntityOperation::RemoveExposedEntity(name) => {
-							entity
-								.exposed_entities
-								.remove(&name)
-								.context("RemoveExposedEntity couldn't find exposed entity to remove!")?;
-						}
-
-						SubEntityOperation::SetExposedInterface(name, implementor) => {
-							entity.exposed_interfaces.insert(name, implementor);
-						}
-
-						SubEntityOperation::RemoveExposedInterface(name) => {
-							entity
-								.exposed_interfaces
-								.remove(&name)
-								.context("RemoveExposedInterface couldn't find exposed entity to remove!")?;
-						}
-
-						SubEntityOperation::AddSubset(name, ent) => {
-							entity.subsets.entry(name).or_default().push(ent);
-						}
-
-						SubEntityOperation::RemoveSubset(name, ent) => {
-							let ind = entity
-								.subsets
-								.get(&name)
-								.context("RemoveSubset couldn't find subset to remove from!")?
-								.iter()
-								.position(|x| *x == ent)
-								.context("RemoveSubset couldn't find the entity to remove from the subset!")?;
-
-							entity.subsets.get_mut(&name).ctx?.remove(ind);
-						}
-
-						SubEntityOperation::RemoveAllSubsetsFor(name) => {
-							entity
-								.subsets
-								.remove(&name)
-								.context("RemoveAllSubsetsFor couldn't find subset to remove!")?;
-						}
-					}
-				}
-
-				#[allow(deprecated)]
-				PatchOperation::AddPropertyOverride(value) => {
-					entity.property_overrides.push(value);
-				}
-
-				#[allow(deprecated)]
-				PatchOperation::RemovePropertyOverride(value) => {
-					entity.property_overrides.remove(
-						entity
-							.property_overrides
-							.par_iter()
-							.position_any(|x| *x == value)
-							.context("RemovePropertyOverride couldn't find expected value!")?
-					);
-				}
-
-				PatchOperation::AddPropertyOverrideConnection(connection) => {
-					let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
-
-					for property_override in &entity.property_overrides {
-						for ent in &property_override.entities {
-							for (prop_name, prop_override) in &property_override.properties {
-								unravelled_overrides.push(PropertyOverride {
-									entities: vec![ent.to_owned()],
-									properties: {
-										let mut x = OrderMap::new();
-										x.insert(prop_name.to_owned(), prop_override.to_owned());
-										x
-									}
-								});
-							}
-						}
-					}
-
-					unravelled_overrides.push(PropertyOverride {
-						entities: vec![connection.entity],
-						properties: {
-							let mut x = OrderMap::new();
-							x.insert(connection.property.to_owned(), connection.value.to_owned());
-							x
-						}
-					});
-
-					let mut merged_overrides: Vec<PropertyOverride> = vec![];
-
-					let mut pass1: Vec<PropertyOverride> = Vec::default();
-
-					for property_override in unravelled_overrides {
-						// if same entity being overridden, merge props
-						if let Some(found) = pass1.iter_mut().find(|x| x.entities == property_override.entities) {
-							found.properties.extend(property_override.properties);
-						} else {
-							pass1.push(PropertyOverride {
-								entities: property_override.entities,
-								properties: property_override.properties
-							});
-						}
-					}
-
-					// merge entities when same props being overridden
-					for property_override in pass1 {
-						if let Some(found) = merged_overrides.iter_mut().try_find(|x| -> Result<bool> {
-							let contain_same_keys = x
-								.properties
-								.iter()
-								.all(|(y, _)| property_override.properties.contains_key(y))
-								&& property_override
-									.properties
-									.iter()
-									.all(|(y, _)| x.properties.contains_key(y));
-
-							// short-circuit
-							if !contain_same_keys {
-								return Ok(false);
-							}
-
-							let values_identical = x.properties.iter().all(|(prop_name, prop_val)| {
-								prop_val.rough_eq(&property_override.properties[prop_name])
-							});
-
-							// Properties are identical when they contain the same properties and each property's value is roughly identical
-							Ok(values_identical)
-						})? {
-							found.entities.extend(property_override.entities);
-						} else {
-							merged_overrides.push(property_override);
-						}
-					}
-
-					entity.property_overrides = merged_overrides;
-				}
-
-				PatchOperation::RemovePropertyOverrideConnection(connection) => {
-					let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
-
-					for property_override in &entity.property_overrides {
-						for ent in &property_override.entities {
-							for (prop_name, prop_override) in &property_override.properties {
-								unravelled_overrides.push(PropertyOverride {
-									entities: vec![ent.to_owned()],
-									properties: {
-										let mut x = OrderMap::new();
-										x.insert(prop_name.to_owned(), prop_override.to_owned());
-										x
-									}
-								});
-							}
-						}
-					}
-
-					let search = PropertyOverride {
-						entities: vec![connection.entity.to_owned()],
-						properties: {
-							let mut x = OrderMap::new();
-							x.insert(connection.property.to_owned(), connection.value.to_owned());
-							x
-						}
-					};
-
-					unravelled_overrides.retain(|x| {
-						x.entities != search.entities
-							|| !x.properties.contains_key(&connection.property)
-							|| !{ x.properties[&connection.property].rough_eq(&connection.value) }
-					});
-
-					let mut merged_overrides: Vec<PropertyOverride> = vec![];
-
-					let mut pass1: Vec<PropertyOverride> = Vec::default();
-
-					for property_override in unravelled_overrides {
-						// if same entity being overridden, merge props
-						if let Some(found) = pass1.iter_mut().find(|x| x.entities == property_override.entities) {
-							found.properties.extend(property_override.properties);
-						} else {
-							pass1.push(PropertyOverride {
-								entities: property_override.entities,
-								properties: property_override.properties
-							});
-						}
-					}
-
-					// merge entities when same props being overridden
-					for property_override in pass1 {
-						if let Some(found) = merged_overrides.iter_mut().try_find(|x| -> Result<bool> {
-							let contain_same_keys = x
-								.properties
-								.iter()
-								.all(|(y, _)| property_override.properties.contains_key(y))
-								&& property_override
-									.properties
-									.iter()
-									.all(|(y, _)| x.properties.contains_key(y));
-
-							// short-circuit
-							if !contain_same_keys {
-								return Ok(false);
-							}
-
-							let values_identical = x.properties.iter().all(|(prop_name, prop_val)| {
-								prop_val.rough_eq(&property_override.properties[prop_name])
-							});
-
-							// Properties are identical when they contain the same properties and each property's value is roughly identical
-							Ok(values_identical)
-						})? {
-							found.entities.extend(property_override.entities);
-						} else {
-							merged_overrides.push(property_override);
-						}
-					}
-
-					entity.property_overrides = merged_overrides;
-				}
-
-				PatchOperation::AddOverrideDelete(value) => {
-					entity.override_deletes.push(value);
-				}
-
-				PatchOperation::RemoveOverrideDelete(value) => {
-					entity.override_deletes.remove(
-						entity
-							.override_deletes
-							.par_iter()
-							.position_any(|x| *x == value)
-							.context("RemoveOverrideDelete couldn't find expected value!")?
-					);
-				}
-
-				PatchOperation::AddPinConnectionOverride(value) => {
-					entity.pin_connection_overrides.push(value);
-				}
-
-				PatchOperation::RemovePinConnectionOverride(value) => {
-					entity.pin_connection_overrides.remove(
-						entity
-							.pin_connection_overrides
-							.par_iter()
-							.position_any(|x| *x == value)
-							.context("RemovePinConnectionOverride couldn't find expected value!")?
-					);
-				}
-
-				PatchOperation::AddPinConnectionOverrideDelete(value) => {
-					entity.pin_connection_override_deletes.push(value);
-				}
-
-				PatchOperation::RemovePinConnectionOverrideDelete(value) => {
-					entity.pin_connection_override_deletes.remove(
-						entity
-							.pin_connection_override_deletes
-							.par_iter()
-							.position_any(|x| *x == value)
-							.context("RemovePinConnectionOverrideDelete couldn't find expected value!")?
-					);
-				}
-
-				PatchOperation::AddExternalScene(value) => {
-					entity.external_scenes.push(value);
-				}
-
-				PatchOperation::RemoveExternalScene(value) => {
-					if let Some(x) = entity.external_scenes.par_iter().position_any(|x| *x == value) {
-						entity.external_scenes.remove(x);
-					} else {
-						emit(Diagnostic::ExternalSceneAlreadyNonexistent { scene: value });
-					}
-				}
-
-				PatchOperation::AddExtraFactoryReference(value) => {
-					entity.extra_factory_references.push(value);
-				}
-
-				PatchOperation::RemoveExtraFactoryReference(value) => {
-					entity.extra_factory_references.remove(
-						entity
-							.extra_factory_references
-							.par_iter()
-							.position_any(|x| *x == value)
-							.context("RemoveExtraFactoryDependency couldn't find expected value!")?
-					);
-				}
-
-				PatchOperation::AddExtraBlueprintReference(value) => {
-					entity.extra_blueprint_references.push(value);
-				}
-
-				PatchOperation::RemoveExtraBlueprintReference(value) => {
-					entity.extra_blueprint_references.remove(
-						entity
-							.extra_blueprint_references
-							.par_iter()
-							.position_any(|x| *x == value)
-							.context("RemoveExtraBlueprintDependency couldn't find expected value!")?
-					);
-				}
-
-				PatchOperation::AddComment(value) => {
-					entity.comments.push(value);
-				}
-
-				PatchOperation::RemoveComment(value) => {
-					entity.comments.remove(
-						entity
-							.comments
-							.par_iter()
-							.position_any(|x| *x == value)
-							.context("RemoveComment couldn't find expected value!")?
-					);
-				}
-			}
+		for (idx, operation) in patch.into_iter().enumerate() {
+			apply_patch_operation(entity, operation, &mut emit).context(format!("Failure applying operation {idx}"))?;
 		}
 
 		anyhow::Ok(())
 	})?;
+}
+
+#[try_fn]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+#[hotpath::measure]
+fn apply_patch_operation(
+	entity: &mut Entity,
+	operation: PatchOperation,
+	mut emit: impl FnMut(Diagnostic)
+) -> Result<()> {
+	match operation {
+		PatchOperation::SetRootEntity(value) => {
+			entity.root_entity = value;
+		}
+
+		PatchOperation::SetSubType(value) => {
+			entity.sub_type = value;
+		}
+
+		PatchOperation::RemoveEntityByID(value) => {
+			let removed = entity.entities.remove(&value);
+
+			if removed.is_none() {
+				emit(Diagnostic::EntityAlreadyNonexistent { entity: value });
+			}
+		}
+
+		PatchOperation::AddEntity(id, data) => {
+			entity.entities.insert(id, *data);
+		}
+
+		PatchOperation::SubEntityOperation(entity_id, op) => {
+			let entity = entity
+				.entities
+				.get_mut(&entity_id)
+				.with_context(|| format!("SubEntityOperation couldn't find entity ID: {entity_id}!"))?;
+
+			match op {
+				SubEntityOperation::SetParent(value) => {
+					entity.parent = value;
+				}
+
+				SubEntityOperation::SetName(value) => {
+					entity.name = value;
+				}
+
+				SubEntityOperation::SetFactory(value) => {
+					entity.factory = value;
+				}
+
+				SubEntityOperation::SetBlueprint(value) => {
+					entity.blueprint = value;
+				}
+
+				SubEntityOperation::SetEditorOnly(value) => {
+					entity.editor_only = value;
+				}
+
+				SubEntityOperation::AddProperty(name, data) => {
+					entity.properties.insert(name, data);
+				}
+
+				SubEntityOperation::RemovePropertyByName(name) => {
+					let removed = entity.properties.remove(&name);
+
+					if removed.is_none() {
+						emit(Diagnostic::PropertyAlreadyNonexistent {
+							entity: entity_id,
+							property: name
+						});
+					}
+				}
+
+				SubEntityOperation::PatchPropertyValue(property_name, patch) => {
+					let property = entity
+						.properties
+						.get_mut(&property_name)
+						.context("PatchPropertyValue couldn't find expected property!")?;
+
+					match patch {
+						VariantPatch::Set(value) => {
+							property.value = value;
+						}
+
+						VariantPatch::ArrayPatch(patch) => {
+							let Variant::Array(_, value) = &mut property.value else {
+								bail!("PatchPropertyValue expected property to be an array!");
+							};
+
+							apply_array_patch(value, patch, property_name, &mut emit)?;
+						}
+					}
+				}
+
+				SubEntityOperation::SetPropertyPostInit(name, value) => {
+					entity
+						.properties
+						.get_mut(&name)
+						.context("SetPropertyPostInit couldn't find expected property!")?
+						.post_init = value;
+				}
+
+				SubEntityOperation::AddPlatformSpecificProperty(platform, name, data) => {
+					entity
+						.platform_specific_properties
+						.entry(platform)
+						.or_default()
+						.insert(name, data);
+				}
+
+				SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
+					let removed = entity.platform_specific_properties.remove(&name);
+
+					if removed.is_none() {
+						emit(Diagnostic::PlatformAlreadyNonexistent {
+							entity: entity_id,
+							platform: name
+						});
+					}
+				}
+
+				SubEntityOperation::RemovePlatformSpecificPropertyByName(platform, name) => {
+					let removed = entity
+						.platform_specific_properties
+						.get_mut(&platform)
+						.context("RemovePSPropertyByName couldn't find platform!")?
+						.remove(&name);
+
+					if removed.is_none() {
+						emit(Diagnostic::PlatformSpecificPropertyAlreadyNonexistent {
+							entity: entity_id,
+							platform,
+							property: name
+						});
+					} else if entity.platform_specific_properties.get(&platform).unwrap().is_empty() {
+						entity.platform_specific_properties.remove(&platform);
+					}
+				}
+
+				SubEntityOperation::PatchPlatformSpecificPropertyValue(platform, property_name, patch) => {
+					let property = entity
+						.platform_specific_properties
+						.get_mut(&platform)
+						.context("PatchPlatformSpecificPropertyValue couldn't find expected platform!")?
+						.get_mut(&property_name)
+						.context("PatchPlatformSpecificPropertyValue couldn't find expected property!")?;
+
+					match patch {
+						VariantPatch::Set(value) => {
+							property.value = value;
+						}
+
+						VariantPatch::ArrayPatch(patch) => {
+							let Variant::Array(_, value) = &mut property.value else {
+								bail!("PatchPlatformSpecificPropertyValue expected property to be an array!");
+							};
+
+							apply_array_patch(value, patch, property_name, &mut emit)?;
+						}
+					}
+				}
+
+				SubEntityOperation::SetPlatformSpecificPropertyPostInit(platform, name, value) => {
+					entity
+						.platform_specific_properties
+						.get_mut(&platform)
+						.context("SetPSPropertyPostInit couldn't find expected platform!")?
+						.get_mut(&name)
+						.context("SetPSPropertyPostInit couldn't find expected property!")?
+						.post_init = value;
+				}
+
+				SubEntityOperation::RemoveAllEventConnectionsForEvent(event) => {
+					entity
+						.events
+						.remove(&event)
+						.context("RemoveAllEventConnectionsForEvent couldn't find event!")?;
+				}
+
+				SubEntityOperation::RemoveAllEventConnectionsForTrigger(event, trigger) => {
+					entity
+						.events
+						.get_mut(&event)
+						.context("RemoveAllEventConnectionsForTrigger couldn't find event!")?
+						.remove(&trigger)
+						.context("RemoveAllEventConnectionsForTrigger couldn't find trigger!")?;
+
+					if entity.events.get(&event).unwrap().is_empty() {
+						entity.events.remove(&event);
+					}
+				}
+
+				SubEntityOperation::RemoveEventConnection(event, trigger, reference) => {
+					let ind = entity
+						.events
+						.get(&event)
+						.context("RemoveEventConnection couldn't find event!")?
+						.get(&trigger)
+						.context("RemoveEventConnection couldn't find trigger!")?
+						.iter()
+						.position(|x| *x == reference)
+						.context("RemoveEventConnection couldn't find reference!")?;
+
+					entity
+						.events
+						.get_mut(&event)
+						.unwrap()
+						.get_mut(&trigger)
+						.unwrap()
+						.remove(ind);
+
+					if entity.events.get(&event).unwrap().get(&trigger).unwrap().is_empty() {
+						entity.events.get_mut(&event).unwrap().remove(&trigger);
+					}
+
+					if entity.events.get(&event).unwrap().is_empty() {
+						entity.events.remove(&event);
+					}
+				}
+
+				SubEntityOperation::AddEventConnection(event, trigger, reference) => {
+					entity
+						.events
+						.entry(event)
+						.or_default()
+						.entry(trigger)
+						.or_default()
+						.push(reference);
+				}
+
+				SubEntityOperation::RemoveAllInputCopyConnectionsForInput(event) => {
+					entity
+						.input_copying
+						.remove(&event)
+						.context("RemoveAllInputCopyConnectionsForInput couldn't find input!")?;
+				}
+
+				SubEntityOperation::RemoveAllInputCopyConnectionsForTrigger(event, trigger) => {
+					entity
+						.input_copying
+						.get_mut(&event)
+						.context("RemoveAllInputCopyConnectionsForTrigger couldn't find input!")?
+						.remove(&trigger)
+						.context("RemoveAllInputCopyConnectionsForTrigger couldn't find trigger!")?;
+
+					if entity.input_copying.get(&event).unwrap().is_empty() {
+						entity.input_copying.remove(&event);
+					}
+				}
+
+				SubEntityOperation::RemoveInputCopyConnection(event, trigger, reference) => {
+					let ind = entity
+						.input_copying
+						.get(&event)
+						.context("RemoveInputCopyConnection couldn't find input!")?
+						.get(&trigger)
+						.context("RemoveInputCopyConnection couldn't find trigger!")?
+						.iter()
+						.position(|x| *x == reference)
+						.context("RemoveInputCopyConnection couldn't find reference!")?;
+
+					entity
+						.input_copying
+						.get_mut(&event)
+						.unwrap()
+						.get_mut(&trigger)
+						.unwrap()
+						.remove(ind);
+
+					if entity
+						.input_copying
+						.get(&event)
+						.unwrap()
+						.get(&trigger)
+						.unwrap()
+						.is_empty()
+					{
+						entity.input_copying.get_mut(&event).unwrap().remove(&trigger);
+					}
+
+					if entity.input_copying.get(&event).unwrap().is_empty() {
+						entity.input_copying.remove(&event);
+					}
+				}
+
+				SubEntityOperation::AddInputCopyConnection(event, trigger, reference) => {
+					entity
+						.input_copying
+						.entry(event)
+						.or_default()
+						.entry(trigger)
+						.or_default()
+						.push(reference);
+				}
+
+				SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(event) => {
+					entity
+						.output_copying
+						.remove(&event)
+						.context("RemoveAllOutputCopyConnectionsForOutput couldn't find event!")?;
+				}
+
+				SubEntityOperation::RemoveAllOutputCopyConnectionsForPropagate(event, trigger) => {
+					entity
+						.output_copying
+						.get_mut(&event)
+						.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find event!")?
+						.remove(&trigger)
+						.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find propagate!")?;
+
+					if entity.output_copying.get(&event).unwrap().is_empty() {
+						entity.output_copying.remove(&event);
+					}
+				}
+
+				SubEntityOperation::RemoveOutputCopyConnection(event, trigger, reference) => {
+					let ind = entity
+						.output_copying
+						.get(&event)
+						.context("RemoveOutputCopyConnection couldn't find event!")?
+						.get(&trigger)
+						.context("RemoveOutputCopyConnection couldn't find propagate!")?
+						.iter()
+						.position(|x| *x == reference)
+						.context("RemoveOutputCopyConnection couldn't find reference!")?;
+
+					entity
+						.output_copying
+						.get_mut(&event)
+						.unwrap()
+						.get_mut(&trigger)
+						.unwrap()
+						.remove(ind);
+
+					if entity
+						.output_copying
+						.get(&event)
+						.unwrap()
+						.get(&trigger)
+						.unwrap()
+						.is_empty()
+					{
+						entity.output_copying.get_mut(&event).unwrap().remove(&trigger);
+					}
+
+					if entity.output_copying.get(&event).unwrap().is_empty() {
+						entity.output_copying.remove(&event);
+					}
+				}
+
+				SubEntityOperation::AddOutputCopyConnection(event, trigger, reference) => {
+					entity
+						.output_copying
+						.entry(event)
+						.or_default()
+						.entry(trigger)
+						.or_default()
+						.push(reference);
+				}
+
+				SubEntityOperation::AddPropertyAliasConnection(alias, data) => {
+					entity.property_aliases.entry(alias).or_default().push(data);
+				}
+
+				SubEntityOperation::RemovePropertyAlias(alias) => {
+					entity
+						.property_aliases
+						.remove(&alias)
+						.context("RemovePropertyAlias couldn't find alias!")?;
+				}
+
+				SubEntityOperation::RemoveConnectionForPropertyAlias(alias, data) => {
+					let connection = entity
+						.property_aliases
+						.get(&alias)
+						.context("RemoveConnectionForPropertyAlias couldn't find alias!")?
+						.iter()
+						.position(|x| *x == data)
+						.context("RemoveConnectionForPropertyAlias couldn't find connection!")?;
+
+					entity.property_aliases.get_mut(&alias).unwrap().remove(connection);
+
+					if entity.property_aliases.get(&alias).unwrap().is_empty() {
+						entity.property_aliases.remove(&alias);
+					}
+				}
+
+				SubEntityOperation::SetExposedEntity(name, data) => {
+					entity.exposed_entities.insert(name, data);
+				}
+
+				SubEntityOperation::RemoveExposedEntity(name) => {
+					entity
+						.exposed_entities
+						.remove(&name)
+						.context("RemoveExposedEntity couldn't find exposed entity to remove!")?;
+				}
+
+				SubEntityOperation::SetExposedInterface(name, implementor) => {
+					entity.exposed_interfaces.insert(name, implementor);
+				}
+
+				SubEntityOperation::RemoveExposedInterface(name) => {
+					entity
+						.exposed_interfaces
+						.remove(&name)
+						.context("RemoveExposedInterface couldn't find exposed entity to remove!")?;
+				}
+
+				SubEntityOperation::AddSubset(name, ent) => {
+					entity.subsets.entry(name).or_default().push(ent);
+				}
+
+				SubEntityOperation::RemoveSubset(name, ent) => {
+					let ind = entity
+						.subsets
+						.get(&name)
+						.context("RemoveSubset couldn't find subset to remove from!")?
+						.iter()
+						.position(|x| *x == ent)
+						.context("RemoveSubset couldn't find the entity to remove from the subset!")?;
+
+					entity.subsets.get_mut(&name).unwrap().remove(ind);
+				}
+
+				SubEntityOperation::RemoveAllSubsetsFor(name) => {
+					entity
+						.subsets
+						.remove(&name)
+						.context("RemoveAllSubsetsFor couldn't find subset to remove!")?;
+				}
+			}
+		}
+
+		#[allow(deprecated)]
+		PatchOperation::AddPropertyOverride(value) => {
+			entity.property_overrides.push(value);
+		}
+
+		#[allow(deprecated)]
+		PatchOperation::RemovePropertyOverride(value) => {
+			entity.property_overrides.remove(
+				entity
+					.property_overrides
+					.par_iter()
+					.position_any(|x| *x == value)
+					.context("RemovePropertyOverride couldn't find expected value!")?
+			);
+		}
+
+		PatchOperation::AddPropertyOverrideConnection(connection) => {
+			let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
+
+			for property_override in &entity.property_overrides {
+				for ent in &property_override.entities {
+					for (prop_name, prop_override) in &property_override.properties {
+						unravelled_overrides.push(PropertyOverride {
+							entities: vec![ent.to_owned()],
+							properties: {
+								let mut x = OrderMap::new();
+								x.insert(prop_name.to_owned(), prop_override.to_owned());
+								x
+							}
+						});
+					}
+				}
+			}
+
+			unravelled_overrides.push(PropertyOverride {
+				entities: vec![connection.entity],
+				properties: {
+					let mut x = OrderMap::new();
+					x.insert(connection.property.to_owned(), connection.value.to_owned());
+					x
+				}
+			});
+
+			let mut merged_overrides: Vec<PropertyOverride> = vec![];
+
+			let mut pass1: Vec<PropertyOverride> = Vec::default();
+
+			for property_override in unravelled_overrides {
+				// if same entity being overridden, merge props
+				if let Some(found) = pass1.iter_mut().find(|x| x.entities == property_override.entities) {
+					found.properties.extend(property_override.properties);
+				} else {
+					pass1.push(PropertyOverride {
+						entities: property_override.entities,
+						properties: property_override.properties
+					});
+				}
+			}
+
+			// merge entities when same props being overridden
+			for property_override in pass1 {
+				if let Some(found) = merged_overrides.iter_mut().try_find(|x| -> Result<bool> {
+					let contain_same_keys = x
+						.properties
+						.iter()
+						.all(|(y, _)| property_override.properties.contains_key(y))
+						&& property_override
+							.properties
+							.iter()
+							.all(|(y, _)| x.properties.contains_key(y));
+
+					// short-circuit
+					if !contain_same_keys {
+						return Ok(false);
+					}
+
+					let values_identical = x
+						.properties
+						.iter()
+						.all(|(prop_name, prop_val)| prop_val.rough_eq(&property_override.properties[prop_name]));
+
+					// Properties are identical when they contain the same properties and each property's value is roughly identical
+					Ok(values_identical)
+				})? {
+					found.entities.extend(property_override.entities);
+				} else {
+					merged_overrides.push(property_override);
+				}
+			}
+
+			entity.property_overrides = merged_overrides;
+		}
+
+		PatchOperation::RemovePropertyOverrideConnection(connection) => {
+			let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
+
+			for property_override in &entity.property_overrides {
+				for ent in &property_override.entities {
+					for (prop_name, prop_override) in &property_override.properties {
+						unravelled_overrides.push(PropertyOverride {
+							entities: vec![ent.to_owned()],
+							properties: {
+								let mut x = OrderMap::new();
+								x.insert(prop_name.to_owned(), prop_override.to_owned());
+								x
+							}
+						});
+					}
+				}
+			}
+
+			let search = PropertyOverride {
+				entities: vec![connection.entity.to_owned()],
+				properties: {
+					let mut x = OrderMap::new();
+					x.insert(connection.property.to_owned(), connection.value.to_owned());
+					x
+				}
+			};
+
+			unravelled_overrides.retain(|x| {
+				x.entities != search.entities
+					|| !x.properties.contains_key(&connection.property)
+					|| !{ x.properties[&connection.property].rough_eq(&connection.value) }
+			});
+
+			let mut merged_overrides: Vec<PropertyOverride> = vec![];
+
+			let mut pass1: Vec<PropertyOverride> = Vec::default();
+
+			for property_override in unravelled_overrides {
+				// if same entity being overridden, merge props
+				if let Some(found) = pass1.iter_mut().find(|x| x.entities == property_override.entities) {
+					found.properties.extend(property_override.properties);
+				} else {
+					pass1.push(PropertyOverride {
+						entities: property_override.entities,
+						properties: property_override.properties
+					});
+				}
+			}
+
+			// merge entities when same props being overridden
+			for property_override in pass1 {
+				if let Some(found) = merged_overrides.iter_mut().try_find(|x| -> Result<bool> {
+					let contain_same_keys = x
+						.properties
+						.iter()
+						.all(|(y, _)| property_override.properties.contains_key(y))
+						&& property_override
+							.properties
+							.iter()
+							.all(|(y, _)| x.properties.contains_key(y));
+
+					// short-circuit
+					if !contain_same_keys {
+						return Ok(false);
+					}
+
+					let values_identical = x
+						.properties
+						.iter()
+						.all(|(prop_name, prop_val)| prop_val.rough_eq(&property_override.properties[prop_name]));
+
+					// Properties are identical when they contain the same properties and each property's value is roughly identical
+					Ok(values_identical)
+				})? {
+					found.entities.extend(property_override.entities);
+				} else {
+					merged_overrides.push(property_override);
+				}
+			}
+
+			entity.property_overrides = merged_overrides;
+		}
+
+		PatchOperation::AddOverrideDelete(value) => {
+			entity.override_deletes.push(value);
+		}
+
+		PatchOperation::RemoveOverrideDelete(value) => {
+			entity.override_deletes.remove(
+				entity
+					.override_deletes
+					.par_iter()
+					.position_any(|x| *x == value)
+					.context("RemoveOverrideDelete couldn't find expected value!")?
+			);
+		}
+
+		PatchOperation::AddPinConnectionOverride(value) => {
+			entity.pin_connection_overrides.push(value);
+		}
+
+		PatchOperation::RemovePinConnectionOverride(value) => {
+			entity.pin_connection_overrides.remove(
+				entity
+					.pin_connection_overrides
+					.par_iter()
+					.position_any(|x| *x == value)
+					.context("RemovePinConnectionOverride couldn't find expected value!")?
+			);
+		}
+
+		PatchOperation::AddPinConnectionOverrideDelete(value) => {
+			entity.pin_connection_override_deletes.push(value);
+		}
+
+		PatchOperation::RemovePinConnectionOverrideDelete(value) => {
+			entity.pin_connection_override_deletes.remove(
+				entity
+					.pin_connection_override_deletes
+					.par_iter()
+					.position_any(|x| *x == value)
+					.context("RemovePinConnectionOverrideDelete couldn't find expected value!")?
+			);
+		}
+
+		PatchOperation::AddExternalScene(value) => {
+			entity.external_scenes.push(value);
+		}
+
+		PatchOperation::RemoveExternalScene(value) => {
+			if let Some(x) = entity.external_scenes.par_iter().position_any(|x| *x == value) {
+				entity.external_scenes.remove(x);
+			} else {
+				emit(Diagnostic::ExternalSceneAlreadyNonexistent { scene: value });
+			}
+		}
+
+		PatchOperation::AddExtraFactoryReference(value) => {
+			entity.extra_factory_references.push(value);
+		}
+
+		PatchOperation::RemoveExtraFactoryReference(value) => {
+			entity.extra_factory_references.remove(
+				entity
+					.extra_factory_references
+					.par_iter()
+					.position_any(|x| *x == value)
+					.context("RemoveExtraFactoryDependency couldn't find expected value!")?
+			);
+		}
+
+		PatchOperation::AddExtraBlueprintReference(value) => {
+			entity.extra_blueprint_references.push(value);
+		}
+
+		PatchOperation::RemoveExtraBlueprintReference(value) => {
+			entity.extra_blueprint_references.remove(
+				entity
+					.extra_blueprint_references
+					.par_iter()
+					.position_any(|x| *x == value)
+					.context("RemoveExtraBlueprintDependency couldn't find expected value!")?
+			);
+		}
+
+		PatchOperation::AddComment(value) => {
+			entity.comments.push(value);
+		}
+
+		PatchOperation::RemoveComment(value) => {
+			entity.comments.remove(
+				entity
+					.comments
+					.par_iter()
+					.position_any(|x| *x == value)
+					.context("RemoveComment couldn't find expected value!")?
+			);
+		}
+	}
 }
 
 #[try_fn]
