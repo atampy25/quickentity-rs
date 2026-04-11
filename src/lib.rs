@@ -2561,16 +2561,14 @@ pub fn convert_to_qn(
 #[cfg(feature = "rune")]
 #[rune::function(path = ::convert_to_qn)]
 pub fn r_convert_to_qn(
-	factory: rune::Value,
+	factory: &str,
 	factory_meta: &ResourceMetadata,
-	blueprint: rune::Value,
+	blueprint: &str,
 	blueprint_meta: &ResourceMetadata,
 	convert_lossless: bool
 ) -> Result<Entity> {
-	use serde_json::{from_value, to_value};
-
-	let factory = from_value(to_value(factory)?)?;
-	let blueprint = from_value(to_value(blueprint)?)?;
+	let factory = serde_json::from_str(factory)?;
+	let blueprint = serde_json::from_str(blueprint)?;
 	convert_to_qn(&factory, factory_meta, &blueprint, blueprint_meta, convert_lossless)
 }
 
@@ -3111,15 +3109,13 @@ pub fn convert_to_game(
 pub fn r_convert_to_game(
 	entity: &Entity,
 	version: GameVersion
-) -> Result<(rune::Value, ResourceMetadata, rune::Value, ResourceMetadata)> {
-	use serde_json::{from_value, to_value};
-
+) -> Result<(String, ResourceMetadata, String, ResourceMetadata)> {
 	let (fac, fac_meta, blu, blu_meta) = convert_to_game(entity, version)?;
 
 	(
-		from_value(to_value(fac)?)?,
+		serde_json::to_string(&fac)?,
 		fac_meta,
-		from_value(to_value(blu)?)?,
+		serde_json::to_string(&blu)?,
 		blu_meta
 	)
 }
