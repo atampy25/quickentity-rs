@@ -2559,7 +2559,7 @@ pub fn convert_to_qn(
 }
 
 #[cfg(feature = "rune")]
-#[rune::function]
+#[rune::function(path = ::convert_to_qn)]
 pub fn r_convert_to_qn(
 	factory: rune::Value,
 	factory_meta: &ResourceMetadata,
@@ -3107,7 +3107,7 @@ pub fn convert_to_game(
 
 #[cfg(feature = "rune")]
 #[try_fn]
-#[rune::function]
+#[rune::function(path = ::convert_to_game)]
 pub fn r_convert_to_game(
 	entity: &Entity,
 	version: GameVersion

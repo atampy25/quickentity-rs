@@ -128,7 +128,7 @@ impl Type for EntityID {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
 #[cfg_attr(
 	feature = "rune",
-	rune_functions(Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
+	rune_functions(Self::r_entities, Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
 )]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Entity {
@@ -211,6 +211,11 @@ pub struct Entity {
 
 #[cfg(feature = "rune")]
 impl Entity {
+	#[rune::function(instance, path = Self::entities)]
+	fn r_entities(&self) -> Vec<EntityID> {
+		self.entities.keys().copied().collect()
+	}
+
 	#[rune::function(instance, path = Self::get_entity)]
 	fn r_get_entity(&self, id: EntityID) -> Option<SubEntity> {
 		self.entities.get(&id).cloned()
