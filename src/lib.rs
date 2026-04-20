@@ -198,26 +198,31 @@ fn apply_patch_operation(
 					}
 				}
 
-				SubEntityOperation::PatchPropertyValue(property_name, patch) => {
-					let property = entity
-						.properties
-						.get_mut(&property_name)
-						.context("PatchPropertyValue couldn't find expected property!")?;
-
-					match patch {
-						VariantPatch::Set(value) => {
-							property.value = value;
-						}
-
-						VariantPatch::ArrayPatch(patch) => {
-							let Variant::Array(_, value) = &mut property.value else {
-								bail!("PatchPropertyValue expected property to be an array!");
-							};
-
-							apply_array_patch(value, patch, property_name, &mut emit)?;
-						}
+				SubEntityOperation::PatchPropertyValue(property_name, patch, post_init) => match patch {
+					VariantPatch::Set(value) => {
+						entity
+							.properties
+							.entry(property_name)
+							.or_insert_with(|| Property {
+								value: Variant::Ref(None),
+								post_init
+							})
+							.value = value;
 					}
-				}
+
+					VariantPatch::ArrayPatch(patch) => {
+						let property = entity
+							.properties
+							.get_mut(&property_name)
+							.context("PatchPropertyValue couldn't find expected property!")?;
+
+						let Variant::Array(_, value) = &mut property.value else {
+							bail!("PatchPropertyValue expected property to be an array!");
+						};
+
+						apply_array_patch(value, patch, property_name, &mut emit)?;
+					}
+				},
 
 				SubEntityOperation::SetPropertyPostInit(name, value) => {
 					entity
@@ -264,20 +269,29 @@ fn apply_patch_operation(
 					}
 				}
 
-				SubEntityOperation::PatchPlatformSpecificPropertyValue(platform, property_name, patch) => {
-					let property = entity
-						.platform_specific_properties
-						.get_mut(&platform)
-						.context("PatchPlatformSpecificPropertyValue couldn't find expected platform!")?
-						.get_mut(&property_name)
-						.context("PatchPlatformSpecificPropertyValue couldn't find expected property!")?;
-
+				SubEntityOperation::PatchPlatformSpecificPropertyValue(platform, property_name, patch, post_init) => {
 					match patch {
 						VariantPatch::Set(value) => {
-							property.value = value;
+							entity
+								.platform_specific_properties
+								.entry(platform)
+								.or_default()
+								.entry(property_name)
+								.or_insert_with(|| Property {
+									value: Variant::Ref(None),
+									post_init
+								})
+								.value = value;
 						}
 
 						VariantPatch::ArrayPatch(patch) => {
+							let property = entity
+								.platform_specific_properties
+								.get_mut(&platform)
+								.context("PatchPlatformSpecificPropertyValue couldn't find expected platform!")?
+								.get_mut(&property_name)
+								.context("PatchPlatformSpecificPropertyValue couldn't find expected property!")?;
+
 							let Variant::Array(_, value) = &mut property.value else {
 								bail!("PatchPlatformSpecificPropertyValue expected property to be an array!");
 							};
@@ -884,10 +898,7 @@ pub fn apply_array_patch(
 					}
 				}
 
-				if before.is_none() && after.is_none() {
-					arr.push(item);
-					continue;
-				}
+				arr.push(item);
 
 				if let Some(element) = missing_before {
 					emit(Diagnostic::ArrayPatch {
@@ -1162,7 +1173,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 								entity_id.to_owned(),
 								SubEntityOperation::PatchPropertyValue(
 									property_name.to_owned(),
-									VariantPatch::ArrayPatch(ops)
+									VariantPatch::ArrayPatch(ops),
+									new_property_data.post_init
 								)
 							));
 						} else {
@@ -1170,7 +1182,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 								entity_id.to_owned(),
 								SubEntityOperation::PatchPropertyValue(
 									property_name.to_owned(),
-									VariantPatch::Set(new_property_data.value.to_owned())
+									VariantPatch::Set(new_property_data.value.to_owned()),
+									new_property_data.post_init
 								)
 							));
 						}
@@ -1230,7 +1243,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 										SubEntityOperation::PatchPlatformSpecificPropertyValue(
 											platform_name.to_owned(),
 											property_name.to_owned(),
-											VariantPatch::ArrayPatch(ops)
+											VariantPatch::ArrayPatch(ops),
+											new_property_data.post_init
 										)
 									));
 								} else {
@@ -1239,7 +1253,8 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 										SubEntityOperation::PatchPlatformSpecificPropertyValue(
 											platform_name.to_owned(),
 											property_name.to_owned(),
-											VariantPatch::Set(new_property_data.value.to_owned())
+											VariantPatch::Set(new_property_data.value.to_owned()),
+											new_property_data.post_init
 										)
 									));
 								}

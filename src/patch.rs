@@ -130,8 +130,6 @@ pub enum PatchOperation {
 	RemoveComment(#[cfg_attr(feature = "rune", rune(get, set))] CommentEntity)
 }
 
-// TODO: Robustness improvements like adding expected post-initness to PatchPropertyValue?
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
@@ -161,7 +159,10 @@ pub enum SubEntityOperation {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	PatchPropertyValue(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] VariantPatch
+		#[cfg_attr(feature = "rune", rune(get, set))] VariantPatch,
+		/// Expected value of post-init, used only if the property doesn't exist and needs to be created
+		#[cfg_attr(feature = "rune", rune(get, set))]
+		bool
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -184,7 +185,10 @@ pub enum SubEntityOperation {
 	PatchPlatformSpecificPropertyValue(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] VariantPatch
+		#[cfg_attr(feature = "rune", rune(get, set))] VariantPatch,
+		/// Expected value of post-init, used only if the property doesn't exist and needs to be created
+		#[cfg_attr(feature = "rune", rune(get, set))]
+		bool
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
