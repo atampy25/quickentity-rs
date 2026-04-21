@@ -309,18 +309,17 @@ pub struct SubEntity {
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	pub events: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
-	// TODO: Input and output forwarding do not support external references so shouldn't use PinConnection
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub input_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
+	pub input_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
-	pub output_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
+	pub output_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
@@ -461,7 +460,7 @@ impl SubEntity {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"input_copying",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<LocalPinConnection>>>| {
 				s.input_copying = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
@@ -487,7 +486,7 @@ impl SubEntity {
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"output_copying",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
+			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<LocalPinConnection>>>| {
 				s.output_copying = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
@@ -612,6 +611,62 @@ impl From<PinConnectionProxy> for PinConnection {
 			},
 
 			PinConnectionProxy::RefWithValue { entity_ref, value } => PinConnection {
+				entity_ref,
+				value: Some(value)
+			}
+		}
+	}
+}
+
+#[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
+#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
+#[cfg_attr(feature = "rune", rune(constructor))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(from = "LocalPinConnectionProxy", into = "LocalPinConnectionProxy")]
+pub struct LocalPinConnection {
+	/// The entity being referenced.
+	#[serde(rename = "ref")]
+	pub entity_ref: EntityID,
+
+	/// The constant value of the pin connection.
+	pub value: Option<Variant>
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum LocalPinConnectionProxy {
+	RefWithValue {
+		#[serde(rename = "ref")]
+		entity_ref: EntityID,
+		value: Variant
+	},
+	Ref(EntityID)
+}
+
+impl From<LocalPinConnection> for LocalPinConnectionProxy {
+	fn from(pin: LocalPinConnection) -> Self {
+		if let Some(value) = pin.value {
+			Self::RefWithValue {
+				entity_ref: pin.entity_ref,
+				value
+			}
+		} else {
+			Self::Ref(pin.entity_ref)
+		}
+	}
+}
+
+impl From<LocalPinConnectionProxy> for LocalPinConnection {
+	fn from(proxy: LocalPinConnectionProxy) -> Self {
+		match proxy {
+			LocalPinConnectionProxy::Ref(entity_ref) => LocalPinConnection {
+				entity_ref,
+				value: None
+			},
+
+			LocalPinConnectionProxy::RefWithValue { entity_ref, value } => LocalPinConnection {
 				entity_ref,
 				value: Some(value)
 			}

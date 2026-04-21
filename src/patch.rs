@@ -5,8 +5,8 @@ use specta::Type;
 
 use crate::{
 	entity::{
-		CommentEntity, EntityID, ExposedEntity, PinConnection, PinConnectionOverride, PinConnectionOverrideDelete,
-		Property, PropertyAlias, Ref, SubEntity, SubType
+		CommentEntity, EntityID, ExposedEntity, LocalPinConnection, PinConnection, PinConnectionOverride,
+		PinConnectionOverrideDelete, Property, PropertyAlias, Ref, SubEntity, SubType
 	},
 	variant::Variant
 };
@@ -228,14 +228,14 @@ pub enum SubEntityOperation {
 	AddInputCopyConnection(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] PinConnection
+		#[cfg_attr(feature = "rune", rune(get, set))] LocalPinConnection
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	RemoveInputCopyConnection(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] PinConnection
+		#[cfg_attr(feature = "rune", rune(get, set))] LocalPinConnection
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -251,14 +251,14 @@ pub enum SubEntityOperation {
 	AddOutputCopyConnection(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] PinConnection
+		#[cfg_attr(feature = "rune", rune(get, set))] LocalPinConnection
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	RemoveOutputCopyConnection(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set))] PinConnection
+		#[cfg_attr(feature = "rune", rune(get, set))] LocalPinConnection
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]

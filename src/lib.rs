@@ -35,7 +35,7 @@ use thiserror::Error;
 use tryvial::try_fn;
 
 use crate::{
-	entity::Property,
+	entity::{LocalPinConnection, Property},
 	patch::{ItemSelector, VariantPatch},
 	variant::Variant
 };
@@ -2562,15 +2562,13 @@ pub fn convert_to_qn(
 				.or_default()
 				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
-				.push(PinConnection {
-					entity_ref: Ref::local(
-						blueprint
-							.sub_entities
-							.get(forwarding.to_id as usize)
-							.context("Pin referred to nonexistent sub-entity")?
-							.entity_id
-							.into()
-					),
+				.push(LocalPinConnection {
+					entity_ref: blueprint
+						.sub_entities
+						.get(forwarding.to_id as usize)
+						.context("Pin referred to nonexistent sub-entity")?
+						.entity_id
+						.into(),
 					value: if forwarding.constant_pin_value.is::<()>() {
 						None
 					} else {
@@ -2603,15 +2601,13 @@ pub fn convert_to_qn(
 				.or_default()
 				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
-				.push(PinConnection {
-					entity_ref: Ref::local(
-						blueprint
-							.sub_entities
-							.get(forwarding.to_id as usize)
-							.context("Pin referred to nonexistent sub-entity")?
-							.entity_id
-							.into()
-					),
+				.push(LocalPinConnection {
+					entity_ref: blueprint
+						.sub_entities
+						.get(forwarding.to_id as usize)
+						.context("Pin referred to nonexistent sub-entity")?
+						.entity_id
+						.into(),
 					value: if forwarding.constant_pin_value.is::<()>() {
 						None
 					} else {
@@ -3198,7 +3194,7 @@ pub fn convert_to_game(
 					.input_copying
 					.iter()
 					.map(|(evt, triggers)| {
-						pin_connections_for_event(
+						local_pin_connections_for_event(
 							entity_id,
 							evt,
 							triggers,
@@ -3226,7 +3222,7 @@ pub fn convert_to_game(
 					.output_copying
 					.iter()
 					.map(|(evt, triggers)| {
-						pin_connections_for_event(
+						local_pin_connections_for_event(
 							entity_id,
 							evt,
 							triggers,
@@ -3288,7 +3284,7 @@ fn pin_connections_for_event(
 				.filter(|&trigger_entity| trigger_entity.entity_ref.external_scene.is_none())
 				.map(|trigger_entity| {
 					if trigger_entity.entity_ref.exposed_entity.is_some() {
-						bail!("Pin connections cannot refer to exposed entities")
+						bail!("Local pin connections cannot refer to exposed entities")
 					}
 
 					Ok(SEntityTemplatePinConnection {
@@ -3299,6 +3295,57 @@ fn pin_connections_for_event(
 								format!(
 									"Pin connection referred to nonexistent entity ID: {}",
 									trigger_entity.entity_ref.entity_id
+								)
+							})? as i32,
+						from_pin_name: event.to_owned(),
+						to_pin_name: trigger.to_owned(),
+						constant_pin_value: if let Some(value) = &trigger_entity.value {
+							value.to_game(
+								factory,
+								factory_meta,
+								entity_id_to_index_mapping,
+								factory_dependencies_index_mapping
+							)?
+						} else {
+							ZVariant::new(())
+						}
+					})
+				})
+				.collect::<Result<Vec<SEntityTemplatePinConnection>>>()
+		})
+		.collect::<Result<Vec<Vec<SEntityTemplatePinConnection>>>>()?
+		.into_iter()
+		.flatten()
+		.collect_vec()
+}
+
+#[try_fn]
+#[context("Failure getting local pin connections for event")]
+#[auto_context]
+#[hotpath::measure]
+fn local_pin_connections_for_event(
+	entity_id: EntityID,
+	event: &EcoString,
+	triggers: &OrderMap<EcoString, Vec<LocalPinConnection>>,
+	factory: &STemplateEntityFactory,
+	factory_meta: &ResourceMetadata,
+	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
+) -> Result<Vec<SEntityTemplatePinConnection>> {
+	triggers
+		.iter()
+		.map(|(trigger, entities)| -> Result<_> {
+			entities
+				.iter()
+				.map(|trigger_entity| {
+					Ok(SEntityTemplatePinConnection {
+						from_id: *entity_id_to_index_mapping.get(&entity_id).ctx? as i32,
+						to_id: *entity_id_to_index_mapping
+							.get(&trigger_entity.entity_ref)
+							.with_context(|| {
+								format!(
+									"Pin connection referred to nonexistent entity ID: {}",
+									trigger_entity.entity_ref
 								)
 							})? as i32,
 						from_pin_name: event.to_owned(),
