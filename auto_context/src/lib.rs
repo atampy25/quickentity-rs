@@ -1,5 +1,4 @@
 #![feature(proc_macro_quote)]
-#![feature(proc_macro_span)]
 
 use proc_macro::{quote, Delimiter, Group, Literal, TokenStream, TokenTree};
 

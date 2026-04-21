@@ -6,7 +6,7 @@ use specta::Type;
 use crate::{
 	entity::{
 		CommentEntity, EntityID, ExposedEntity, PinConnection, PinConnectionOverride, PinConnectionOverrideDelete,
-		Property, PropertyAlias, PropertyOverride, Ref, SubEntity, SubType
+		Property, PropertyAlias, Ref, SubEntity, SubType
 	},
 	variant::Variant
 };
@@ -72,14 +72,6 @@ pub enum PatchOperation {
 		#[cfg_attr(feature = "rune", rune(get, set))] EntityID,
 		#[cfg_attr(feature = "rune", rune(get, set))] SubEntityOperation
 	),
-
-	/// Should no longer be emitted by patch generators.
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddPropertyOverride(#[cfg_attr(feature = "rune", rune(get, set))] PropertyOverride),
-
-	/// Should no longer be emitted by patch generators.
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemovePropertyOverride(#[cfg_attr(feature = "rune", rune(get, set))] PropertyOverride),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddPropertyOverrideConnection(#[cfg_attr(feature = "rune", rune(get, set))] PropertyOverrideConnection),

@@ -61,30 +61,45 @@ pub fn rune_install(ctx: &mut rune::Context) -> Result<(), rune::ContextError> {
 
 #[derive(Error, Debug)]
 pub enum Diagnostic {
-	#[error("couldn't remove entity {entity} because it did not exist")]
-	EntityAlreadyNonexistent { entity: EntityID },
+	#[error("entity {entity} already existed and was replaced")]
+	EntityAlreadyExisted { entity: EntityID },
 
-	#[error("couldn't remove property {property} on {entity} because it did not exist")]
-	PropertyAlreadyNonexistent { entity: EntityID, property: EcoString },
-
-	#[error("couldn't remove platform specific properties for {platform} on {entity} because it did not exist")]
-	PlatformAlreadyNonexistent { entity: EntityID, platform: EcoString },
-
-	#[error("couldn't remove platform specific property {platform}/{property} on {entity} because it did not exist")]
-	PlatformSpecificPropertyAlreadyNonexistent {
-		entity: EntityID,
-		platform: EcoString,
-		property: EcoString
-	},
-
-	#[error("couldn't remove external scene {scene} because it did not exist")]
-	ExternalSceneAlreadyNonexistent { scene: RuntimeID },
+	#[error("{0}")]
+	AlreadyNonexistent(#[from] AlreadyNonexistentDiagnostic),
 
 	#[error("in patching array {identifier}: {diagnostic}")]
 	ArrayPatch {
 		identifier: EcoString,
 		diagnostic: ArrayPatchDiagnostic
 	}
+}
+
+#[derive(Error, Debug)]
+pub enum AlreadyNonexistentDiagnostic {
+	#[error("couldn't remove entity {entity} because it did not exist")]
+	Entity { entity: EntityID },
+
+	#[error("couldn't remove property {property} on {entity} because it did not exist")]
+	Property { entity: EntityID, property: EcoString },
+
+	#[error("couldn't remove platform specific properties for {platform} on {entity} because it did not exist")]
+	Platform { entity: EntityID, platform: EcoString },
+
+	#[error("couldn't remove platform specific property {platform}/{property} on {entity} because it did not exist")]
+	PlatformSpecificProperty {
+		entity: EntityID,
+		platform: EcoString,
+		property: EcoString
+	},
+
+	#[error("couldn't remove external scene {scene} because it did not exist")]
+	ExternalScene { scene: RuntimeID },
+
+	#[error("couldn't remove extra factory reference {reference:?} because it did not exist")]
+	ExtraFactoryReference { reference: ResourceReference },
+
+	#[error("couldn't remove extra blueprint reference {reference:?} because it did not exist")]
+	ExtraBlueprintReference { reference: ResourceReference }
 }
 
 #[derive(Error, Debug)]
@@ -102,11 +117,12 @@ pub enum ArrayPatchDiagnostic {
 	NoSuchElementToReplace { element: ItemSelector }
 }
 
+/// Apply a patch to an entity. Returns whether the entity was modified.
 #[try_fn]
 #[context("Failure applying patch to entity")]
 #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
 #[hotpath::measure]
-pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagnostic) + Send + Sync) -> Result<()> {
+pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagnostic) + Send + Sync) -> Result<bool> {
 	if patch.patch_version != PATCH_VERSION {
 		bail!(
 			"Invalid patch version; expected {}, got {}",
@@ -119,12 +135,15 @@ pub fn apply_patch(entity: &mut Entity, patch: Patch, mut emit: impl FnMut(Diagn
 
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
+		let mut modified = false;
+
 		for (idx, operation) in patch.into_iter().enumerate() {
-			apply_patch_operation(entity, operation, &mut emit).context(format!("Failure applying operation {idx}"))?;
+			modified |= apply_patch_operation(entity, operation, &mut emit)
+				.context(format!("Failure applying operation {idx}"))?;
 		}
 
-		anyhow::Ok(())
-	})?;
+		anyhow::Ok(modified)
+	})?
 }
 
 #[try_fn]
@@ -134,25 +153,37 @@ fn apply_patch_operation(
 	entity: &mut Entity,
 	operation: PatchOperation,
 	mut emit: impl FnMut(Diagnostic)
-) -> Result<()> {
+) -> Result<bool> {
+	let mut modified = false;
+
 	match operation {
 		PatchOperation::SetRootEntity(value) => {
+			modified = entity.root_entity != value;
 			entity.root_entity = value;
 		}
 
 		PatchOperation::SetSubType(value) => {
+			modified = entity.sub_type != value;
 			entity.sub_type = value;
 		}
 
 		PatchOperation::RemoveEntityByID(value) => {
 			let removed = entity.entities.remove(&value);
+			modified = removed.is_some();
 
-			if removed.is_none() {
-				emit(Diagnostic::EntityAlreadyNonexistent { entity: value });
+			if !modified {
+				emit(AlreadyNonexistentDiagnostic::Entity { entity: value }.into());
 			}
 		}
 
 		PatchOperation::AddEntity(id, data) => {
+			if let Some(existing) = entity.entities.get(&id) {
+				emit(Diagnostic::EntityAlreadyExisted { entity: id });
+				modified = *data != *existing;
+			} else {
+				modified = true;
+			}
+
 			entity.entities.insert(id, *data);
 		}
 
@@ -164,42 +195,63 @@ fn apply_patch_operation(
 
 			match op {
 				SubEntityOperation::SetParent(value) => {
+					modified = entity.parent != value;
 					entity.parent = value;
 				}
 
 				SubEntityOperation::SetName(value) => {
+					modified = entity.name != value;
 					entity.name = value;
 				}
 
 				SubEntityOperation::SetFactory(value) => {
+					modified = entity.factory != value;
 					entity.factory = value;
 				}
 
 				SubEntityOperation::SetBlueprint(value) => {
+					modified = entity.blueprint != value;
 					entity.blueprint = value;
 				}
 
 				SubEntityOperation::SetEditorOnly(value) => {
+					modified = entity.editor_only != value;
 					entity.editor_only = value;
 				}
 
 				SubEntityOperation::AddProperty(name, data) => {
+					if let Some(existing) = entity.properties.get(&name) {
+						modified = data != *existing;
+					} else {
+						modified = true;
+					}
+
 					entity.properties.insert(name, data);
 				}
 
 				SubEntityOperation::RemovePropertyByName(name) => {
 					let removed = entity.properties.remove(&name);
+					modified = removed.is_some();
 
-					if removed.is_none() {
-						emit(Diagnostic::PropertyAlreadyNonexistent {
-							entity: entity_id,
-							property: name
-						});
+					if !modified {
+						emit(
+							AlreadyNonexistentDiagnostic::Property {
+								entity: entity_id,
+								property: name
+							}
+							.into()
+						);
 					}
 				}
 
 				SubEntityOperation::PatchPropertyValue(property_name, patch, post_init) => match patch {
 					VariantPatch::Set(value) => {
+						if let Some(existing) = entity.properties.get(&property_name) {
+							modified = value != existing.value;
+						} else {
+							modified = true;
+						}
+
 						entity
 							.properties
 							.entry(property_name)
@@ -220,34 +272,44 @@ fn apply_patch_operation(
 							bail!("PatchPropertyValue expected property to be an array!");
 						};
 
-						apply_array_patch(value, patch, property_name, &mut emit)?;
+						modified = apply_array_patch(value, patch, property_name, &mut emit)?;
 					}
 				},
 
 				SubEntityOperation::SetPropertyPostInit(name, value) => {
-					entity
+					let ent = entity
 						.properties
 						.get_mut(&name)
-						.context("SetPropertyPostInit couldn't find expected property!")?
-						.post_init = value;
+						.context("SetPropertyPostInit couldn't find expected property!")?;
+
+					modified = value != ent.post_init;
+					ent.post_init = value;
 				}
 
 				SubEntityOperation::AddPlatformSpecificProperty(platform, name, data) => {
-					entity
-						.platform_specific_properties
-						.entry(platform)
-						.or_default()
-						.insert(name, data);
+					let entry = entity.platform_specific_properties.entry(platform).or_default();
+
+					if let Some(existing) = entry.get(&name) {
+						modified = data != *existing;
+					} else {
+						modified = true;
+					}
+
+					entry.insert(name, data);
 				}
 
 				SubEntityOperation::RemovePlatformSpecificPropertiesForPlatform(name) => {
 					let removed = entity.platform_specific_properties.remove(&name);
+					modified = removed.is_some();
 
-					if removed.is_none() {
-						emit(Diagnostic::PlatformAlreadyNonexistent {
-							entity: entity_id,
-							platform: name
-						});
+					if !modified {
+						emit(
+							AlreadyNonexistentDiagnostic::Platform {
+								entity: entity_id,
+								platform: name
+							}
+							.into()
+						);
 					}
 				}
 
@@ -258,12 +320,17 @@ fn apply_patch_operation(
 						.context("RemovePSPropertyByName couldn't find platform!")?
 						.remove(&name);
 
-					if removed.is_none() {
-						emit(Diagnostic::PlatformSpecificPropertyAlreadyNonexistent {
-							entity: entity_id,
-							platform,
-							property: name
-						});
+					modified = removed.is_some();
+
+					if !modified {
+						emit(
+							AlreadyNonexistentDiagnostic::PlatformSpecificProperty {
+								entity: entity_id,
+								platform,
+								property: name
+							}
+							.into()
+						);
 					} else if entity.platform_specific_properties.get(&platform).unwrap().is_empty() {
 						entity.platform_specific_properties.remove(&platform);
 					}
@@ -272,10 +339,15 @@ fn apply_patch_operation(
 				SubEntityOperation::PatchPlatformSpecificPropertyValue(platform, property_name, patch, post_init) => {
 					match patch {
 						VariantPatch::Set(value) => {
-							entity
-								.platform_specific_properties
-								.entry(platform)
-								.or_default()
+							let entry = entity.platform_specific_properties.entry(platform).or_default();
+
+							if let Some(existing) = entry.get(&property_name) {
+								modified = value != existing.value;
+							} else {
+								modified = true;
+							}
+
+							entry
 								.entry(property_name)
 								.or_insert_with(|| Property {
 									value: Variant::Ref(None),
@@ -296,19 +368,21 @@ fn apply_patch_operation(
 								bail!("PatchPlatformSpecificPropertyValue expected property to be an array!");
 							};
 
-							apply_array_patch(value, patch, property_name, &mut emit)?;
+							modified = apply_array_patch(value, patch, property_name, &mut emit)?;
 						}
 					}
 				}
 
 				SubEntityOperation::SetPlatformSpecificPropertyPostInit(platform, name, value) => {
-					entity
+					let ent = entity
 						.platform_specific_properties
 						.get_mut(&platform)
 						.context("SetPSPropertyPostInit couldn't find expected platform!")?
 						.get_mut(&name)
-						.context("SetPSPropertyPostInit couldn't find expected property!")?
-						.post_init = value;
+						.context("SetPSPropertyPostInit couldn't find expected property!")?;
+
+					modified = value != ent.post_init;
+					ent.post_init = value;
 				}
 
 				SubEntityOperation::RemoveAllEventConnectionsForEvent(event) => {
@@ -316,6 +390,8 @@ fn apply_patch_operation(
 						.events
 						.remove(&event)
 						.context("RemoveAllEventConnectionsForEvent couldn't find event!")?;
+
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveAllEventConnectionsForTrigger(event, trigger) => {
@@ -325,6 +401,8 @@ fn apply_patch_operation(
 						.context("RemoveAllEventConnectionsForTrigger couldn't find event!")?
 						.remove(&trigger)
 						.context("RemoveAllEventConnectionsForTrigger couldn't find trigger!")?;
+
+					modified = true;
 
 					if entity.events.get(&event).unwrap().is_empty() {
 						entity.events.remove(&event);
@@ -350,6 +428,8 @@ fn apply_patch_operation(
 						.unwrap()
 						.remove(ind);
 
+					modified = true;
+
 					if entity.events.get(&event).unwrap().get(&trigger).unwrap().is_empty() {
 						entity.events.get_mut(&event).unwrap().remove(&trigger);
 					}
@@ -367,6 +447,8 @@ fn apply_patch_operation(
 						.entry(trigger)
 						.or_default()
 						.push(reference);
+
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveAllInputCopyConnectionsForInput(event) => {
@@ -374,6 +456,8 @@ fn apply_patch_operation(
 						.input_copying
 						.remove(&event)
 						.context("RemoveAllInputCopyConnectionsForInput couldn't find input!")?;
+
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveAllInputCopyConnectionsForTrigger(event, trigger) => {
@@ -383,6 +467,8 @@ fn apply_patch_operation(
 						.context("RemoveAllInputCopyConnectionsForTrigger couldn't find input!")?
 						.remove(&trigger)
 						.context("RemoveAllInputCopyConnectionsForTrigger couldn't find trigger!")?;
+
+					modified = true;
 
 					if entity.input_copying.get(&event).unwrap().is_empty() {
 						entity.input_copying.remove(&event);
@@ -408,6 +494,8 @@ fn apply_patch_operation(
 						.unwrap()
 						.remove(ind);
 
+					modified = true;
+
 					if entity
 						.input_copying
 						.get(&event)
@@ -432,6 +520,8 @@ fn apply_patch_operation(
 						.entry(trigger)
 						.or_default()
 						.push(reference);
+
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveAllOutputCopyConnectionsForOutput(event) => {
@@ -439,6 +529,8 @@ fn apply_patch_operation(
 						.output_copying
 						.remove(&event)
 						.context("RemoveAllOutputCopyConnectionsForOutput couldn't find event!")?;
+
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveAllOutputCopyConnectionsForPropagate(event, trigger) => {
@@ -448,6 +540,8 @@ fn apply_patch_operation(
 						.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find event!")?
 						.remove(&trigger)
 						.context("RemoveAllOutputCopyConnectionsForPropagate couldn't find propagate!")?;
+
+					modified = true;
 
 					if entity.output_copying.get(&event).unwrap().is_empty() {
 						entity.output_copying.remove(&event);
@@ -473,6 +567,8 @@ fn apply_patch_operation(
 						.unwrap()
 						.remove(ind);
 
+					modified = true;
+
 					if entity
 						.output_copying
 						.get(&event)
@@ -497,10 +593,13 @@ fn apply_patch_operation(
 						.entry(trigger)
 						.or_default()
 						.push(reference);
+
+					modified = true;
 				}
 
 				SubEntityOperation::AddPropertyAliasConnection(alias, data) => {
 					entity.property_aliases.entry(alias).or_default().push(data);
+					modified = true;
 				}
 
 				SubEntityOperation::RemovePropertyAlias(alias) => {
@@ -508,6 +607,8 @@ fn apply_patch_operation(
 						.property_aliases
 						.remove(&alias)
 						.context("RemovePropertyAlias couldn't find alias!")?;
+
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveConnectionForPropertyAlias(alias, data) => {
@@ -521,12 +622,15 @@ fn apply_patch_operation(
 
 					entity.property_aliases.get_mut(&alias).unwrap().remove(connection);
 
+					modified = true;
+
 					if entity.property_aliases.get(&alias).unwrap().is_empty() {
 						entity.property_aliases.remove(&alias);
 					}
 				}
 
 				SubEntityOperation::SetExposedEntity(name, data) => {
+					modified = entity.exposed_entities.get(&name) != Some(&data);
 					entity.exposed_entities.insert(name, data);
 				}
 
@@ -535,9 +639,12 @@ fn apply_patch_operation(
 						.exposed_entities
 						.remove(&name)
 						.context("RemoveExposedEntity couldn't find exposed entity to remove!")?;
+
+					modified = true;
 				}
 
 				SubEntityOperation::SetExposedInterface(name, implementor) => {
+					modified = entity.exposed_interfaces.get(&name) != Some(&implementor);
 					entity.exposed_interfaces.insert(name, implementor);
 				}
 
@@ -546,10 +653,13 @@ fn apply_patch_operation(
 						.exposed_interfaces
 						.remove(&name)
 						.context("RemoveExposedInterface couldn't find exposed entity to remove!")?;
+
+					modified = true;
 				}
 
 				SubEntityOperation::AddSubset(name, ent) => {
 					entity.subsets.entry(name).or_default().push(ent);
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveSubset(name, ent) => {
@@ -562,6 +672,8 @@ fn apply_patch_operation(
 						.context("RemoveSubset couldn't find the entity to remove from the subset!")?;
 
 					entity.subsets.get_mut(&name).unwrap().remove(ind);
+
+					modified = true;
 				}
 
 				SubEntityOperation::RemoveAllSubsetsFor(name) => {
@@ -569,27 +681,14 @@ fn apply_patch_operation(
 						.subsets
 						.remove(&name)
 						.context("RemoveAllSubsetsFor couldn't find subset to remove!")?;
+
+					modified = true;
 				}
 			}
 		}
 
-		#[allow(deprecated)]
-		PatchOperation::AddPropertyOverride(value) => {
-			entity.property_overrides.push(value);
-		}
-
-		#[allow(deprecated)]
-		PatchOperation::RemovePropertyOverride(value) => {
-			entity.property_overrides.remove(
-				entity
-					.property_overrides
-					.par_iter()
-					.position_any(|x| *x == value)
-					.context("RemovePropertyOverride couldn't find expected value!")?
-			);
-		}
-
 		PatchOperation::AddPropertyOverrideConnection(connection) => {
+			let previous_overrides = entity.property_overrides.to_owned();
 			let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
 
 			for property_override in &entity.property_overrides {
@@ -664,9 +763,11 @@ fn apply_patch_operation(
 			}
 
 			entity.property_overrides = merged_overrides;
+			modified = entity.property_overrides != previous_overrides;
 		}
 
 		PatchOperation::RemovePropertyOverrideConnection(connection) => {
+			let previous_overrides = entity.property_overrides.to_owned();
 			let mut unravelled_overrides: Vec<PropertyOverride> = vec![];
 
 			for property_override in &entity.property_overrides {
@@ -747,10 +848,12 @@ fn apply_patch_operation(
 			}
 
 			entity.property_overrides = merged_overrides;
+			modified = entity.property_overrides != previous_overrides;
 		}
 
 		PatchOperation::AddOverrideDelete(value) => {
 			entity.override_deletes.push(value);
+			modified = true;
 		}
 
 		PatchOperation::RemoveOverrideDelete(value) => {
@@ -761,10 +864,13 @@ fn apply_patch_operation(
 					.position_any(|x| *x == value)
 					.context("RemoveOverrideDelete couldn't find expected value!")?
 			);
+
+			modified = true;
 		}
 
 		PatchOperation::AddPinConnectionOverride(value) => {
 			entity.pin_connection_overrides.push(value);
+			modified = true;
 		}
 
 		PatchOperation::RemovePinConnectionOverride(value) => {
@@ -775,10 +881,13 @@ fn apply_patch_operation(
 					.position_any(|x| *x == value)
 					.context("RemovePinConnectionOverride couldn't find expected value!")?
 			);
+
+			modified = true;
 		}
 
 		PatchOperation::AddPinConnectionOverrideDelete(value) => {
 			entity.pin_connection_override_deletes.push(value);
+			modified = true;
 		}
 
 		PatchOperation::RemovePinConnectionOverrideDelete(value) => {
@@ -789,50 +898,59 @@ fn apply_patch_operation(
 					.position_any(|x| *x == value)
 					.context("RemovePinConnectionOverrideDelete couldn't find expected value!")?
 			);
+
+			modified = true;
 		}
 
 		PatchOperation::AddExternalScene(value) => {
 			entity.external_scenes.push(value);
+			modified = true;
 		}
 
 		PatchOperation::RemoveExternalScene(value) => {
 			if let Some(x) = entity.external_scenes.par_iter().position_any(|x| *x == value) {
 				entity.external_scenes.remove(x);
+				modified = true;
 			} else {
-				emit(Diagnostic::ExternalSceneAlreadyNonexistent { scene: value });
+				emit(AlreadyNonexistentDiagnostic::ExternalScene { scene: value }.into());
 			}
 		}
 
 		PatchOperation::AddExtraFactoryReference(value) => {
 			entity.extra_factory_references.push(value);
+			modified = true;
 		}
 
 		PatchOperation::RemoveExtraFactoryReference(value) => {
-			entity.extra_factory_references.remove(
-				entity
-					.extra_factory_references
-					.par_iter()
-					.position_any(|x| *x == value)
-					.context("RemoveExtraFactoryDependency couldn't find expected value!")?
-			);
+			if let Some(x) = entity.extra_factory_references.par_iter().position_any(|x| *x == value) {
+				entity.extra_factory_references.remove(x);
+				modified = true;
+			} else {
+				emit(AlreadyNonexistentDiagnostic::ExtraFactoryReference { reference: value }.into());
+			}
 		}
 
 		PatchOperation::AddExtraBlueprintReference(value) => {
 			entity.extra_blueprint_references.push(value);
+			modified = true;
 		}
 
 		PatchOperation::RemoveExtraBlueprintReference(value) => {
-			entity.extra_blueprint_references.remove(
-				entity
-					.extra_blueprint_references
-					.par_iter()
-					.position_any(|x| *x == value)
-					.context("RemoveExtraBlueprintDependency couldn't find expected value!")?
-			);
+			if let Some(x) = entity
+				.extra_blueprint_references
+				.par_iter()
+				.position_any(|x| *x == value)
+			{
+				entity.extra_blueprint_references.remove(x);
+				modified = true;
+			} else {
+				emit(AlreadyNonexistentDiagnostic::ExtraBlueprintReference { reference: value }.into());
+			}
 		}
 
 		PatchOperation::AddComment(value) => {
 			entity.comments.push(value);
+			modified = true;
 		}
 
 		PatchOperation::RemoveComment(value) => {
@@ -843,8 +961,12 @@ fn apply_patch_operation(
 					.position_any(|x| *x == value)
 					.context("RemoveComment couldn't find expected value!")?
 			);
+
+			modified = true;
 		}
 	}
+
+	modified
 }
 
 #[try_fn]
@@ -855,7 +977,7 @@ pub fn apply_array_patch(
 	patch: Vec<ArrayPatchOperation>,
 	identifier: EcoString,
 	mut emit: impl FnMut(Diagnostic)
-) -> Result<()> {
+) -> Result<bool> {
 	#[hotpath::measure]
 	fn find_selector_index(arr: &[Variant], selector: &ItemSelector) -> Option<usize> {
 		let ItemSelector(wanted, occurrence) = selector;
@@ -874,6 +996,8 @@ pub fn apply_array_patch(
 		None
 	}
 
+	let mut modified = false;
+
 	for operation in patch {
 		match operation {
 			ArrayPatchOperation::Add { before, after, item } => {
@@ -882,6 +1006,7 @@ pub fn apply_array_patch(
 
 				if let Some(selector) = before.as_ref() {
 					if let Some(idx) = find_selector_index(arr, selector) {
+						modified = true;
 						arr.insert(idx, item);
 						continue;
 					} else {
@@ -891,6 +1016,7 @@ pub fn apply_array_patch(
 
 				if let Some(selector) = after.as_ref() {
 					if let Some(idx) = find_selector_index(arr, selector) {
+						modified = true;
 						arr.insert(idx + 1, item);
 						continue;
 					} else {
@@ -898,6 +1024,7 @@ pub fn apply_array_patch(
 					}
 				}
 
+				modified = true;
 				arr.push(item);
 
 				if let Some(element) = missing_before {
@@ -919,6 +1046,7 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::Remove { item } => {
 				if let Some(idx) = find_selector_index(arr, &item) {
+					modified = true;
 					arr.remove(idx);
 				} else {
 					emit(Diagnostic::ArrayPatch {
@@ -930,6 +1058,7 @@ pub fn apply_array_patch(
 
 			ArrayPatchOperation::Replace { item, new } => {
 				if let Some(idx) = find_selector_index(arr, &item) {
+					modified = true;
 					arr[idx] = new;
 				} else {
 					emit(Diagnostic::ArrayPatch {
@@ -937,11 +1066,14 @@ pub fn apply_array_patch(
 						diagnostic: ArrayPatchDiagnostic::NoSuchElementToReplace { element: item }
 					});
 
+					modified = true;
 					arr.push(new);
 				}
 			}
 		}
 	}
+
+	modified
 }
 
 #[hotpath::measure]

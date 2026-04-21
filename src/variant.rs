@@ -602,8 +602,17 @@ impl Variant {
 			(Self::Resource(a), Self::Resource(b)) => a == b,
 			(Self::Uuid(a), Self::Uuid(b)) => a == b,
 			(Self::RepositoryId(a), Self::RepositoryId(b)) => a == b,
-			(Self::ColorRGB(a), Self::ColorRGB(b)) => a == b,
-			(Self::ColorRGBA(a), Self::ColorRGBA(b)) => a == b,
+			(Self::ColorRGB(a), Self::ColorRGB(b)) => {
+				(a.r * 255.0).round() == (b.r * 255.0).round()
+					&& (a.g * 255.0).round() == (b.g * 255.0).round()
+					&& (a.b * 255.0).round() == (b.b * 255.0).round()
+			}
+			(Self::ColorRGBA(a), Self::ColorRGBA(b)) => {
+				(a.r * 255.0).round() == (b.r * 255.0).round()
+					&& (a.g * 255.0).round() == (b.g * 255.0).round()
+					&& (a.b * 255.0).round() == (b.b * 255.0).round()
+					&& (a.a * 255.0).round() == (b.a * 255.0).round()
+			}
 			(Self::PairStringVariant(a1, a2), Self::PairStringVariant(b1, b2)) => a1 == b1 && a2.rough_eq(b2),
 			(Self::Variant(a), Self::Variant(b)) => a.rough_eq(b),
 			(Self::Array(_, a_items), Self::Array(_, b_items)) => {
