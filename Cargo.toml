@@ -41,10 +41,13 @@ log = { version = "0.4.27", optional = true }
 glam = { version = "0.32.1", features = ["glam-assert"] }
 uuid = { version = "1.23.1", features = ["serde"] }
 hotpath = "0.15.0"
+schemars = { version = "1.2.1", features = ["uuid1"], optional = true }
 
 [features]
 cli = ["dep:log", "dep:env_logger", "dep:clap"]
+
 rune = ["dep:rune", "dep:better-rune-derive", "hitman-commons/rune"]
+schemars = ["dep:schemars", "hitman-commons/schemars"]
 
 hotpath = ["hotpath/hotpath"]
 hotpath-alloc = ["hotpath/hotpath-alloc"]

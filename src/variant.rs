@@ -46,6 +46,7 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Transform {
 	/// Position in 3D space.
@@ -166,6 +167,7 @@ impl Transform {
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Type)]
 pub struct Vec3 {
 	pub x: f64,
@@ -224,6 +226,20 @@ pub struct ColorRGB {
 	pub b: f32
 }
 
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for ColorRGB {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"ColorRGB".into()
+	}
+
+	fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": "string",
+			"pattern": "^#[0-9a-fA-F]{6}$"
+		})
+	}
+}
+
 impl Display for ColorRGB {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		write!(
@@ -269,6 +285,20 @@ pub struct ColorRGBA {
 	pub a: f32
 }
 
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for ColorRGBA {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"ColorRGBA".into()
+	}
+
+	fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": "string",
+			"pattern": "^#[0-9a-fA-F]{8}$"
+		})
+	}
+}
+
 impl Display for ColorRGBA {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		write!(
@@ -309,6 +339,7 @@ impl FromStr for ColorRGBA {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_get, Self::r_set, Self::r_from))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Variant {
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -323,7 +354,9 @@ pub enum Variant {
 	Uuid(Uuid),
 
 	// Rune doesn't need to know about this
-	RepositoryId(hitman_bin1::types::repository::ZRepositoryID),
+	RepositoryId(
+		#[cfg_attr(feature = "schemars", schemars(with = "String"))] hitman_bin1::types::repository::ZRepositoryID
+	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	ColorRGB(#[cfg_attr(feature = "rune", rune(get, set))] ColorRGB),
@@ -333,7 +366,9 @@ pub enum Variant {
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	PairStringVariant(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
+		#[cfg_attr(feature = "schemars", schemars(with = "String"))]
+		EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, boxed))] Box<Variant>
 	),
 
@@ -342,11 +377,13 @@ pub enum Variant {
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Array(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
+		#[cfg_attr(feature = "schemars", schemars(with = "String"))]
+		EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set))] Vec<Variant>
 	),
 
-	Raw(hitman_bin1::game::h3::ZVariant)
+	Raw(#[cfg_attr(feature = "schemars", schemars(with = "Value"))] hitman_bin1::game::h3::ZVariant)
 }
 
 #[cfg(feature = "rune")]

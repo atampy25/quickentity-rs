@@ -45,6 +45,7 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum SubType {
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Brick,
@@ -65,6 +66,20 @@ pub enum SubType {
 )]
 #[derive(SerializeDisplay, DeserializeFromStr, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EntityID(u64);
+
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for EntityID {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"EntityID".into()
+	}
+
+	fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": "string",
+			"pattern": "^[0-9a-fA-F]{16}$"
+		})
+	}
+}
 
 impl EntityID {
 	#[cfg(feature = "rune")]
@@ -130,6 +145,7 @@ impl Type for EntityID {
 	feature = "rune",
 	rune_functions(Self::r_entities, Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
 )]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Entity {
 	/// The TEMP file of this entity.
@@ -150,6 +166,10 @@ pub struct Entity {
 	/// The sub-entities of this entity.
 	#[serde(rename = "entities")]
 	#[specta(type = std::collections::HashMap<EntityID, SubEntity>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(with = "std::collections::HashMap<EntityID, SubEntity>")
+	)]
 	pub entities: OrderMap<EntityID, SubEntity>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
@@ -239,6 +259,7 @@ impl Entity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct CommentEntity {
 	/// The sub-entity this comment is parented to.
@@ -247,11 +268,13 @@ pub struct CommentEntity {
 	/// The name of this comment.
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub name: EcoString,
 
 	/// The text this comment holds.
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub text: EcoString
 }
 
@@ -260,6 +283,7 @@ pub struct CommentEntity {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_new))]
 #[serde_with::skip_serializing_none]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct SubEntity {
 	/// The "logical" or "organisational" parent of the entity, used for tree organisation in graphical editors.
@@ -272,6 +296,7 @@ pub struct SubEntity {
 	/// The name of the entity.
 	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub name: EcoString,
 
 	/// The factory of the entity.
@@ -298,6 +323,7 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, Property>)]
+	#[cfg_attr(feature = "schemars", schemars(with = "std::collections::HashMap<String, Property>"))]
 	pub properties: OrderMap<EcoString, Property>,
 
 	/// Properties to apply conditionally to the entity based on platform.
@@ -305,6 +331,10 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Property>>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(with = "std::collections::HashMap<String, std::collections::HashMap<String, Property>>")
+	)]
 	pub platform_specific_properties: OrderMap<EcoString, OrderMap<EcoString, Property>>,
 
 	/// Inputs on entities to trigger when events occur.
@@ -312,6 +342,10 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<PinConnection>>>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(with = "std::collections::HashMap<String, std::collections::HashMap<String, Vec<PinConnection>>>")
+	)]
 	pub events: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
@@ -319,6 +353,12 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(
+			with = "std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>"
+		)
+	)]
 	pub input_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Events to propagate on other entities.
@@ -326,6 +366,12 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(
+			with = "std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>"
+		)
+	)]
 	pub output_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
@@ -333,6 +379,10 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, Vec<PropertyAlias>>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(with = "std::collections::HashMap<String, Vec<PropertyAlias>>")
+	)]
 	pub property_aliases: OrderMap<EcoString, Vec<PropertyAlias>>,
 
 	/// Entities that can be accessed from this entity.
@@ -340,6 +390,10 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, ExposedEntity>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(with = "std::collections::HashMap<String, ExposedEntity>")
+	)]
 	pub exposed_entities: OrderMap<EcoString, ExposedEntity>,
 
 	/// Interfaces implemented by other entities that can be accessed from this entity.
@@ -347,6 +401,7 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, EntityID>)]
+	#[cfg_attr(feature = "schemars", schemars(with = "std::collections::HashMap<String, EntityID>"))]
 	pub exposed_interfaces: OrderMap<EcoString, EntityID>,
 
 	/// The subsets that this entity belongs to.
@@ -354,6 +409,10 @@ pub struct SubEntity {
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, Vec<EntityID>>)]
+	#[cfg_attr(
+		feature = "schemars",
+		schemars(with = "std::collections::HashMap<String, Vec<EntityID>>")
+	)]
 	pub subsets: OrderMap<EcoString, Vec<EntityID>>
 }
 
@@ -578,6 +637,7 @@ impl SubEntity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(from = "PinConnectionProxy", into = "PinConnectionProxy")]
 pub struct PinConnection {
@@ -602,6 +662,7 @@ impl Type for PinConnection {
 	}
 }
 
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Type)]
 #[serde(untagged)]
 enum PinConnectionProxy {
@@ -647,6 +708,7 @@ impl From<PinConnectionProxy> for PinConnection {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(from = "LocalPinConnectionProxy", into = "LocalPinConnectionProxy")]
 pub struct LocalPinConnection {
@@ -671,6 +733,7 @@ impl Type for LocalPinConnection {
 	}
 }
 
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Type)]
 #[serde(untagged)]
 enum LocalPinConnectionProxy {
@@ -713,6 +776,7 @@ impl From<LocalPinConnectionProxy> for LocalPinConnection {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Property {
@@ -736,6 +800,7 @@ pub struct Property {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Type)]
 pub struct ExposedEntity {
 	/// Whether there are multiple target entities.
@@ -755,12 +820,14 @@ pub struct ExposedEntity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type, Eq, Hash)]
 pub struct PropertyAlias {
 	/// The other entity's property that should be accessed from this entity.
 	#[serde(rename = "originalProperty")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub original_property: EcoString,
 
 	/// The other entity whose property will be accessed.
@@ -773,6 +840,7 @@ pub struct PropertyAlias {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct PinConnectionOverride {
@@ -786,6 +854,7 @@ pub struct PinConnectionOverride {
 	#[serde(rename = "fromPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub from_pin: EcoString,
 
 	/// The entity whose input will be triggered.
@@ -797,6 +866,7 @@ pub struct PinConnectionOverride {
 	#[serde(rename = "toPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
@@ -809,6 +879,7 @@ pub struct PinConnectionOverride {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde_with::skip_serializing_none]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct PinConnectionOverrideDelete {
@@ -821,6 +892,7 @@ pub struct PinConnectionOverrideDelete {
 	#[serde(rename = "fromPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub from_pin: EcoString,
 
 	/// The entity whose input is triggered.
@@ -832,6 +904,7 @@ pub struct PinConnectionOverrideDelete {
 	#[serde(rename = "toPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
 	#[specta(type = String)]
+	#[cfg_attr(feature = "schemars", schemars(with = "String"))]
 	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
@@ -844,6 +917,7 @@ pub struct PinConnectionOverrideDelete {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct PropertyOverride {
 	/// An array of references to the entities to override the properties of.
@@ -854,6 +928,7 @@ pub struct PropertyOverride {
 	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
 	#[specta(type = std::collections::HashMap<String, Variant>)]
+	#[cfg_attr(feature = "schemars", schemars(with = "std::collections::HashMap<String, Variant>"))]
 	pub properties: OrderMap<EcoString, Variant>
 }
 
@@ -898,6 +973,7 @@ impl PropertyOverride {
 	rune_functions(Self::local__meta, Self::is_local__meta, Self::as_local__meta, Self::to_local__meta)
 )]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(from = "RefProxy", into = "RefProxy")]
 pub struct Ref {
@@ -1082,6 +1158,7 @@ impl Ref {
 	}
 }
 
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Type)]
 #[serde(untagged)]
 enum RefProxy {
@@ -1097,6 +1174,7 @@ enum RefProxy {
 		#[serde(rename = "exposedEntity")]
 		#[serde(skip_serializing_if = "Option::is_none")]
 		#[specta(type = Option<String>)]
+		#[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
 		exposed_entity: Option<EcoString>
 	}
 }
