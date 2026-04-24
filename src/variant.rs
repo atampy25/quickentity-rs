@@ -339,7 +339,6 @@ impl FromStr for ColorRGBA {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_get, Self::r_set, Self::r_from))]
-#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Variant {
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -354,9 +353,7 @@ pub enum Variant {
 	Uuid(Uuid),
 
 	// Rune doesn't need to know about this
-	RepositoryId(
-		#[cfg_attr(feature = "schemars", schemars(with = "String"))] hitman_bin1::types::repository::ZRepositoryID
-	),
+	RepositoryId(hitman_bin1::types::repository::ZRepositoryID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	ColorRGB(#[cfg_attr(feature = "rune", rune(get, set))] ColorRGB),
@@ -366,9 +363,7 @@ pub enum Variant {
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	PairStringVariant(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[cfg_attr(feature = "schemars", schemars(with = "String"))]
-		EcoString,
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set, boxed))] Box<Variant>
 	),
 
@@ -377,13 +372,29 @@ pub enum Variant {
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Array(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[cfg_attr(feature = "schemars", schemars(with = "String"))]
-		EcoString,
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set))] Vec<Variant>
 	),
 
-	Raw(#[cfg_attr(feature = "schemars", schemars(with = "Value"))] hitman_bin1::game::h3::ZVariant)
+	Raw(hitman_bin1::game::h3::ZVariant)
+}
+
+#[cfg(feature = "schemars")]
+impl schemars::JsonSchema for Variant {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"Variant".into()
+	}
+
+	fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": "object",
+			"properties": {
+				"type": { "type": "string" },
+				"value": {}
+			},
+			"required": ["type", "value"]
+		})
+	}
 }
 
 #[cfg(feature = "rune")]
