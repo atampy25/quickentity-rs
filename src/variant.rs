@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use ecow::EcoString;
+use ecow::{EcoString, eco_format};
 use fn_error_context::context;
 use glam::{DAffine3, DMat3, DQuat, DVec3, EulerRot};
 use hitman_bin1::{
@@ -46,7 +46,7 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Transform {
 	/// Position in 3D space.
 	pub position: Vec3,
@@ -166,7 +166,7 @@ impl Transform {
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Type)]
 pub struct Vec3 {
 	pub x: f64,
 	pub y: f64,
@@ -308,10 +308,7 @@ impl FromStr for ColorRGBA {
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
-#[cfg_attr(
-	feature = "rune",
-	rune_functions(Self::r_get, Self::r_set, Self::r_from, Self::variant_type__meta)
-)]
+#[cfg_attr(feature = "rune", rune_functions(Self::r_get, Self::r_set, Self::r_from))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Variant {
 	#[cfg_attr(feature = "rune", rune(constructor))]
@@ -372,8 +369,7 @@ impl Variant {
 
 #[hotpath::measure_all]
 impl Variant {
-	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::variant_type))]
-	pub fn variant_type(&self) -> String {
+	pub fn variant_type(&self) -> EcoString {
 		match self {
 			Variant::Ref(_) => "SEntityTemplateReference".into(),
 			Variant::Resource(_) => "ZRuntimeResourceID".into(),
@@ -384,8 +380,8 @@ impl Variant {
 			Variant::ColorRGBA(_) => "SColorRGBA".into(),
 			Variant::PairStringVariant(_, _) => "TPair<ZString,ZVariant>".into(),
 			Variant::Variant(_) => "ZVariant".into(),
-			Variant::Array(ty, _) => format!("TArray<{ty}>"),
-			Variant::Raw(x) => x.variant_type()
+			Variant::Array(ty, _) => eco_format!("TArray<{ty}>"),
+			Variant::Raw(x) => x.variant_type().into()
 		}
 	}
 

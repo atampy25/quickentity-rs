@@ -2563,7 +2563,7 @@ pub fn convert_to_qn(
 				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
 				.push(LocalPinConnection {
-					entity_ref: blueprint
+					entity_id: blueprint
 						.sub_entities
 						.get(forwarding.to_id as usize)
 						.context("Pin referred to nonexistent sub-entity")?
@@ -2602,7 +2602,7 @@ pub fn convert_to_qn(
 				.entry(forwarding.to_pin_name.to_owned())
 				.or_default()
 				.push(LocalPinConnection {
-					entity_ref: blueprint
+					entity_id: blueprint
 						.sub_entities
 						.get(forwarding.to_id as usize)
 						.context("Pin referred to nonexistent sub-entity")?
@@ -3341,11 +3341,11 @@ fn local_pin_connections_for_event(
 					Ok(SEntityTemplatePinConnection {
 						from_id: *entity_id_to_index_mapping.get(&entity_id).ctx? as i32,
 						to_id: *entity_id_to_index_mapping
-							.get(&trigger_entity.entity_ref)
+							.get(&trigger_entity.entity_id)
 							.with_context(|| {
 								format!(
 									"Pin connection referred to nonexistent entity ID: {}",
-									trigger_entity.entity_ref
+									trigger_entity.entity_id
 								)
 							})? as i32,
 						from_pin_name: event.to_owned(),

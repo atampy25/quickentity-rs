@@ -652,7 +652,7 @@ impl From<PinConnectionProxy> for PinConnection {
 pub struct LocalPinConnection {
 	/// The entity being referenced.
 	#[serde(rename = "ref")]
-	pub entity_ref: EntityID,
+	pub entity_id: EntityID,
 
 	/// The constant value of the pin connection.
 	pub value: Option<Variant>
@@ -676,7 +676,7 @@ impl Type for LocalPinConnection {
 enum LocalPinConnectionProxy {
 	RefWithValue {
 		#[serde(rename = "ref")]
-		entity_ref: EntityID,
+		entity_id: EntityID,
 		value: Variant
 	},
 	Ref(EntityID)
@@ -686,11 +686,11 @@ impl From<LocalPinConnection> for LocalPinConnectionProxy {
 	fn from(pin: LocalPinConnection) -> Self {
 		if let Some(value) = pin.value {
 			Self::RefWithValue {
-				entity_ref: pin.entity_ref,
+				entity_id: pin.entity_id,
 				value
 			}
 		} else {
-			Self::Ref(pin.entity_ref)
+			Self::Ref(pin.entity_id)
 		}
 	}
 }
@@ -698,13 +698,10 @@ impl From<LocalPinConnection> for LocalPinConnectionProxy {
 impl From<LocalPinConnectionProxy> for LocalPinConnection {
 	fn from(proxy: LocalPinConnectionProxy) -> Self {
 		match proxy {
-			LocalPinConnectionProxy::Ref(entity_ref) => LocalPinConnection {
-				entity_ref,
-				value: None
-			},
+			LocalPinConnectionProxy::Ref(entity_id) => LocalPinConnection { entity_id, value: None },
 
-			LocalPinConnectionProxy::RefWithValue { entity_ref, value } => LocalPinConnection {
-				entity_ref,
+			LocalPinConnectionProxy::RefWithValue { entity_id, value } => LocalPinConnection {
+				entity_id,
 				value: Some(value)
 			}
 		}
@@ -975,11 +972,7 @@ impl Ref {
 
 	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::as_local))]
 	pub fn as_local(&self) -> Option<EntityID> {
-		if self.is_local() {
-			Some(self.entity_id)
-		} else {
-			None
-		}
+		if self.is_local() { Some(self.entity_id) } else { None }
 	}
 
 	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::to_local))]
