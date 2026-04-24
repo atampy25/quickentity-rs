@@ -130,14 +130,14 @@ impl Type for EntityID {
 	feature = "rune",
 	rune_functions(Self::r_entities, Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
 )]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct Entity {
-	/// The hash of the TEMP file of this entity.
+	/// The TEMP file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "factory")]
 	pub factory: RuntimeID,
 
-	/// The hash of the TBLU file of this entity.
+	/// The TBLU file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "blueprint")]
 	pub blueprint: RuntimeID,
@@ -149,6 +149,7 @@ pub struct Entity {
 
 	/// The sub-entities of this entity.
 	#[serde(rename = "entities")]
+	#[specta(type = std::collections::HashMap<EntityID, SubEntity>)]
 	pub entities: OrderMap<EntityID, SubEntity>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
@@ -259,7 +260,7 @@ pub struct CommentEntity {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_new))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct SubEntity {
 	/// The "logical" or "organisational" parent of the entity, used for tree organisation in graphical editors.
 	///
@@ -270,6 +271,7 @@ pub struct SubEntity {
 
 	/// The name of the entity.
 	#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
+	#[specta(type = String)]
 	pub name: EcoString,
 
 	/// The factory of the entity.
@@ -295,54 +297,63 @@ pub struct SubEntity {
 	#[serde(rename = "properties")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, Property>)]
 	pub properties: OrderMap<EcoString, Property>,
 
 	/// Properties to apply conditionally to the entity based on platform.
 	#[serde(rename = "platformSpecificProperties")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Property>>)]
 	pub platform_specific_properties: OrderMap<EcoString, OrderMap<EcoString, Property>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<PinConnection>>>)]
 	pub events: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
 	#[serde(rename = "inputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>)]
 	pub input_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Events to propagate on other entities.
 	#[serde(rename = "outputCopying")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>)]
 	pub output_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, Vec<PropertyAlias>>)]
 	pub property_aliases: OrderMap<EcoString, Vec<PropertyAlias>>,
 
 	/// Entities that can be accessed from this entity.
 	#[serde(rename = "exposedEntities")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, ExposedEntity>)]
 	pub exposed_entities: OrderMap<EcoString, ExposedEntity>,
 
 	/// Interfaces implemented by other entities that can be accessed from this entity.
 	#[serde(rename = "exposedInterfaces")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, EntityID>)]
 	pub exposed_interfaces: OrderMap<EcoString, EntityID>,
 
 	/// The subsets that this entity belongs to.
 	#[serde(rename = "subsets")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
+	#[specta(type = std::collections::HashMap<String, Vec<EntityID>>)]
 	pub subsets: OrderMap<EcoString, Vec<EntityID>>
 }
 
@@ -578,7 +589,20 @@ pub struct PinConnection {
 	pub value: Option<Variant>
 }
 
-#[derive(Serialize, Deserialize)]
+impl Type for PinConnection {
+	fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::datatype::DataType {
+		PinConnectionProxy::inline(type_map, generics)
+	}
+
+	fn reference(
+		type_map: &mut specta::TypeCollection,
+		generics: &[specta::datatype::DataType]
+	) -> specta::datatype::reference::Reference {
+		PinConnectionProxy::reference(type_map, generics)
+	}
+}
+
+#[derive(Serialize, Deserialize, Type)]
 #[serde(untagged)]
 enum PinConnectionProxy {
 	RefWithValue {
@@ -634,7 +658,20 @@ pub struct LocalPinConnection {
 	pub value: Option<Variant>
 }
 
-#[derive(Serialize, Deserialize)]
+impl Type for LocalPinConnection {
+	fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::datatype::DataType {
+		LocalPinConnectionProxy::inline(type_map, generics)
+	}
+
+	fn reference(
+		type_map: &mut specta::TypeCollection,
+		generics: &[specta::datatype::DataType]
+	) -> specta::datatype::reference::Reference {
+		LocalPinConnectionProxy::reference(type_map, generics)
+	}
+}
+
+#[derive(Serialize, Deserialize, Type)]
 #[serde(untagged)]
 enum LocalPinConnectionProxy {
 	RefWithValue {
@@ -702,7 +739,7 @@ pub struct Property {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Type)]
 pub struct ExposedEntity {
 	/// Whether there are multiple target entities.
 	#[serde(rename = "isArray")]
@@ -740,7 +777,7 @@ pub struct PropertyAlias {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct PinConnectionOverride {
 	/// The entity that will trigger the input on the other entity.
 	///
@@ -751,6 +788,7 @@ pub struct PinConnectionOverride {
 	/// The name of the event on the fromEntity that will trigger the input on the toEntity.
 	#[serde(rename = "fromPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
 	pub from_pin: EcoString,
 
 	/// The entity whose input will be triggered.
@@ -761,6 +799,7 @@ pub struct PinConnectionOverride {
 	/// fromEntity.
 	#[serde(rename = "toPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
 	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
@@ -774,7 +813,7 @@ pub struct PinConnectionOverride {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor))]
 #[serde_with::skip_serializing_none]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct PinConnectionOverrideDelete {
 	/// The entity that triggers the input on the other entity.
 	#[serde(rename = "fromEntity")]
@@ -784,6 +823,7 @@ pub struct PinConnectionOverrideDelete {
 	/// toEntity.
 	#[serde(rename = "fromPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
 	pub from_pin: EcoString,
 
 	/// The entity whose input is triggered.
@@ -794,6 +834,7 @@ pub struct PinConnectionOverrideDelete {
 	/// the fromEntity.
 	#[serde(rename = "toPin")]
 	#[cfg_attr(feature = "rune", rune(as_into = String))]
+	#[specta(type = String)]
 	pub to_pin: EcoString,
 
 	/// The constant value of the input to the toEntity.
@@ -806,7 +847,7 @@ pub struct PinConnectionOverrideDelete {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune(constructor_fn = Self::rune_construct))]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct PropertyOverride {
 	/// An array of references to the entities to override the properties of.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -815,6 +856,7 @@ pub struct PropertyOverride {
 
 	/// A set of properties to override on the entities.
 	#[serde(rename = "properties")]
+	#[specta(type = std::collections::HashMap<String, Variant>)]
 	pub properties: OrderMap<EcoString, Variant>
 }
 
@@ -875,6 +917,19 @@ pub struct Ref {
 	pub exposed_entity: Option<EcoString>
 }
 
+impl Type for Ref {
+	fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::datatype::DataType {
+		RefProxy::inline(type_map, generics)
+	}
+
+	fn reference(
+		type_map: &mut specta::TypeCollection,
+		generics: &[specta::datatype::DataType]
+	) -> specta::datatype::reference::Reference {
+		RefProxy::reference(type_map, generics)
+	}
+}
+
 #[cfg(feature = "rune")]
 impl Ref {
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
@@ -920,7 +975,11 @@ impl Ref {
 
 	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::as_local))]
 	pub fn as_local(&self) -> Option<EntityID> {
-		if self.is_local() { Some(self.entity_id) } else { None }
+		if self.is_local() {
+			Some(self.entity_id)
+		} else {
+			None
+		}
 	}
 
 	#[cfg_attr(feature = "rune", rune::function(keep, instance, path = Self::to_local))]
@@ -1030,7 +1089,7 @@ impl Ref {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Type)]
 #[serde(untagged)]
 enum RefProxy {
 	Short(EntityID),
@@ -1044,6 +1103,7 @@ enum RefProxy {
 
 		#[serde(rename = "exposedEntity")]
 		#[serde(skip_serializing_if = "Option::is_none")]
+		#[specta(type = Option<String>)]
 		exposed_entity: Option<EcoString>
 	}
 }
