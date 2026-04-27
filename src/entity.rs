@@ -282,7 +282,6 @@ pub struct CommentEntity {
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::entity, install_with = Self::rune_install))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
 #[cfg_attr(feature = "rune", rune_functions(Self::r_new))]
-#[serde_with::skip_serializing_none]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 pub struct SubEntity {
@@ -986,7 +985,6 @@ pub struct Ref {
 	pub external_scene: Option<RuntimeID>,
 
 	/// The sub-entity to reference that is exposed by the referenced entity.
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub exposed_entity: Option<EcoString>
 }
 
