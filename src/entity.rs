@@ -133,8 +133,8 @@ impl From<EntityID> for u64 {
 }
 
 impl Type for EntityID {
-	fn inline(_: &mut specta::TypeMap, _: specta::Generics<'_>) -> specta::DataType {
-		specta::DataType::Primitive(specta::datatype::PrimitiveType::String)
+	fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+		String::definition(types)
 	}
 }
 
@@ -649,15 +649,8 @@ pub struct PinConnection {
 }
 
 impl Type for PinConnection {
-	fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::datatype::DataType {
-		PinConnectionProxy::inline(type_map, generics)
-	}
-
-	fn reference(
-		type_map: &mut specta::TypeCollection,
-		generics: &[specta::datatype::DataType]
-	) -> specta::datatype::reference::Reference {
-		PinConnectionProxy::reference(type_map, generics)
+	fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+		PinConnectionProxy::definition(types)
 	}
 }
 
@@ -720,15 +713,8 @@ pub struct LocalPinConnection {
 }
 
 impl Type for LocalPinConnection {
-	fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::datatype::DataType {
-		LocalPinConnectionProxy::inline(type_map, generics)
-	}
-
-	fn reference(
-		type_map: &mut specta::TypeCollection,
-		generics: &[specta::datatype::DataType]
-	) -> specta::datatype::reference::Reference {
-		LocalPinConnectionProxy::reference(type_map, generics)
+	fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+		LocalPinConnectionProxy::definition(types)
 	}
 }
 
@@ -989,15 +975,8 @@ pub struct Ref {
 }
 
 impl Type for Ref {
-	fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::datatype::DataType {
-		RefProxy::inline(type_map, generics)
-	}
-
-	fn reference(
-		type_map: &mut specta::TypeCollection,
-		generics: &[specta::datatype::DataType]
-	) -> specta::datatype::reference::Reference {
-		RefProxy::reference(type_map, generics)
+	fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+		RefProxy::definition(types)
 	}
 }
 

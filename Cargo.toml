@@ -20,7 +20,7 @@ auto_context = { path = "auto_context" }
 ordermap = { version = "1.2.0", features = ["serde", "rayon"] }
 serde_path_to_error = "0.1.14"
 env_logger = { version = "0.11.8", optional = true }
-specta = { version = "=2.0.0-rc.22", features = ["serde_json"] }
+specta = { version = "=2.0.0-rc.24", features = ["serde_json"] }
 hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features = [
     "serde",
     "specta",

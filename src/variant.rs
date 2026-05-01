@@ -790,20 +790,17 @@ impl<'de> Deserialize<'de> for Variant {
 	}
 }
 
-#[derive(Type)]
-#[specta(rename = "Variant")]
-#[allow(unused)]
+#[derive(Type, Serialize)]
+#[serde(rename = "Variant")]
 struct VariantProxy {
-	#[specta(rename = "type")]
+	#[serde(rename = "type")]
 	ty: String,
 
 	value: Value
 }
 
 impl Type for Variant {
-	fn inline(type_map: &mut specta::TypeCollection, generics: specta::Generics) -> specta::datatype::DataType {
-		VariantProxy::inline(type_map, generics)
+	fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+		VariantProxy::definition(types)
 	}
 }
-
-impl specta::Flatten for Variant {}
