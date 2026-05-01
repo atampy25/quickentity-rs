@@ -11,6 +11,7 @@ use ecow::EcoString;
 use fn_error_context::context;
 use hitman_bin1::game::h3::{SEntityTemplateReference, STemplateEntityBlueprint, STemplateEntityFactory};
 use hitman_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
+use identity_hash::BuildIdentityHasher;
 use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -170,7 +171,7 @@ pub struct Entity {
 		feature = "schemars",
 		schemars(with = "std::collections::HashMap<EntityID, SubEntity>")
 	)]
-	pub entities: OrderMap<EntityID, SubEntity>,
+	pub entities: OrderMap<EntityID, SubEntity, BuildIdentityHasher<u64>>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
 	///
@@ -1074,7 +1075,6 @@ impl Ref {
 							)
 							.context("External scene type index does not exist in factory metadata")?
 							.resource
-							.to_owned()
 					)
 				},
 				exposed_entity: (!reference.exposed_entity.is_empty()).then(|| reference.exposed_entity.to_owned())
@@ -1088,7 +1088,7 @@ impl Ref {
 		&self,
 		factory: &STemplateEntityFactory,
 		factory_meta: &ResourceMetadata,
-		entity_id_to_index_mapping: &HashMap<EntityID, usize>
+		entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>
 	) -> Result<SEntityTemplateReference> {
 		if let Some(external_scene) = &self.external_scene {
 			SEntityTemplateReference {
@@ -1120,7 +1120,7 @@ impl Ref {
 		value: Option<&Self>,
 		factory: &STemplateEntityFactory,
 		factory_meta: &ResourceMetadata,
-		entity_id_to_index_mapping: &HashMap<EntityID, usize>
+		entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>
 	) -> Result<SEntityTemplateReference> {
 		match value {
 			None => SEntityTemplateReference {

@@ -16,6 +16,7 @@ use hitman_bin1::{
 	types::{repository::ZRepositoryID, resource::ZRuntimeResourceID}
 };
 use hitman_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
+use identity_hash::BuildIdentityHasher;
 use serde::{
 	Deserialize, Serialize,
 	de::Error as _,
@@ -525,8 +526,8 @@ impl Variant {
 		&self,
 		factory: &STemplateEntityFactory,
 		factory_meta: &ResourceMetadata,
-		entity_id_to_index_mapping: &HashMap<EntityID, usize>,
-		factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
+		entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>,
+		factory_dependencies_index_mapping: &HashMap<RuntimeID, usize, BuildIdentityHasher<u64>>
 	) -> Result<ZVariant> {
 		match self {
 			Self::Ref(value) => ZVariant::new(Ref::to_game_opt(

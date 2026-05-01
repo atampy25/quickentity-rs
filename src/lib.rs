@@ -27,6 +27,7 @@ use hitman_commons::{
 	game::GameVersion,
 	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
 };
+use identity_hash::BuildIdentityHasher;
 use itertools::Itertools;
 use ordermap::OrderMap;
 use patch::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
@@ -2357,7 +2358,7 @@ pub fn convert_to_qn(
 						))
 					}
 				)
-				.collect::<Result<OrderMap<EntityID, SubEntity>>>()?,
+				.collect::<Result<_>>()?,
 			external_scenes: factory
 				.external_scene_type_indices_in_resource_header
 				.iter()
@@ -2442,27 +2443,35 @@ pub fn convert_to_qn(
 			comments: vec![]
 		};
 
-		{
-			let depends = get_factory_references(&entity)?.into_iter().collect::<HashSet<_>>();
+		let (a, b) = rayon::join(
+			|| {
+				let depends = get_factory_references(&entity)?.into_iter().collect::<HashSet<_>>();
 
-			entity.extra_factory_references = factory_meta
-				.references
-				.iter()
-				.filter(|x| !depends.contains(x))
-				.cloned()
-				.collect();
-		}
+				anyhow::Ok(
+					factory_meta
+						.references
+						.iter()
+						.filter(|x| !depends.contains(x))
+						.cloned()
+						.collect()
+				)
+			},
+			|| {
+				let depends = get_blueprint_references(&entity).into_iter().collect::<HashSet<_>>();
 
-		{
-			let depends = get_blueprint_references(&entity).into_iter().collect::<HashSet<_>>();
+				anyhow::Ok(
+					blueprint_meta
+						.references
+						.iter()
+						.filter(|x| !depends.contains(x))
+						.cloned()
+						.collect()
+				)
+			}
+		);
 
-			entity.extra_blueprint_references = blueprint_meta
-				.references
-				.iter()
-				.filter(|x| !depends.contains(x))
-				.cloned()
-				.collect();
-		}
+		entity.extra_factory_references = a?;
+		entity.extra_blueprint_references = b?;
 
 		for pin in &blueprint.pin_connections {
 			let relevant_sub_entity = entity
@@ -2740,7 +2749,7 @@ pub fn convert_to_game(
 
 	let pool = rayon::ThreadPoolBuilder::new().build()?;
 	pool.install(|| {
-		let entity_id_to_index_mapping: HashMap<EntityID, usize> =
+		let entity_id_to_index_mapping: HashMap<EntityID, usize, BuildIdentityHasher<u64>> =
 			entity.entities.keys().enumerate().map(|(x, y)| (*y, x)).collect();
 
 		let mut factory = STemplateEntityFactory {
@@ -2770,7 +2779,7 @@ pub fn convert_to_game(
 			.concat()
 		};
 
-		let factory_dependencies_index_mapping: HashMap<RuntimeID, usize> = factory_meta
+		let factory_dependencies_index_mapping: HashMap<RuntimeID, usize, BuildIdentityHasher<u64>> = factory_meta
 			.references
 			.par_iter()
 			.enumerate()
@@ -2935,7 +2944,7 @@ pub fn convert_to_game(
 			.concat()
 		};
 
-		let blueprint_dependencies_index_mapping: HashMap<RuntimeID, usize> = blueprint_meta
+		let blueprint_dependencies_index_mapping: HashMap<RuntimeID, usize, BuildIdentityHasher<u64>> = blueprint_meta
 			.references
 			.par_iter()
 			.enumerate()
@@ -3273,8 +3282,8 @@ fn pin_connections_for_event(
 	triggers: &OrderMap<EcoString, Vec<PinConnection>>,
 	factory: &STemplateEntityFactory,
 	factory_meta: &ResourceMetadata,
-	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
-	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
+	entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>,
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize, BuildIdentityHasher<u64>>
 ) -> Result<Vec<SEntityTemplatePinConnection>> {
 	triggers
 		.iter()
@@ -3329,8 +3338,8 @@ fn local_pin_connections_for_event(
 	triggers: &OrderMap<EcoString, Vec<LocalPinConnection>>,
 	factory: &STemplateEntityFactory,
 	factory_meta: &ResourceMetadata,
-	entity_id_to_index_mapping: &HashMap<EntityID, usize>,
-	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize>
+	entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>,
+	factory_dependencies_index_mapping: &HashMap<RuntimeID, usize, BuildIdentityHasher<u64>>
 ) -> Result<Vec<SEntityTemplatePinConnection>> {
 	triggers
 		.iter()

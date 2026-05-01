@@ -1,6 +1,6 @@
-use std::fs;
+use std::{fs, hint::black_box};
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use hitman_commons::game::GameVersion;
 use serde_json::from_slice;
 
