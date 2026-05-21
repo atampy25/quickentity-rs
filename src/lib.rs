@@ -1107,12 +1107,12 @@ fn generate_array_patch(original: &[Variant], modified: &[Variant]) -> Vec<Array
 	let m = modified.len();
 	let mut dp = vec![vec![0usize; m + 1]; n + 1];
 
-	for i in 0..=n {
-		dp[i][0] = i;
+	for (i, row) in dp.iter_mut().enumerate() {
+		row[0] = i;
 	}
 
-	for j in 0..=m {
-		dp[0][j] = j;
+	for (j, el) in dp[0].iter_mut().enumerate() {
+		*el = j;
 	}
 
 	for i in 1..=n {

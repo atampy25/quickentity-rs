@@ -214,8 +214,7 @@ fn main() -> Result<()> {
 
 			fs::write(output_factory, {
 				if h1 {
-					// to_vec_float_format(&converted_fac.into_legacy())
-					todo!()
+					to_vec_float_format(&h1::game::SEntityTemplate::try_from(converted_fac).unwrap())
 				} else {
 					to_vec_float_format(&converted_fac)
 				}
@@ -226,8 +225,7 @@ fn main() -> Result<()> {
 
 			fs::write(output_blueprint, {
 				if h1 {
-					// to_vec_float_format(&converted_blu.into_legacy())
-					todo!()
+					to_vec_float_format(&h1::game::SEntityTemplateBlueprint::try_from(converted_blu).unwrap())
 				} else {
 					to_vec_float_format(&converted_blu)
 				}

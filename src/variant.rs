@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use ecow::{EcoString, eco_format};
 use fn_error_context::context;
-use glam::{DAffine3, DMat3, DQuat, DVec3, EulerRot};
+use glam::{Affine3, EulerRot, Mat3, Quat};
 use hitman_bin1::{
 	game::h3::{
 		SColorRGB, SColorRGBA, SEntityTemplateReference, SMatrix43, STemplateEntityBlueprint, STemplateEntityFactory,
@@ -69,7 +69,7 @@ impl Transform {
 		}
 	}
 
-	pub fn from_glam(transform: DAffine3, lossless: bool) -> Self {
+	pub fn from_glam(transform: Affine3, lossless: bool) -> Self {
 		let (scale, rotation, translation) = transform.to_scale_rotation_translation();
 
 		let scale_important = if lossless {
@@ -98,42 +98,43 @@ impl Transform {
 	}
 
 	pub fn from_game(transform: &SMatrix43, lossless: bool) -> Self {
-		let transform = DAffine3::from_mat3_translation(
-			DMat3 {
-				x_axis: DVec3 {
-					x: transform.x_axis.x as f64,
-					y: transform.x_axis.y as f64,
-					z: transform.x_axis.z as f64
+		// Mat3 is column-major while SMatrix43 is row-major, so we have to transpose
+		let transform = Affine3::from_mat3_translation(
+			Mat3 {
+				x_axis: glam::Vec3 {
+					x: transform.x_axis.x,
+					y: transform.y_axis.x,
+					z: transform.z_axis.x
 				},
-				y_axis: DVec3 {
-					x: transform.y_axis.x as f64,
-					y: transform.y_axis.y as f64,
-					z: transform.y_axis.z as f64
+				y_axis: glam::Vec3 {
+					x: transform.x_axis.y,
+					y: transform.y_axis.y,
+					z: transform.z_axis.y
 				},
-				z_axis: DVec3 {
-					x: transform.z_axis.x as f64,
-					y: transform.z_axis.y as f64,
-					z: transform.z_axis.z as f64
+				z_axis: glam::Vec3 {
+					x: transform.x_axis.z,
+					y: transform.y_axis.z,
+					z: transform.z_axis.z
 				}
 			},
-			DVec3 {
-				x: transform.trans.x as f64,
-				y: transform.trans.y as f64,
-				z: transform.trans.z as f64
+			glam::Vec3 {
+				x: transform.trans.x,
+				y: transform.trans.y,
+				z: transform.trans.z
 			}
 		);
 
 		Self::from_glam(transform, lossless)
 	}
 
-	pub fn to_glam(&self) -> DAffine3 {
+	pub fn to_glam(&self) -> Affine3 {
 		let scale = if let Some(scale) = self.scale {
 			scale.into()
 		} else {
-			DVec3 { x: 1.0, y: 1.0, z: 1.0 }
+			glam::Vec3 { x: 1.0, y: 1.0, z: 1.0 }
 		};
 
-		DAffine3::from_scale_rotation_translation(scale, self.rotation.into(), self.position.into())
+		Affine3::from_scale_rotation_translation(scale, self.rotation.into(), self.position.into())
 	}
 
 	pub fn to_game(&self) -> SMatrix43 {
@@ -141,24 +142,24 @@ impl Transform {
 
 		SMatrix43 {
 			x_axis: SVector3 {
-				x: transform.matrix3.x_axis.x as f32,
-				y: transform.matrix3.x_axis.y as f32,
-				z: transform.matrix3.x_axis.z as f32
+				x: transform.matrix3.x_axis.x,
+				y: transform.matrix3.x_axis.y,
+				z: transform.matrix3.x_axis.z
 			},
 			y_axis: SVector3 {
-				x: transform.matrix3.y_axis.x as f32,
-				y: transform.matrix3.y_axis.y as f32,
-				z: transform.matrix3.y_axis.z as f32
+				x: transform.matrix3.y_axis.x,
+				y: transform.matrix3.y_axis.y,
+				z: transform.matrix3.y_axis.z
 			},
 			z_axis: SVector3 {
-				x: transform.matrix3.z_axis.x as f32,
-				y: transform.matrix3.z_axis.y as f32,
-				z: transform.matrix3.z_axis.z as f32
+				x: transform.matrix3.z_axis.x,
+				y: transform.matrix3.z_axis.y,
+				z: transform.matrix3.z_axis.z
 			},
 			trans: SVector3 {
-				x: transform.translation.x as f32,
-				y: transform.translation.y as f32,
-				z: transform.translation.z as f32
+				x: transform.translation.x,
+				y: transform.translation.y,
+				z: transform.translation.z
 			}
 		}
 	}
@@ -171,14 +172,14 @@ impl Transform {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Type)]
 pub struct Vec3 {
-	pub x: f64,
-	pub y: f64,
-	pub z: f64
+	pub x: f32,
+	pub y: f32,
+	pub z: f32
 }
 
-impl From<Vec3> for DVec3 {
+impl From<Vec3> for glam::Vec3 {
 	fn from(value: Vec3) -> Self {
-		DVec3 {
+		glam::Vec3 {
 			x: value.x,
 			y: value.y,
 			z: value.z
@@ -186,8 +187,8 @@ impl From<Vec3> for DVec3 {
 	}
 }
 
-impl From<DVec3> for Vec3 {
-	fn from(value: DVec3) -> Self {
+impl From<glam::Vec3> for Vec3 {
+	fn from(value: glam::Vec3) -> Self {
 		Vec3 {
 			x: value.x,
 			y: value.y,
@@ -196,17 +197,17 @@ impl From<DVec3> for Vec3 {
 	}
 }
 
-const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
-const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
+const RAD2DEG: f32 = 180.0 / std::f32::consts::PI;
+const DEG2RAD: f32 = std::f32::consts::PI / 180.0;
 
-impl From<Vec3> for DQuat {
+impl From<Vec3> for Quat {
 	fn from(value: Vec3) -> Self {
-		DQuat::from_euler(EulerRot::XYZ, value.x * DEG2RAD, value.y * DEG2RAD, value.z * DEG2RAD)
+		Quat::from_euler(EulerRot::XYZ, value.x * DEG2RAD, value.y * DEG2RAD, value.z * DEG2RAD)
 	}
 }
 
-impl From<DQuat> for Vec3 {
-	fn from(value: DQuat) -> Self {
+impl From<Quat> for Vec3 {
+	fn from(value: Quat) -> Self {
 		let (x, y, z) = value.normalize().to_euler(EulerRot::XYZ);
 		Vec3 {
 			x: x * RAD2DEG,
