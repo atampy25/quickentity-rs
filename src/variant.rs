@@ -15,7 +15,10 @@ use hitman_bin1::{
 	},
 	types::{repository::ZRepositoryID, resource::ZRuntimeResourceID}
 };
-use hitman_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
+use hitman_commons::{
+	game::GameVersion,
+	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
+};
 use identity_hash::BuildIdentityHasher;
 use serde::{
 	Deserialize, Serialize,
@@ -378,7 +381,7 @@ pub enum Variant {
 		#[cfg_attr(feature = "rune", rune(get, set))] Vec<Variant>
 	),
 
-	Raw(hitman_bin1::game::h3::ZVariant)
+	Raw(EcoString, serde_json::Value)
 }
 
 #[cfg(feature = "schemars")]
@@ -431,7 +434,7 @@ impl Variant {
 			Variant::PairStringVariant(_, _) => "TPair<ZString,ZVariant>".into(),
 			Variant::Variant(_) => "ZVariant".into(),
 			Variant::Array(ty, _) => eco_format!("TArray<{ty}>"),
-			Variant::Raw(x) => x.variant_type().into()
+			Variant::Raw(x, _) => x.into()
 		}
 	}
 
@@ -517,7 +520,7 @@ impl Variant {
 		} else if let Some(value) = value.as_ref::<ZVariant>() {
 			Self::Variant(Self::from_game(value, factory, factory_meta, blueprint, convert_lossless)?.into())
 		} else {
-			Self::Raw(value.to_owned())
+			Self::Raw(value.variant_type().into(), value.to_serde()?)
 		}
 	}
 
@@ -525,6 +528,7 @@ impl Variant {
 	#[context("Failure converting QN variant value to game")]
 	pub fn to_game(
 		&self,
+		version: GameVersion,
 		factory: &STemplateEntityFactory,
 		factory_meta: &ResourceMetadata,
 		entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>,
@@ -590,6 +594,7 @@ impl Variant {
 			Self::PairStringVariant(first, second) => ZVariant::new((
 				first.to_owned(),
 				second.to_game(
+					version,
 					factory,
 					factory_meta,
 					entity_id_to_index_mapping,
@@ -598,29 +603,49 @@ impl Variant {
 			)),
 
 			Self::Variant(value) => ZVariant::new(value.to_game(
+				version,
 				factory,
 				factory_meta,
 				entity_id_to_index_mapping,
 				factory_dependencies_index_mapping
 			)?),
 
-			Self::Array(ty, items) => from_value(json!({
-				"$type": format!("TArray<{ty}>"),
-				"$val": items.iter().map(|item| {
-						item.to_game(
-							factory,
-							factory_meta,
-							entity_id_to_index_mapping,
-							factory_dependencies_index_mapping
-						)
-					})
-					.collect::<Result<Vec<_>>>()?
-					.into_iter()
-					.map(|x| to_value(&x).unwrap().as_object_mut().unwrap().remove("$val").unwrap())
-					.collect::<Vec<_>>()
-			}))?,
+			Self::Array(ty, items) => {
+				let val = json!({
+					"$type": format!("TArray<{ty}>"),
+					"$val": items.iter().map(|item| {
+							item.to_game(version,
+								factory,
+								factory_meta,
+								entity_id_to_index_mapping,
+								factory_dependencies_index_mapping
+							)
+						})
+						.collect::<Result<Vec<_>>>()?
+						.into_iter()
+						.map(|x| to_value(&x).unwrap().as_object_mut().unwrap().remove("$val").unwrap())
+						.collect::<Vec<_>>()
+				});
 
-			Self::Raw(value) => value.to_owned()
+				match version {
+					GameVersion::H1 => from_value::<hitman_bin1::game::h1::ZVariant>(val)?.into_inner().into(),
+					GameVersion::H2 => from_value::<hitman_bin1::game::h2::ZVariant>(val)?.into_inner().into(),
+					GameVersion::H3 => from_value(val)?
+				}
+			}
+
+			Self::Raw(ty, value) => {
+				let val = json!({
+					"$type": ty,
+					"$val": value
+				});
+
+				match version {
+					GameVersion::H1 => from_value::<hitman_bin1::game::h1::ZVariant>(val)?.into_inner().into(),
+					GameVersion::H2 => from_value::<hitman_bin1::game::h2::ZVariant>(val)?.into_inner().into(),
+					GameVersion::H3 => from_value(val)?
+				}
+			}
 		}
 	}
 
@@ -674,7 +699,7 @@ impl Variant {
 
 				true
 			}
-			(Self::Raw(a), Self::Raw(b)) => a == b,
+			(Self::Raw(a_ty, a_val), Self::Raw(b_ty, b_val)) => a_ty == b_ty && a_val == b_val,
 			_ => false
 		}
 	}
@@ -713,12 +738,12 @@ impl Serialize for Variant {
 						Self::PairStringVariant(first, second) => to_value((first, second)),
 						Self::Variant(value) => to_value(value),
 						Self::Array(_, items) => to_value(items),
-						Self::Raw(value) => value.to_serde()
+						Self::Raw(_, value) => Ok(value.to_owned())
 					})
 					.collect::<Result<Vec<_>, _>>()
 					.map_err(S::Error::custom)?
 			)?,
-			Self::Raw(value) => state.serialize_field("value", &value.to_serde().map_err(S::Error::custom)?)?
+			Self::Raw(_, value) => state.serialize_field("value", value)?
 		}
 
 		state.end()
@@ -762,12 +787,7 @@ impl<'de> Deserialize<'de> for Variant {
 					Variant::Array(inner.into(), variants)
 				}
 
-				_ => {
-					let zv = serde_json::from_value::<ZVariant>(serde_json::json!({"$type": ty, "$val": val}))
-						.map_err(D::Error::custom)?;
-
-					Variant::Raw(zv)
-				}
+				_ => Variant::Raw(ty.into(), val)
 			};
 
 			Ok(res)
