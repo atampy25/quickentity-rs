@@ -144,7 +144,14 @@ impl Type for EntityID {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
 #[cfg_attr(
 	feature = "rune",
-	rune_functions(Self::r_entities, Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
+	rune_functions(
+		Self::r_entities,
+		Self::r_get_entity,
+		Self::r_insert_entity,
+		Self::r_remove_entity,
+		Self::r_from_game,
+		Self::r_to_game
+	)
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
@@ -213,6 +220,7 @@ pub struct Entity {
 	/// The QuickEntity format version of this entity. The current version is 3.2.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "quickEntityVersion")]
+	#[serde(deserialize_with = "validate_qn_version")]
 	pub quickentity_version: f32,
 
 	/// Extra resource references that should be added to the entity's factory when converted to the game's format.
@@ -229,6 +237,20 @@ pub struct Entity {
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "comments")]
 	pub comments: Vec<CommentEntity>
+}
+
+#[try_fn]
+fn validate_qn_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<f32, D::Error> {
+	let version = f32::deserialize(deserializer)?;
+
+	if version != 3.2 {
+		return Err(serde::de::Error::invalid_value(
+			serde::de::Unexpected::Float(version as f64),
+			&"version 3.2"
+		));
+	}
+
+	version
 }
 
 #[cfg(feature = "rune")]
@@ -327,7 +349,7 @@ pub struct SubEntity {
 	pub properties: OrderMap<EcoString, Property>,
 
 	/// Properties to apply conditionally to the entity based on platform.
-	#[serde(rename = "platformSpecificProperties")]
+	#[serde(rename = "platformProperties")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Property>>)]
@@ -335,7 +357,7 @@ pub struct SubEntity {
 		feature = "schemars",
 		schemars(with = "std::collections::HashMap<String, std::collections::HashMap<String, Property>>")
 	)]
-	pub platform_specific_properties: OrderMap<EcoString, OrderMap<EcoString, Property>>,
+	pub platform_properties: OrderMap<EcoString, OrderMap<EcoString, Property>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
@@ -349,7 +371,7 @@ pub struct SubEntity {
 	pub events: OrderMap<EcoString, OrderMap<EcoString, Vec<PinConnection>>>,
 
 	/// Inputs on entities to trigger when this entity is given inputs.
-	#[serde(rename = "inputCopying")]
+	#[serde(rename = "inputForwardings")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>)]
@@ -359,10 +381,10 @@ pub struct SubEntity {
 			with = "std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>"
 		)
 	)]
-	pub input_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
+	pub input_forwardings: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Events to propagate on other entities.
-	#[serde(rename = "outputCopying")]
+	#[serde(rename = "outputForwardings")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>)]
@@ -372,7 +394,7 @@ pub struct SubEntity {
 			with = "std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>"
 		)
 	)]
-	pub output_copying: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
+	pub output_forwardings: OrderMap<EcoString, OrderMap<EcoString, Vec<LocalPinConnection>>>,
 
 	/// Properties on other entities that can be accessed from this entity.
 	#[serde(rename = "propertyAliases")]
@@ -428,10 +450,10 @@ impl SubEntity {
 			blueprint,
 			editor_only: false,
 			properties: Default::default(),
-			platform_specific_properties: Default::default(),
+			platform_properties: Default::default(),
 			events: Default::default(),
-			input_copying: Default::default(),
-			output_copying: Default::default(),
+			input_forwardings: Default::default(),
+			output_forwardings: Default::default(),
 			property_aliases: Default::default(),
 			exposed_entities: Default::default(),
 			exposed_interfaces: Default::default(),
@@ -456,30 +478,26 @@ impl SubEntity {
 			}
 		)?;
 
-		module.field_function(
-			&rune::runtime::Protocol::GET,
-			"platform_specific_properties",
-			|s: &Self| {
-				s.platform_specific_properties
-					.clone()
-					.into_iter()
-					.map(|(x, y)| {
-						(
-							String::from(x),
-							y.into_iter()
-								.map(|(x, y)| (String::from(x), y))
-								.collect::<HashMap<_, _>>()
-						)
-					})
-					.collect::<HashMap<_, _>>()
-			}
-		)?;
+		module.field_function(&rune::runtime::Protocol::GET, "platform_properties", |s: &Self| {
+			s.platform_properties
+				.clone()
+				.into_iter()
+				.map(|(x, y)| {
+					(
+						String::from(x),
+						y.into_iter()
+							.map(|(x, y)| (String::from(x), y))
+							.collect::<HashMap<_, _>>()
+					)
+				})
+				.collect::<HashMap<_, _>>()
+		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
-			"platform_specific_properties",
+			"platform_properties",
 			|s: &mut Self, value: HashMap<String, HashMap<String, Property>>| {
-				s.platform_specific_properties = value
+				s.platform_properties = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
 					.collect()
@@ -512,8 +530,8 @@ impl SubEntity {
 			}
 		)?;
 
-		module.field_function(&rune::runtime::Protocol::GET, "input_copying", |s: &Self| {
-			s.input_copying
+		module.field_function(&rune::runtime::Protocol::GET, "input_forwardings", |s: &Self| {
+			s.input_forwardings
 				.clone()
 				.into_iter()
 				.map(|(x, y)| {
@@ -529,17 +547,17 @@ impl SubEntity {
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
-			"input_copying",
+			"input_forwardings",
 			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<LocalPinConnection>>>| {
-				s.input_copying = value
+				s.input_forwardings = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
 					.collect();
 			}
 		)?;
 
-		module.field_function(&rune::runtime::Protocol::GET, "output_copying", |s: &Self| {
-			s.output_copying
+		module.field_function(&rune::runtime::Protocol::GET, "output_forwardings", |s: &Self| {
+			s.output_forwardings
 				.clone()
 				.into_iter()
 				.map(|(x, y)| {
@@ -555,9 +573,9 @@ impl SubEntity {
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
-			"output_copying",
+			"output_forwardings",
 			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<LocalPinConnection>>>| {
-				s.output_copying = value
+				s.output_forwardings = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
 					.collect();

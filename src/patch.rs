@@ -2,6 +2,7 @@ use ecow::EcoString;
 use hitman_commons::metadata::{ResourceReference, RuntimeID};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use tryvial::try_fn;
 
 use crate::{
 	entity::{
@@ -44,10 +45,26 @@ pub struct Patch {
 
 	/// The patch version. The current version is 7.
 	#[serde(rename = "patchVersion")]
+	#[serde(deserialize_with = "validate_patch_version")]
 	pub patch_version: u8
 }
 
+#[try_fn]
+fn validate_patch_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u8, D::Error> {
+	let version = u8::deserialize(deserializer)?;
+
+	if version != 7 {
+		return Err(serde::de::Error::invalid_value(
+			serde::de::Unexpected::Unsigned(version as u64),
+			&"version 7"
+		));
+	}
+
+	version
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -65,10 +82,10 @@ pub enum PatchOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveEntityByID(#[cfg_attr(feature = "rune", rune(get, set))] EntityID),
+	RemoveEntity(#[cfg_attr(feature = "rune", rune(get, set))] EntityID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SubEntityOperation(
+	PatchEntity(
 		#[cfg_attr(feature = "rune", rune(get, set))] EntityID,
 		#[cfg_attr(feature = "rune", rune(get, set))] SubEntityOperation
 	),
@@ -123,6 +140,7 @@ pub enum PatchOperation {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -174,14 +192,14 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemovePropertyByName(
+	RemoveProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddPlatformSpecificProperty(
+	AddPlatformProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -192,7 +210,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	PatchPlatformSpecificPropertyValue(
+	PatchPlatformPropertyValue(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -206,7 +224,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetPlatformSpecificPropertyPostInit(
+	SetPlatformPropertyPostInit(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -217,17 +235,10 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemovePlatformSpecificPropertyByName(
+	RemovePlatformProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemovePlatformSpecificPropertiesForPlatform(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString
@@ -256,24 +267,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveAllEventConnectionsForTrigger(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveAllEventConnectionsForEvent(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddInputCopyConnection(
+	AddInputForwarding(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -284,7 +278,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveInputCopyConnection(
+	RemoveInputForwarding(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -295,24 +289,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveAllInputCopyConnectionsForTrigger(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveAllInputCopyConnectionsForInput(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddOutputCopyConnection(
+	AddOutputForwarding(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -323,7 +300,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveOutputCopyConnection(
+	RemoveOutputForwarding(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -334,24 +311,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveAllOutputCopyConnectionsForPropagate(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString,
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveAllOutputCopyConnectionsForOutput(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddPropertyAliasConnection(
+	AddPropertyAlias(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -360,13 +320,6 @@ pub enum SubEntityOperation {
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	RemovePropertyAlias(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveConnectionForPropertyAlias(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -417,17 +370,11 @@ pub enum SubEntityOperation {
 		#[specta(type = String)]
 		EcoString,
 		#[cfg_attr(feature = "rune", rune(get, set))] EntityID
-	),
-
-	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveAllSubsetsFor(
-		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
-		#[specta(type = String)]
-		EcoString
 	)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
@@ -450,6 +397,7 @@ pub struct ItemSelector(
 );
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]

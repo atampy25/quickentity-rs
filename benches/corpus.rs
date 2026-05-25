@@ -45,7 +45,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 		group.bench_function(format!("{} -- convert", item.file_name().to_string_lossy()), |b| {
 			b.iter(|| {
-				quickentity_rs::convert_to_qn(
+				quickentity_rs::entity::Entity::from_game(
 					black_box(&fac),
 					black_box(&fac_meta),
 					black_box(&blu),
@@ -55,7 +55,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 			})
 		});
 
-		let converted = quickentity_rs::convert_to_qn(
+		let converted = quickentity_rs::entity::Entity::from_game(
 			black_box(&fac),
 			black_box(&fac_meta),
 			black_box(&blu),
@@ -65,7 +65,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 		.unwrap();
 
 		group.bench_function(format!("{} -- generate", item.file_name().to_string_lossy()), |b| {
-			b.iter(|| quickentity_rs::convert_to_game(black_box(&converted), black_box(GameVersion::H3)))
+			b.iter(|| black_box(&converted).to_game(black_box(GameVersion::H3)))
 		});
 	}
 
