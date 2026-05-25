@@ -438,6 +438,12 @@ impl Variant {
 		}
 	}
 
+	/// Creates a Variant from a raw ZVariant without doing ANY conversion.
+	/// You must only use this for types that are usually represented as raw values (e.g. primitives). Types with QN handling will not be converted and will just be wrapped as raw, producing an invalid value.
+	pub fn from_raw(value: &ZVariant) -> Self {
+		Self::Raw(value.variant_type().into(), value.to_serde().unwrap())
+	}
+
 	#[try_fn]
 	#[context("Failure converting game variant value to QN")]
 	pub fn from_game(
