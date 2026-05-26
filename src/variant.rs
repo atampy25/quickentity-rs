@@ -143,20 +143,21 @@ impl Transform {
 	pub fn to_game(&self) -> SMatrix43 {
 		let transform = self.to_glam();
 
+		// Transpose
 		SMatrix43 {
 			x_axis: SVector3 {
 				x: transform.matrix3.x_axis.x,
-				y: transform.matrix3.x_axis.y,
-				z: transform.matrix3.x_axis.z
+				y: transform.matrix3.y_axis.x,
+				z: transform.matrix3.z_axis.x
 			},
 			y_axis: SVector3 {
-				x: transform.matrix3.y_axis.x,
+				x: transform.matrix3.x_axis.y,
 				y: transform.matrix3.y_axis.y,
-				z: transform.matrix3.y_axis.z
+				z: transform.matrix3.z_axis.y
 			},
 			z_axis: SVector3 {
-				x: transform.matrix3.z_axis.x,
-				y: transform.matrix3.z_axis.y,
+				x: transform.matrix3.x_axis.z,
+				y: transform.matrix3.y_axis.z,
 				z: transform.matrix3.z_axis.z
 			},
 			trans: SVector3 {
