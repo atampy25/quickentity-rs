@@ -33,7 +33,7 @@ hitman-bin1 = { git = "https://github.com/atampy25/hitman-bin1", features = [
 tracing = { version = "0.1.40", optional = true }
 rune = { git = "https://github.com/rune-rs/rune", rev = "a8c4f97", optional = true }
 better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", optional = true }
-ecow = { version = "0.2.6", features = ["serde"] }
+ecow = { version = "0.3.0", features = ["serde"] }
 educe = "0.6.0"
 crc32fast = "1.5.0"
 thiserror = "2.0.18"
