@@ -43,6 +43,7 @@ uuid = { version = "1.23.1", features = ["serde"] }
 hotpath = "0.16.1"
 schemars = { version = "1.2.1", features = ["uuid1"], optional = true }
 identity-hash = "0.1.0"
+rapidhash = { version = "4.4.1", features = ["unsafe", "rand"] }
 
 [features]
 cli = ["dep:log", "dep:env_logger", "dep:clap"]

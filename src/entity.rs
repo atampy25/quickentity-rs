@@ -1,5 +1,4 @@
 use std::{
-	collections::HashMap,
 	fmt::{Debug, Display, Formatter},
 	hash::Hash,
 	num::ParseIntError,
@@ -12,13 +11,12 @@ use fn_error_context::context;
 use hitman_bin1::game::h3::{SEntityTemplateReference, STemplateEntityBlueprint, STemplateEntityFactory};
 use hitman_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use identity_hash::BuildIdentityHasher;
-use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use specta::Type;
 use tryvial::try_fn;
 
-use crate::variant::Variant;
+use crate::{HashMap, OrderMap, variant::Variant};
 
 #[cfg(feature = "rune")]
 pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
@@ -467,13 +465,13 @@ impl SubEntity {
 				.clone()
 				.into_iter()
 				.map(|(x, y)| (String::from(x), y))
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"properties",
-			|s: &mut Self, value: HashMap<String, Property>| {
+			|s: &mut Self, value: std::collections::HashMap<String, Property>| {
 				s.properties = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
@@ -487,16 +485,16 @@ impl SubEntity {
 						String::from(x),
 						y.into_iter()
 							.map(|(x, y)| (String::from(x), y))
-							.collect::<HashMap<_, _>>()
+							.collect::<std::collections::HashMap<_, _>>()
 					)
 				})
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"platform_properties",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Property>>| {
+			|s: &mut Self, value: std::collections::HashMap<String, std::collections::HashMap<String, Property>>| {
 				s.platform_properties = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
@@ -513,16 +511,17 @@ impl SubEntity {
 						String::from(x),
 						y.into_iter()
 							.map(|(x, y)| (String::from(x), y))
-							.collect::<HashMap<_, _>>()
+							.collect::<std::collections::HashMap<_, _>>()
 					)
 				})
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"events",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<PinConnection>>>| {
+			|s: &mut Self,
+			 value: std::collections::HashMap<String, std::collections::HashMap<String, Vec<PinConnection>>>| {
 				s.events = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
@@ -539,16 +538,17 @@ impl SubEntity {
 						String::from(x),
 						y.into_iter()
 							.map(|(x, y)| (String::from(x), y))
-							.collect::<HashMap<_, _>>()
+							.collect::<std::collections::HashMap<_, _>>()
 					)
 				})
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"input_forwardings",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<LocalPinConnection>>>| {
+			|s: &mut Self,
+			 value: std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>| {
 				s.input_forwardings = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
@@ -565,16 +565,17 @@ impl SubEntity {
 						String::from(x),
 						y.into_iter()
 							.map(|(x, y)| (String::from(x), y))
-							.collect::<HashMap<_, _>>()
+							.collect::<std::collections::HashMap<_, _>>()
 					)
 				})
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"output_forwardings",
-			|s: &mut Self, value: HashMap<String, HashMap<String, Vec<LocalPinConnection>>>| {
+			|s: &mut Self,
+			 value: std::collections::HashMap<String, std::collections::HashMap<String, Vec<LocalPinConnection>>>| {
 				s.output_forwardings = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
@@ -587,13 +588,13 @@ impl SubEntity {
 				.clone()
 				.into_iter()
 				.map(|(x, y)| (String::from(x), y.to_owned()))
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"property_aliases",
-			|s: &mut Self, value: HashMap<String, Vec<PropertyAlias>>| {
+			|s: &mut Self, value: std::collections::HashMap<String, Vec<PropertyAlias>>| {
 				s.property_aliases = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
@@ -603,13 +604,13 @@ impl SubEntity {
 				.clone()
 				.into_iter()
 				.map(|(x, y)| (String::from(x), y.to_owned()))
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"exposed_entities",
-			|s: &mut Self, value: HashMap<String, ExposedEntity>| {
+			|s: &mut Self, value: std::collections::HashMap<String, ExposedEntity>| {
 				s.exposed_entities = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
@@ -619,13 +620,13 @@ impl SubEntity {
 				.clone()
 				.into_iter()
 				.map(|(x, y)| (String::from(x), y.to_owned()))
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"exposed_interfaces",
-			|s: &mut Self, value: HashMap<String, EntityID>| {
+			|s: &mut Self, value: std::collections::HashMap<String, EntityID>| {
 				s.exposed_interfaces = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
@@ -635,13 +636,13 @@ impl SubEntity {
 				.clone()
 				.into_iter()
 				.map(|(x, y)| (String::from(x), y.to_owned()))
-				.collect::<HashMap<_, _>>()
+				.collect::<std::collections::HashMap<_, _>>()
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"subsets",
-			|s: &mut Self, value: HashMap<String, Vec<EntityID>>| {
+			|s: &mut Self, value: std::collections::HashMap<String, Vec<EntityID>>| {
 				s.subsets = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;
@@ -938,7 +939,7 @@ pub struct PropertyOverride {
 
 #[cfg(feature = "rune")]
 impl PropertyOverride {
-	fn rune_construct(entities: Vec<Ref>, properties: HashMap<String, Variant>) -> Self {
+	fn rune_construct(entities: Vec<Ref>, properties: std::collections::HashMap<String, Variant>) -> Self {
 		Self {
 			entities,
 			properties: properties.into_iter().map(|(x, y)| (x.into(), y)).collect()
@@ -952,14 +953,14 @@ impl PropertyOverride {
 					.clone()
 					.into_iter()
 					.map(|(x, y)| (String::from(x), y))
-					.collect::<HashMap<_, _>>()
+					.collect::<std::collections::HashMap<_, _>>()
 			)
 		})?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
 			"properties",
-			|s: &mut Self, value: HashMap<String, Variant>| {
+			|s: &mut Self, value: std::collections::HashMap<String, Variant>| {
 				s.properties = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
 			}
 		)?;

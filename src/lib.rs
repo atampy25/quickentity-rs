@@ -4,8 +4,6 @@ pub mod entity;
 pub mod patch;
 pub mod variant;
 
-use std::collections::{HashMap, HashSet};
-
 use anyhow::{Context, Result, anyhow, bail};
 use auto_context::auto_context;
 use ecow::EcoString;
@@ -29,7 +27,6 @@ use hitman_commons::{
 };
 use identity_hash::BuildIdentityHasher;
 use itertools::Itertools;
-use ordermap::OrderMap;
 use patch::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
 use rayon::prelude::*;
 use thiserror::Error;
@@ -43,6 +40,10 @@ use crate::{
 
 pub const PATCH_VERSION: u8 = 7;
 pub const ENTITY_VERSION: f32 = 3.2;
+
+pub(crate) type HashMap<K, V, S = rapidhash::fast::RandomState> = std::collections::HashMap<K, V, S>;
+pub(crate) type HashSet<K, S = rapidhash::fast::RandomState> = std::collections::HashSet<K, S>;
+pub(crate) type OrderMap<K, V, S = rapidhash::fast::RandomState> = ordermap::OrderMap<K, V, S>;
 
 /// The apply_patch function is not exposed to Rune because of the `emit` argument.
 #[cfg(feature = "rune")]
@@ -585,7 +586,7 @@ fn apply_patch_operation(
 						unravelled_overrides.push(PropertyOverride {
 							entities: vec![ent.to_owned()],
 							properties: {
-								let mut x = OrderMap::new();
+								let mut x = OrderMap::default();
 								x.insert(prop_name.to_owned(), prop_override.to_owned());
 								x
 							}
@@ -597,7 +598,7 @@ fn apply_patch_operation(
 			unravelled_overrides.push(PropertyOverride {
 				entities: vec![connection.entity],
 				properties: {
-					let mut x = OrderMap::new();
+					let mut x = OrderMap::default();
 					x.insert(connection.property.to_owned(), connection.value.to_owned());
 					x
 				}
@@ -664,7 +665,7 @@ fn apply_patch_operation(
 						unravelled_overrides.push(PropertyOverride {
 							entities: vec![ent.to_owned()],
 							properties: {
-								let mut x = OrderMap::new();
+								let mut x = OrderMap::default();
 								x.insert(prop_name.to_owned(), prop_override.to_owned());
 								x
 							}
@@ -676,7 +677,7 @@ fn apply_patch_operation(
 			let search = PropertyOverride {
 				entities: vec![connection.entity.to_owned()],
 				properties: {
-					let mut x = OrderMap::new();
+					let mut x = OrderMap::default();
 					x.insert(connection.property.to_owned(), connection.value.to_owned());
 					x
 				}

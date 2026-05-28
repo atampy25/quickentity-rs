@@ -1,5 +1,4 @@
 use std::{
-	collections::HashMap,
 	fmt::{self, Display, Formatter},
 	str::FromStr
 };
@@ -31,7 +30,10 @@ use specta::Type;
 use tryvial::try_fn;
 use uuid::Uuid;
 
-use crate::entity::{EntityID, Ref};
+use crate::{
+	HashMap,
+	entity::{EntityID, Ref}
+};
 
 #[cfg(feature = "rune")]
 pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
