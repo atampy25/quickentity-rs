@@ -104,23 +104,34 @@ impl Transform {
 
 	pub fn from_game(transform: &SMatrix43, lossless: bool) -> Self {
 		// Mat3 is column-major while SMatrix43 is row-major, so we have to transpose
+		let matrix = Mat3 {
+			x_axis: glam::Vec3 {
+				x: transform.x_axis.x,
+				y: transform.y_axis.x,
+				z: transform.z_axis.x
+			},
+			y_axis: glam::Vec3 {
+				x: transform.x_axis.y,
+				y: transform.y_axis.y,
+				z: transform.z_axis.y
+			},
+			z_axis: glam::Vec3 {
+				x: transform.x_axis.z,
+				y: transform.y_axis.z,
+				z: transform.z_axis.z
+			}
+		};
+
 		let transform = Affine3::from_mat3_translation(
-			Mat3 {
-				x_axis: glam::Vec3 {
-					x: transform.x_axis.x,
-					y: transform.y_axis.x,
-					z: transform.z_axis.x
-				},
-				y_axis: glam::Vec3 {
-					x: transform.x_axis.y,
-					y: transform.y_axis.y,
-					z: transform.z_axis.y
-				},
-				z_axis: glam::Vec3 {
-					x: transform.x_axis.z,
-					y: transform.y_axis.z,
-					z: transform.z_axis.z
-				}
+			if matrix.determinant() == 0.0
+				|| matrix.x_axis.length() == 0.0
+				|| matrix.y_axis.length() == 0.0
+				|| matrix.z_axis.length() == 0.0
+			{
+				// Reset invalid rotations to identity
+				Mat3::IDENTITY
+			} else {
+				matrix
 			},
 			glam::Vec3 {
 				x: transform.trans.x,
