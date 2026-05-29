@@ -448,7 +448,7 @@ impl Variant {
 			Variant::PairStringVariant(_, _) => "TPair<ZString,ZVariant>".into(),
 			Variant::Variant(_) => "ZVariant".into(),
 			Variant::Array(ty, _) => eco_format!("TArray<{ty}>"),
-			Variant::Raw(x) => x.variant_type()
+			Variant::Raw(x) => x.variant_type().into()
 		}
 	}
 
@@ -834,7 +834,7 @@ pub enum RawVariant {
 
 impl RawVariant {
 	/// Get the variant type (i.e., the $type field).
-	pub fn variant_type(&self) -> EcoString {
+	pub fn variant_type(&self) -> &'static str {
 		match self {
 			Self::H1(value) => value.variant_type(),
 			Self::H2(value) => value.variant_type(),
