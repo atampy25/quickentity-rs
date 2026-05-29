@@ -1,0 +1,59 @@
+name: Artifact
+
+on:
+    push:
+    workflow_dispatch:
+
+jobs:
+    build:
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - platform: "ubuntu-latest"
+                    - platform: "windows-latest"
+
+        runs-on: ${{ matrix.platform }}
+
+        steps:
+            - uses: actions/checkout@v2
+              with:
+                  fetch-depth: 0
+
+            - name: Set up Rust (Linux)
+              uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f
+              if: matrix.platform == 'ubuntu-latest'
+              with:
+                  profile: minimal
+                  toolchain: nightly-2026-05-28
+                  target: x86_64-unknown-linux-gnu
+                  default: true
+
+            - name: Set up Rust (Windows)
+              uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f
+              if: matrix.platform == 'windows-latest'
+              with:
+                  profile: minimal
+                  toolchain: nightly-2026-05-28
+                  target: x86_64-pc-windows-msvc
+                  default: true
+
+            - name: Rust cache
+              uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+
+            - name: Build
+              run: cargo build --release --bin quickentity_rs -F cli
+
+            - name: Upload artifact (Linux)
+              if: matrix.platform == 'ubuntu-latest'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: quickentity_rs
+                  path: target/release/quickentity_rs
+
+            - name: Upload artifact (Windows)
+              if: matrix.platform == 'windows-latest'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: quickentity_rs.exe
+                  path: target/release/quickentity_rs.exe
