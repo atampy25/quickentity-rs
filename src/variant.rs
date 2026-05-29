@@ -867,8 +867,6 @@ impl RawVariant {
 					.into_inner()
 					.into(),
 				GameVersion::H3 => from_value::<hitman_bin1::game::h3::ZVariant>(to_value(value)?)?
-					.into_inner()
-					.into()
 			},
 			RawVariant::H2(value) => match version {
 				GameVersion::H1 => from_value::<hitman_bin1::game::h1::ZVariant>(to_value(value)?)?
@@ -876,8 +874,6 @@ impl RawVariant {
 					.into(),
 				GameVersion::H2 => value.to_owned().into_inner().into(),
 				GameVersion::H3 => from_value::<hitman_bin1::game::h3::ZVariant>(to_value(value)?)?
-					.into_inner()
-					.into()
 			},
 			RawVariant::H3(value) => match version {
 				GameVersion::H1 => from_value::<hitman_bin1::game::h1::ZVariant>(to_value(value)?)?
