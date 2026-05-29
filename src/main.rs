@@ -2,10 +2,11 @@ mod io_utils;
 
 use std::fs;
 
-use quickentity_rs::{apply_patch, convert_to_game, convert_to_qn, entity::Entity, generate_patch, patch::Patch};
+use quickentity_rs::{apply_patch, entity::Entity, generate_patch, patch::Patch};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use hitman_bin1::game::conversion::ConvertFrom;
 use hitman_commons::game::GameVersion;
 use serde_json::from_slice;
 use tryvial::try_fn;
@@ -187,7 +188,7 @@ fn main() -> Result<()> {
 					lossless
 				}
 		} => {
-			let entity = convert_to_qn(
+			let entity = Entity::from_game(
 				&read_as_json(input_factory),
 				&read_as_json(input_factory_meta),
 				&read_as_json(input_blueprint),
@@ -210,11 +211,11 @@ fn main() -> Result<()> {
 				}
 		} => {
 			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
-				convert_to_game(&read_as_json(input), GameVersion::H3)?;
+				read_as_json::<Entity>(input).to_game(if h1 { GameVersion::H1 } else { GameVersion::H3 })?;
 
 			fs::write(output_factory, {
 				if h1 {
-					to_vec_float_format(&hitman_bin1::game::h1::STemplateEntity::try_from(converted_fac).unwrap())
+					to_vec_float_format(&hitman_bin1::game::h1::STemplateEntity::convert_from(converted_fac).unwrap())
 				} else {
 					to_vec_float_format(&converted_fac)
 				}
@@ -226,7 +227,7 @@ fn main() -> Result<()> {
 			fs::write(output_blueprint, {
 				if h1 {
 					to_vec_float_format(
-						&hitman_bin1::game::h1::STemplateEntityBlueprint::try_from(converted_blu).unwrap()
+						&hitman_bin1::game::h1::STemplateEntityBlueprint::convert_from(converted_blu).unwrap()
 					)
 				} else {
 					to_vec_float_format(&converted_blu)
@@ -245,8 +246,8 @@ fn main() -> Result<()> {
 			}
 		} => {
 			let (factory, factory_meta, blueprint, blueprint_meta) =
-				convert_to_game(&read_as_json(input), GameVersion::H3)?;
-			let entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
+				read_as_json::<Entity>(input).to_game(GameVersion::H3)?;
+			let entity = Entity::from_game(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
 		}
@@ -293,8 +294,8 @@ fn main() -> Result<()> {
 			}
 
 			if normalise {
-				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_game(&entity, GameVersion::H3)?;
-				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
+				let (factory, factory_meta, blueprint, blueprint_meta) = entity.to_game(GameVersion::H3)?;
+				entity = Entity::from_game(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
 			let mut diagnostics_result = None;
@@ -310,8 +311,8 @@ fn main() -> Result<()> {
 			diagnostics_result.map_or(Ok(()), |e| Err(e))?;
 
 			if normalise {
-				let (factory, factory_meta, blueprint, blueprint_meta) = convert_to_game(&entity, GameVersion::H3)?;
-				entity = convert_to_qn(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
+				let (factory, factory_meta, blueprint, blueprint_meta) = entity.to_game(GameVersion::H3)?;
+				entity = Entity::from_game(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
