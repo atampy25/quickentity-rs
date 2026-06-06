@@ -12,7 +12,7 @@ use entity::{
 	PropertyOverride, Ref, SubEntity, SubType
 };
 use fn_error_context::context;
-use hitman_bin1::{
+use glacier_bin1::{
 	game::h3::{
 		SEntityTemplateEntitySubset, SEntityTemplateExposedEntity, SEntityTemplatePinConnection,
 		SEntityTemplatePlatformSpecificProperty, SEntityTemplateProperty, SEntityTemplatePropertyAlias,

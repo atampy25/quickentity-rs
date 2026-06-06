@@ -25,7 +25,7 @@ hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features 
     "serde",
     "specta",
 ] }
-hitman-bin1 = { git = "https://github.com/atampy25/hitman-bin1", features = [
+glacier-bin1 = { git = "https://github.com/atampy25/glacier-bin1", features = [
     "all-games",
     "TBLU",
     "TEMP",

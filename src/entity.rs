@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result};
 use ecow::EcoString;
 use fn_error_context::context;
-use hitman_bin1::game::h3::{SEntityTemplateReference, STemplateEntityBlueprint, STemplateEntityFactory};
+use glacier_bin1::game::h3::{SEntityTemplateReference, STemplateEntityBlueprint, STemplateEntityFactory};
 use hitman_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use identity_hash::BuildIdentityHasher;
 use serde::{Deserialize, Serialize};

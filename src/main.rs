@@ -6,7 +6,7 @@ use quickentity_rs::{apply_patch, entity::Entity, generate_patch, patch::Patch};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use hitman_bin1::game::conversion::ConvertFrom;
+use glacier_bin1::game::conversion::ConvertFrom;
 use hitman_commons::game::GameVersion;
 use serde_json::from_slice;
 use tryvial::try_fn;
@@ -215,7 +215,7 @@ fn main() -> Result<()> {
 
 			fs::write(output_factory, {
 				if h1 {
-					to_vec_float_format(&hitman_bin1::game::h1::STemplateEntity::convert_from(converted_fac).unwrap())
+					to_vec_float_format(&glacier_bin1::game::h1::STemplateEntity::convert_from(converted_fac).unwrap())
 				} else {
 					to_vec_float_format(&converted_fac)
 				}
@@ -227,7 +227,7 @@ fn main() -> Result<()> {
 			fs::write(output_blueprint, {
 				if h1 {
 					to_vec_float_format(
-						&hitman_bin1::game::h1::STemplateEntityBlueprint::convert_from(converted_blu).unwrap()
+						&glacier_bin1::game::h1::STemplateEntityBlueprint::convert_from(converted_blu).unwrap()
 					)
 				} else {
 					to_vec_float_format(&converted_blu)

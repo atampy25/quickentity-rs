@@ -6,14 +6,14 @@ use std::{
 use anyhow::{Context, Result};
 use ecow::{EcoString, eco_format};
 use fn_error_context::context;
-use glam::{Affine3, EulerRot, Mat3, Quat};
-use hitman_bin1::{
+use glacier_bin1::{
 	game::h3::{
 		SColorRGB, SColorRGBA, SEntityTemplateReference, SMatrix43, STemplateEntityBlueprint, STemplateEntityFactory,
 		SVector3, ZGuid, ZVariant
 	},
 	types::{repository::ZRepositoryID, resource::ZRuntimeResourceID}
 };
+use glam::{Affine3, EulerRot, Mat3, Quat};
 use hitman_commons::{
 	game::GameVersion,
 	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
@@ -372,7 +372,7 @@ pub enum Variant {
 	Uuid(Uuid),
 
 	// Rune doesn't need to know about this
-	RepositoryId(hitman_bin1::types::repository::ZRepositoryID),
+	RepositoryId(glacier_bin1::types::repository::ZRepositoryID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	ColorRGB(#[cfg_attr(feature = "rune", rune(get, set))] ColorRGB),
@@ -827,9 +827,9 @@ impl<'de> Deserialize<'de> for Variant {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RawVariant {
-	H1(hitman_bin1::game::h1::ZVariant),
-	H2(hitman_bin1::game::h2::ZVariant),
-	H3(hitman_bin1::game::h3::ZVariant)
+	H1(glacier_bin1::game::h1::ZVariant),
+	H2(glacier_bin1::game::h2::ZVariant),
+	H3(glacier_bin1::game::h3::ZVariant)
 }
 
 impl RawVariant {
@@ -852,10 +852,10 @@ impl RawVariant {
 	}
 
 	pub fn from_value(value: Value) -> Result<Self, serde_json::Error> {
-		hitman_bin1::game::h3::ZVariant::deserialize(&value)
+		glacier_bin1::game::h3::ZVariant::deserialize(&value)
 			.map(Self::H3)
-			.or_else(|_| hitman_bin1::game::h2::ZVariant::deserialize(&value).map(Self::H2))
-			.or_else(|_| hitman_bin1::game::h1::ZVariant::deserialize(&value).map(Self::H1))
+			.or_else(|_| glacier_bin1::game::h2::ZVariant::deserialize(&value).map(Self::H2))
+			.or_else(|_| glacier_bin1::game::h1::ZVariant::deserialize(&value).map(Self::H1))
 	}
 
 	#[try_fn]
@@ -863,23 +863,23 @@ impl RawVariant {
 		match self {
 			RawVariant::H1(value) => match version {
 				GameVersion::H1 => value.to_owned().into_inner().into(),
-				GameVersion::H2 => from_value::<hitman_bin1::game::h2::ZVariant>(to_value(value)?)?
+				GameVersion::H2 => from_value::<glacier_bin1::game::h2::ZVariant>(to_value(value)?)?
 					.into_inner()
 					.into(),
-				GameVersion::H3 => from_value::<hitman_bin1::game::h3::ZVariant>(to_value(value)?)?
+				GameVersion::H3 => from_value::<glacier_bin1::game::h3::ZVariant>(to_value(value)?)?
 			},
 			RawVariant::H2(value) => match version {
-				GameVersion::H1 => from_value::<hitman_bin1::game::h1::ZVariant>(to_value(value)?)?
+				GameVersion::H1 => from_value::<glacier_bin1::game::h1::ZVariant>(to_value(value)?)?
 					.into_inner()
 					.into(),
 				GameVersion::H2 => value.to_owned().into_inner().into(),
-				GameVersion::H3 => from_value::<hitman_bin1::game::h3::ZVariant>(to_value(value)?)?
+				GameVersion::H3 => from_value::<glacier_bin1::game::h3::ZVariant>(to_value(value)?)?
 			},
 			RawVariant::H3(value) => match version {
-				GameVersion::H1 => from_value::<hitman_bin1::game::h1::ZVariant>(to_value(value)?)?
+				GameVersion::H1 => from_value::<glacier_bin1::game::h1::ZVariant>(to_value(value)?)?
 					.into_inner()
 					.into(),
-				GameVersion::H2 => from_value::<hitman_bin1::game::h2::ZVariant>(to_value(value)?)?
+				GameVersion::H2 => from_value::<glacier_bin1::game::h2::ZVariant>(to_value(value)?)?
 					.into_inner()
 					.into(),
 				GameVersion::H3 => value.to_owned()
