@@ -7,7 +7,7 @@ use quickentity_rs::{apply_patch, entity::Entity, generate_patch, patch::Patch};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glacier_bin1::game::conversion::ConvertFrom;
-use hitman_commons::game::GameVersion;
+use glacier_commons::game::GameVersion;
 use serde_json::from_slice;
 use tryvial::try_fn;
 
@@ -211,7 +211,7 @@ fn main() -> Result<()> {
 				}
 		} => {
 			let (converted_fac, converted_fac_meta, converted_blu, converted_blu_meta) =
-				read_as_json::<Entity>(input).to_game(if h1 { GameVersion::H1 } else { GameVersion::H3 })?;
+				read_as_json::<Entity>(input).to_game()?;
 
 			fs::write(output_factory, {
 				if h1 {
@@ -245,8 +245,7 @@ fn main() -> Result<()> {
 				lossless
 			}
 		} => {
-			let (factory, factory_meta, blueprint, blueprint_meta) =
-				read_as_json::<Entity>(input).to_game(GameVersion::H3)?;
+			let (factory, factory_meta, blueprint, blueprint_meta) = read_as_json::<Entity>(input).to_game()?;
 			let entity = Entity::from_game(&factory, &factory_meta, &blueprint, &blueprint_meta, lossless)?;
 
 			fs::write(output, to_vec_float_format(&entity)).unwrap();
@@ -294,7 +293,7 @@ fn main() -> Result<()> {
 			}
 
 			if normalise {
-				let (factory, factory_meta, blueprint, blueprint_meta) = entity.to_game(GameVersion::H3)?;
+				let (factory, factory_meta, blueprint, blueprint_meta) = entity.to_game()?;
 				entity = Entity::from_game(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
@@ -311,7 +310,7 @@ fn main() -> Result<()> {
 			diagnostics_result.map_or(Ok(()), |e| Err(e))?;
 
 			if normalise {
-				let (factory, factory_meta, blueprint, blueprint_meta) = entity.to_game(GameVersion::H3)?;
+				let (factory, factory_meta, blueprint, blueprint_meta) = entity.to_game()?;
 				entity = Entity::from_game(&factory, &factory_meta, &blueprint, &blueprint_meta, true)?;
 			}
 
@@ -319,8 +318,8 @@ fn main() -> Result<()> {
 		}
 
 		Command::ConvertMeta { input, output } => {
-			let meta = hitman_commons::metadata::ResourceMetadata::try_from(read_as_json::<
-				hitman_commons::rpkg_tool::RpkgResourceMeta
+			let meta = glacier_commons::metadata::ResourceMetadata::try_from(read_as_json::<
+				glacier_commons::rpkg_tool::RpkgResourceMeta
 			>(input))?;
 			fs::write(output, to_vec_float_format(&meta)).unwrap();
 		}

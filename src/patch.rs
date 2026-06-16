@@ -1,5 +1,5 @@
 use ecow::EcoString;
-use hitman_commons::metadata::{ResourceReference, RuntimeID};
+use glacier_commons::metadata::{ResourceID, ResourceReference};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tryvial::try_fn;
@@ -34,11 +34,11 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 pub struct Patch {
 	/// The hash of the TEMP file of this entity.
 	#[serde(rename = "factory")]
-	pub factory: RuntimeID,
+	pub factory: ResourceID,
 
 	/// The hash of the TBLU file of this entity.
 	#[serde(rename = "blueprint")]
-	pub blueprint: RuntimeID,
+	pub blueprint: ResourceID,
 
 	/// The patch operations to apply.
 	pub patch: Vec<PatchOperation>,
@@ -115,10 +115,10 @@ pub enum PatchOperation {
 	RemovePinConnectionOverrideDelete(#[cfg_attr(feature = "rune", rune(get, set))] PinConnectionOverrideDelete),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] RuntimeID),
+	AddExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] ResourceID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] RuntimeID),
+	RemoveExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] ResourceID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddExtraFactoryReference(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
@@ -159,7 +159,7 @@ pub enum SubEntityOperation {
 	SetFactory(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetBlueprint(#[cfg_attr(feature = "rune", rune(get, set))] RuntimeID),
+	SetBlueprint(#[cfg_attr(feature = "rune", rune(get, set))] ResourceID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	SetEditorOnly(#[cfg_attr(feature = "rune", rune(get, set))] bool),
@@ -199,7 +199,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddPlatformProperty(
+	AddPlatformSpecificProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -210,7 +210,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	PatchPlatformPropertyValue(
+	PatchPlatformSpecificPropertyValue(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -224,7 +224,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetPlatformPropertyPostInit(
+	SetPlatformSpecificPropertyPostInit(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -235,7 +235,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemovePlatformProperty(
+	RemovePlatformSpecificProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -448,5 +448,7 @@ pub struct PropertyOverrideConnection {
 	pub property: EcoString,
 
 	/// The overridden property.
-	pub value: Variant
+	pub value: Variant,
+
+	pub runtime_editable: bool
 }
