@@ -42,7 +42,7 @@ jobs:
               uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
 
             - name: Build
-              run: cargo build --release --bin quickentity_rs -F cli
+              run: cargo build --release --bin quickentity_rs -F cli -F all-games
 
             - name: Upload artifact (Linux)
               if: matrix.platform == 'ubuntu-latest'
