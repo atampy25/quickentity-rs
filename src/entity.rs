@@ -335,7 +335,6 @@ pub struct SubEntity {
 	pub editor_only: bool,
 
 	/// Platforms on which the entity will not be loaded.
-	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "excludedPlatforms")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "Vec::is_empty")]
@@ -490,6 +489,22 @@ impl SubEntity {
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
+		module.field_function(&rune::runtime::Protocol::GET, "excluded_platforms", |s: &Self| {
+			s.excluded_platforms
+				.clone()
+				.into_iter()
+				.map(|x| String::from(x))
+				.collect::<Vec<_>>()
+		})?;
+
+		module.field_function(
+			&rune::runtime::Protocol::SET,
+			"excluded_platforms",
+			|s: &mut Self, value: Vec<String>| {
+				s.excluded_platforms = value.into_iter().map(|x| x.into()).collect();
+			}
+		)?;
+
 		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
 			s.properties
 				.clone()
