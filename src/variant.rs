@@ -1031,7 +1031,7 @@ impl From<glacier_bin1::game::fl::ZVariant> for RawVariant {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum RawVariant {
 	#[cfg(feature = "h1")]
@@ -1047,6 +1047,26 @@ pub enum RawVariant {
 	FL(glacier_bin1::game::fl::ZVariant),
 
 	Unknown(EcoString, Value)
+}
+
+impl PartialEq for RawVariant {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			#[cfg(feature = "h1")]
+			(Self::H1(a), Self::H1(b)) => a == b,
+
+			#[cfg(feature = "h2")]
+			(Self::H2(a), Self::H2(b)) => a == b,
+
+			#[cfg(feature = "h3")]
+			(Self::H3(a), Self::H3(b)) => a == b,
+
+			#[cfg(feature = "fl")]
+			(Self::FL(a), Self::FL(b)) => a == b,
+
+			_ => self.variant_type() == other.variant_type() && self.to_serde().ok() == other.to_serde().ok()
+		}
+	}
 }
 
 impl RawVariant {
