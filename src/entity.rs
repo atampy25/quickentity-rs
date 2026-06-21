@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result};
 use ecow::EcoString;
 use fn_error_context::context;
-use glacier_commons::metadata::{ResourceID, ResourceMetadata, ResourceReference};
+use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use identity_hash::BuildIdentityHasher;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -153,12 +153,12 @@ pub struct Entity {
 	/// The TEMP file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "factory")]
-	pub factory: ResourceID,
+	pub factory: RuntimeID,
 
 	/// The TBLU file of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "blueprint")]
-	pub blueprint: ResourceID,
+	pub blueprint: RuntimeID,
 
 	/// The root sub-entity of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -204,7 +204,7 @@ pub struct Entity {
 	/// The external scenes that this entity references.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "externalScenes")]
-	pub external_scenes: Vec<ResourceID>,
+	pub external_scenes: Vec<RuntimeID>,
 
 	/// The type of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -323,7 +323,7 @@ pub struct SubEntity {
 	/// The blueprint of the entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "blueprint")]
-	pub blueprint: ResourceID,
+	pub blueprint: RuntimeID,
 
 	/// Whether the entity is only loaded in IO's editor.
 	///
@@ -469,22 +469,13 @@ impl Default for SubEntity {
 impl SubEntity {
 	/// Constructor function. An actual struct constructor cannot be made as Rune only supports up to five parameters in functions.
 	#[rune::function(path = Self::new)]
-	fn r_new(parent: Option<Ref>, name: String, factory: ResourceReference, blueprint: ResourceID) -> Self {
+	fn r_new(parent: Option<Ref>, name: String, factory: ResourceReference, blueprint: RuntimeID) -> Self {
 		Self {
 			parent,
 			name: name.into(),
 			factory,
 			blueprint,
-			editor_only: false,
-			properties: Default::default(),
-			platform_specific_properties: Default::default(),
-			events: Default::default(),
-			input_forwardings: Default::default(),
-			output_forwardings: Default::default(),
-			property_aliases: Default::default(),
-			exposed_entities: Default::default(),
-			exposed_interfaces: Default::default(),
-			subsets: Default::default()
+			..Default::default()
 		}
 	}
 
@@ -1066,7 +1057,7 @@ pub struct Ref {
 
 	/// The external scene the referenced entity resides in.
 	#[cfg_attr(feature = "rune", rune(get, set))]
-	pub external_scene: Option<ResourceID>,
+	pub external_scene: Option<RuntimeID>,
 
 	/// The sub-entity to reference that is exposed by the referenced entity.
 	pub exposed_entity: Option<EcoString>
@@ -1096,7 +1087,7 @@ impl Ref {
 		Ok(())
 	}
 
-	fn rune_construct(entity_id: EntityID, external_scene: Option<ResourceID>, exposed_entity: Option<String>) -> Self {
+	fn rune_construct(entity_id: EntityID, external_scene: Option<RuntimeID>, exposed_entity: Option<String>) -> Self {
 		Self {
 			entity_id,
 			external_scene,
@@ -1232,8 +1223,8 @@ mod ref_impl {
 				fn from_qn(
 					value: &Ref,
 					entity_indices: &HashMap<EntityID, usize>,
-					_: &HashMap<ResourceID, usize>,
-					external_scene_indices: &HashMap<ResourceID, usize>
+					_: &HashMap<RuntimeID, usize>,
+					external_scene_indices: &HashMap<RuntimeID, usize>
 				) -> Result<Self, Self::Error> {
 					if let Some(external_scene) = &value.external_scene {
 						Self {
@@ -1269,8 +1260,8 @@ mod ref_impl {
 				fn from_qn(
 					value: &Option<Ref>,
 					entity_indices: &HashMap<EntityID, usize>,
-					reference_indices: &HashMap<ResourceID, usize>,
-					external_scene_indices: &HashMap<ResourceID, usize>
+					reference_indices: &HashMap<RuntimeID, usize>,
+					external_scene_indices: &HashMap<RuntimeID, usize>
 				) -> Result<Self, Self::Error> {
 					match value {
 						None => Self {
@@ -1311,7 +1302,7 @@ enum RefProxy {
 
 		#[serde(rename = "externalScene")]
 		#[serde(skip_serializing_if = "Option::is_none")]
-		external_scene: Option<ResourceID>,
+		external_scene: Option<RuntimeID>,
 
 		#[serde(rename = "exposedEntity")]
 		#[serde(skip_serializing_if = "Option::is_none")]

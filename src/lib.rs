@@ -9,13 +9,10 @@ pub mod variant;
 use anyhow::{Context, Result, anyhow, bail};
 use auto_context::auto_context;
 use ecow::{EcoString, string::ToEcoString};
-use entity::{
-	Entity, EntityID, ExposedEntity, PinConnection, PinConnectionOverride, PinConnectionOverrideDelete, PropertyAlias,
-	PropertyOverride, Ref, SubEntity, SubType
-};
+use entity::{Entity, EntityID, PropertyOverride};
 use fn_error_context::context;
 use glacier_bin1::types::{property::PropertyID, resource::ZRuntimeResourceID};
-use glacier_commons::metadata::{ResourceID, ResourceMetadata, ResourceReference};
+use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use identity_hash::BuildIdentityHasher;
 use itertools::Itertools;
 use patch::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
@@ -24,11 +21,17 @@ use thiserror::Error;
 use tryvial::try_fn;
 
 use crate::{
-	entity::{LocalPinConnection, Property},
+	entity::{
+		ExposedEntity, LocalPinConnection, PinConnection, PinConnectionOverride, PinConnectionOverrideDelete, Property,
+		PropertyAlias, Ref, SubEntity, SubType
+	},
 	game::{FromQuickEntity, ToGame, ToQuickEntity},
 	patch::{ItemSelector, VariantPatch},
 	variant::Variant
 };
+
+#[cfg(feature = "rune")]
+use glacier_commons::game::GlacierGame;
 
 pub const PATCH_VERSION: u8 = 7;
 pub const ENTITY_VERSION: f32 = 3.2;
@@ -82,7 +85,7 @@ pub enum AlreadyNonexistentDiagnostic {
 	},
 
 	#[error("couldn't remove external scene {scene} because it did not exist")]
-	ExternalScene { scene: ResourceID },
+	ExternalScene { scene: RuntimeID },
 
 	#[error("couldn't remove extra factory reference {reference:?} because it did not exist")]
 	ExtraFactoryReference { reference: ResourceReference },
@@ -2968,8 +2971,8 @@ macro_rules! impl_game {
 			fn from_qn(
 				entity: &Entity,
 				_: &HashMap<EntityID, usize>,
-				_: &HashMap<ResourceID, usize>,
-				_: &HashMap<ResourceID, usize>
+				_: &HashMap<RuntimeID, usize>,
+				_: &HashMap<RuntimeID, usize>
 			) -> Result<Self> {
 				use glacier_bin1::game::$game::*;
 
@@ -3000,7 +3003,7 @@ macro_rules! impl_game {
 					.concat()
 				};
 
-				let reference_indices: HashMap<ResourceID, usize> = factory_meta
+				let reference_indices: HashMap<RuntimeID, usize> = factory_meta
 					.references
 					.par_iter()
 					.enumerate()
@@ -3046,7 +3049,7 @@ macro_rules! impl_game {
 					}
 				);
 
-				let external_scene_indices: HashMap<ResourceID, usize> = impl_fl_others!(
+				let external_scene_indices: HashMap<RuntimeID, usize> = impl_fl_others!(
 					$game,
 					entity
 						.external_scenes
@@ -3307,7 +3310,7 @@ macro_rules! impl_game {
 					.concat()
 				};
 
-				let blueprint_dependencies_index_mapping: HashMap<ResourceID, usize, BuildIdentityHasher<u64>> =
+				let blueprint_dependencies_index_mapping: HashMap<RuntimeID, usize, BuildIdentityHasher<u64>> =
 					blueprint_meta
 						.references
 						.par_iter()
@@ -3807,8 +3810,8 @@ macro_rules! impl_game {
 					event: &EcoString,
 					triggers: &OrderMap<EcoString, Vec<PinConnection>>,
 					entity_indices: &HashMap<EntityID, usize>,
-					_reference_indices: &HashMap<ResourceID, usize>,
-					_external_scene_indices: &HashMap<ResourceID, usize>
+					_reference_indices: &HashMap<RuntimeID, usize>,
+					_external_scene_indices: &HashMap<RuntimeID, usize>
 				) -> Result<Vec<SEntityTemplatePinConnection>> {
 					triggers
 						.iter()
@@ -3877,8 +3880,8 @@ macro_rules! impl_game {
 					event: &EcoString,
 					triggers: &OrderMap<EcoString, Vec<LocalPinConnection>>,
 					entity_indices: &HashMap<EntityID, usize>,
-					_reference_indices: &HashMap<ResourceID, usize>,
-					_external_scene_indices: &HashMap<ResourceID, usize>
+					_reference_indices: &HashMap<RuntimeID, usize>,
+					_external_scene_indices: &HashMap<RuntimeID, usize>
 				) -> Result<Vec<SEntityTemplatePinConnection>> {
 					triggers
 						.iter()
@@ -4041,11 +4044,33 @@ impl Entity {
 		factory_meta: &ResourceMetadata,
 		blueprint: &str,
 		blueprint_meta: &ResourceMetadata,
-		convert_lossless: bool
+		(version, convert_lossless): (GlacierGame, bool)
 	) -> Result<Self> {
-		let factory = serde_json::from_str(factory)?;
-		let blueprint = serde_json::from_str(blueprint)?;
-		Self::from_game(&factory, factory_meta, &blueprint, blueprint_meta, convert_lossless)
+		match version {
+			GlacierGame::H1 => {
+				let factory: glacier_bin1::game::h1::STemplateEntity = serde_json::from_str(factory)?;
+				let blueprint = serde_json::from_str(blueprint)?;
+				Self::from_game(&factory, factory_meta, &blueprint, blueprint_meta, convert_lossless)
+			}
+
+			GlacierGame::H2 => {
+				let factory: glacier_bin1::game::h2::STemplateEntityFactory = serde_json::from_str(factory)?;
+				let blueprint = serde_json::from_str(blueprint)?;
+				Self::from_game(&factory, factory_meta, &blueprint, blueprint_meta, convert_lossless)
+			}
+
+			GlacierGame::H3 => {
+				let factory: glacier_bin1::game::h3::STemplateEntityFactory = serde_json::from_str(factory)?;
+				let blueprint = serde_json::from_str(blueprint)?;
+				Self::from_game(&factory, factory_meta, &blueprint, blueprint_meta, convert_lossless)
+			}
+
+			GlacierGame::FL => {
+				let factory: glacier_bin1::game::fl::STemplateEntityFactory = serde_json::from_str(factory)?;
+				let blueprint = serde_json::from_str(blueprint)?;
+				Self::from_game(&factory, factory_meta, &blueprint, blueprint_meta, convert_lossless)
+			}
+		}
 	}
 
 	pub fn from_game<T: ToQuickEntity>(
@@ -4073,15 +4098,56 @@ impl Entity {
 	#[cfg(feature = "rune")]
 	#[try_fn]
 	#[rune::function(path = Self::to_game, instance)]
-	fn r_to_game(&self, version: GameVersion) -> Result<(String, ResourceMetadata, String, ResourceMetadata)> {
-		let (fac, fac_meta, blu, blu_meta) = self.to_game(version)?;
+	fn r_to_game(&self, version: GlacierGame) -> Result<(String, ResourceMetadata, String, ResourceMetadata)> {
+		match version {
+			GlacierGame::H1 => {
+				let (fac, fac_meta, blu, blu_meta): (glacier_bin1::game::h1::STemplateEntity, _, _, _) =
+					self.to_game()?;
 
-		(
-			serde_json::to_string(&fac)?,
-			fac_meta,
-			serde_json::to_string(&blu)?,
-			blu_meta
-		)
+				(
+					serde_json::to_string(&fac)?,
+					fac_meta,
+					serde_json::to_string(&blu)?,
+					blu_meta
+				)
+			}
+
+			GlacierGame::H2 => {
+				let (fac, fac_meta, blu, blu_meta): (glacier_bin1::game::h2::STemplateEntityFactory, _, _, _) =
+					self.to_game()?;
+
+				(
+					serde_json::to_string(&fac)?,
+					fac_meta,
+					serde_json::to_string(&blu)?,
+					blu_meta
+				)
+			}
+
+			GlacierGame::H3 => {
+				let (fac, fac_meta, blu, blu_meta): (glacier_bin1::game::h3::STemplateEntityFactory, _, _, _) =
+					self.to_game()?;
+
+				(
+					serde_json::to_string(&fac)?,
+					fac_meta,
+					serde_json::to_string(&blu)?,
+					blu_meta
+				)
+			}
+
+			GlacierGame::FL => {
+				let (fac, fac_meta, blu, blu_meta): (glacier_bin1::game::fl::STemplateEntityFactory, _, _, _) =
+					self.to_game()?;
+
+				(
+					serde_json::to_string(&fac)?,
+					fac_meta,
+					serde_json::to_string(&blu)?,
+					blu_meta
+				)
+			}
+		}
 	}
 
 	pub fn to_game<T: FromQuickEntity<Entity>>(&self) -> Result<T, T::Error> {

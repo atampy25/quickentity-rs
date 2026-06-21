@@ -1,4 +1,4 @@
-use glacier_commons::metadata::{ResourceID, ResourceMetadata};
+use glacier_commons::metadata::{RuntimeID, ResourceMetadata};
 
 use crate::{HashMap, entity::EntityID};
 
@@ -25,8 +25,8 @@ pub trait FromQuickEntity<T>: Sized {
 	fn from_qn(
 		input: &T,
 		entity_indices: &HashMap<EntityID, usize>,
-		reference_indices: &HashMap<ResourceID, usize>,
-		external_scene_indices: &HashMap<ResourceID, usize>
+		reference_indices: &HashMap<RuntimeID, usize>,
+		external_scene_indices: &HashMap<RuntimeID, usize>
 	) -> Result<Self, Self::Error>;
 }
 
@@ -36,8 +36,8 @@ pub trait ToGame<T> {
 	fn to_game(
 		&self,
 		entity_indices: &HashMap<EntityID, usize>,
-		reference_indices: &HashMap<ResourceID, usize>,
-		external_scene_indices: &HashMap<ResourceID, usize>
+		reference_indices: &HashMap<RuntimeID, usize>,
+		external_scene_indices: &HashMap<RuntimeID, usize>
 	) -> Result<T, Self::Error>;
 }
 
@@ -47,8 +47,8 @@ impl<T: FromQuickEntity<U>, U> ToGame<T> for U {
 	fn to_game(
 		&self,
 		entity_indices: &HashMap<EntityID, usize>,
-		reference_indices: &HashMap<ResourceID, usize>,
-		external_scene_indices: &HashMap<ResourceID, usize>
+		reference_indices: &HashMap<RuntimeID, usize>,
+		external_scene_indices: &HashMap<RuntimeID, usize>
 	) -> Result<T, Self::Error> {
 		T::from_qn(self, entity_indices, reference_indices, external_scene_indices)
 	}

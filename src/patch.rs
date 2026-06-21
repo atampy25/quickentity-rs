@@ -1,5 +1,5 @@
 use ecow::EcoString;
-use glacier_commons::metadata::{ResourceID, ResourceReference};
+use glacier_commons::metadata::{ResourceReference, RuntimeID};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tryvial::try_fn;
@@ -34,11 +34,11 @@ pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
 pub struct Patch {
 	/// The hash of the TEMP file of this entity.
 	#[serde(rename = "factory")]
-	pub factory: ResourceID,
+	pub factory: RuntimeID,
 
 	/// The hash of the TBLU file of this entity.
 	#[serde(rename = "blueprint")]
-	pub blueprint: ResourceID,
+	pub blueprint: RuntimeID,
 
 	/// The patch operations to apply.
 	pub patch: Vec<PatchOperation>,
@@ -115,10 +115,10 @@ pub enum PatchOperation {
 	RemovePinConnectionOverrideDelete(#[cfg_attr(feature = "rune", rune(get, set))] PinConnectionOverrideDelete),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] ResourceID),
+	AddExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] RuntimeID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemoveExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] ResourceID),
+	RemoveExternalScene(#[cfg_attr(feature = "rune", rune(get, set))] RuntimeID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddExtraFactoryReference(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
@@ -159,7 +159,7 @@ pub enum SubEntityOperation {
 	SetFactory(#[cfg_attr(feature = "rune", rune(get, set))] ResourceReference),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetBlueprint(#[cfg_attr(feature = "rune", rune(get, set))] ResourceID),
+	SetBlueprint(#[cfg_attr(feature = "rune", rune(get, set))] RuntimeID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	SetEditorOnly(#[cfg_attr(feature = "rune", rune(get, set))] bool),

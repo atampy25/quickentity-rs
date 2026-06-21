@@ -6,7 +6,7 @@ use std::{
 use anyhow::{Context, Result};
 use ecow::{EcoString, eco_format};
 use glacier_bin1::types::resource::ZRuntimeResourceID;
-use glacier_commons::metadata::{ResourceID, ResourceMetadata, ResourceReference};
+use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use glam::{Affine3, EulerRot, Mat3, Quat};
 use serde::{
 	Deserialize, Serialize,
@@ -173,8 +173,8 @@ mod transform_impl {
 				fn from_qn(
 					trans: &Transform,
 					_: &HashMap<EntityID, usize>,
-					_: &HashMap<ResourceID, usize>,
-					_: &HashMap<ResourceID, usize>
+					_: &HashMap<RuntimeID, usize>,
+					_: &HashMap<RuntimeID, usize>
 				) -> Result<Self, Self::Error> {
 					let transform = trans.to_glam();
 
@@ -427,8 +427,8 @@ mod color_impl {
 				fn from_qn(
 					color: &ColorRGB,
 					_: &HashMap<EntityID, usize>,
-					_: &HashMap<ResourceID, usize>,
-					_: &HashMap<ResourceID, usize>
+					_: &HashMap<RuntimeID, usize>,
+					_: &HashMap<RuntimeID, usize>
 				) -> Result<Self, Self::Error> {
 					Self {
 						r: color.r,
@@ -470,8 +470,8 @@ mod color_impl {
 				fn from_qn(
 					color: &ColorRGBA,
 					_: &HashMap<EntityID, usize>,
-					_: &HashMap<ResourceID, usize>,
-					_: &HashMap<ResourceID, usize>
+					_: &HashMap<RuntimeID, usize>,
+					_: &HashMap<RuntimeID, usize>
 				) -> Result<Self, Self::Error> {
 					Self {
 						r: color.r,
@@ -560,17 +560,17 @@ impl schemars::JsonSchema for Variant {
 impl Variant {
 	#[rune::function(instance, path = Self::get)]
 	fn r_get(&self) -> rune::Value {
-		from_value(to_value(self).unwrap()).unwrap()
+		serde_json::from_value(to_value(self).unwrap()).unwrap()
 	}
 
 	#[rune::function(instance, path = Self::set)]
 	fn r_set(&mut self, value: rune::Value) {
-		*self = from_value(to_value(value).unwrap()).unwrap();
+		*self = serde_json::from_value(to_value(value).unwrap()).unwrap();
 	}
 
 	#[rune::function(path = Self::from)]
 	fn r_from(value: rune::Value) -> Self {
-		from_value(to_value(value).unwrap()).unwrap()
+		serde_json::from_value(to_value(value).unwrap()).unwrap()
 	}
 }
 
@@ -773,8 +773,8 @@ mod variant_impl {
 				fn from_qn(
 					variant: &Variant,
 					entity_indices: &HashMap<EntityID, usize>,
-					reference_indices: &HashMap<ResourceID, usize>,
-					external_scene_indices: &HashMap<ResourceID, usize>
+					reference_indices: &HashMap<RuntimeID, usize>,
+					external_scene_indices: &HashMap<RuntimeID, usize>
 				) -> Result<Self, Self::Error> {
 					match variant {
 						Variant::Ref(value) => Self::new(glacier_bin1::game::$game::SEntityTemplateReference::from_qn(
