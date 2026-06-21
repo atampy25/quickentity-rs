@@ -12,7 +12,10 @@ use ecow::{EcoString, string::ToEcoString};
 use entity::{Entity, EntityID, PropertyOverride};
 use fn_error_context::context;
 use glacier_bin1::types::{property::PropertyID, resource::ZResourceID};
-use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
+use glacier_commons::{
+	game::GamePlatform,
+	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
+};
 use identity_hash::BuildIdentityHasher;
 use itertools::Itertools;
 use patch::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
@@ -3028,7 +3031,9 @@ macro_rules! impl_game {
 						external_scene_runtime_resource_i_ds: entity
 							.external_scenes
 							.iter()
-							.map(|scene| ZResourceID::from_u64(*reference_indices.get(scene).unwrap() as u64))
+							.map(|scene| ZResourceID::from_u64(
+								scene.as_u64() | ((GamePlatform::PC.tag().unwrap() as u64) << 56)
+							))
 							.collect(),
 						source_resource_id: entity.factory.to_eco_string()
 					},
@@ -3258,7 +3263,9 @@ macro_rules! impl_game {
 								external_scene_runtime_resource_i_ds: entity
 									.external_scenes
 									.iter()
-									.map(|scene| ZResourceID::from_u64(*reference_indices.get(scene).unwrap() as u64))
+									.map(|scene| ZResourceID::from_u64(
+										scene.as_u64() | ((GamePlatform::PC.tag().unwrap() as u64) << 56)
+									))
 									.collect(),
 								source_resource_id: entity.factory.to_eco_string()
 							},
