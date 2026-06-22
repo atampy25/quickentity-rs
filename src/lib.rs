@@ -2086,16 +2086,20 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 }
 
 #[hotpath::measure]
-fn get_blueprint_references(entity: &Entity) -> Vec<ResourceReference> {
+fn get_blueprint_references(entity: &Entity, with_external_scenes: bool) -> Vec<ResourceReference> {
 	vec![
-		entity
-			.external_scenes
-			.par_iter()
-			.map(|scene| ResourceReference {
-				resource: scene.to_owned(),
-				flags: Default::default()
-			})
-			.collect::<Vec<_>>(),
+		if with_external_scenes {
+			entity
+				.external_scenes
+				.par_iter()
+				.map(|scene| ResourceReference {
+					resource: scene.to_owned(),
+					flags: Default::default()
+				})
+				.collect::<Vec<_>>()
+		} else {
+			vec![]
+		},
 		entity
 			.entities
 			.iter()
@@ -2659,13 +2663,9 @@ macro_rules! impl_game {
 
 				let (a, b) = rayon::join(
 					|| {
-						let depends = impl_fl_others!(
-							$game,
-							get_factory_references(&entity, false)?,
-							get_factory_references(&entity, true)?
-						)
-						.into_iter()
-						.collect::<HashSet<_>>();
+						let depends = get_factory_references(&entity, impl_fl_others!($game, false, true))?
+							.into_iter()
+							.collect::<HashSet<_>>();
 
 						anyhow::Ok(
 							factory_meta
@@ -2677,7 +2677,7 @@ macro_rules! impl_game {
 						)
 					},
 					|| {
-						let depends = get_blueprint_references(&entity)
+						let depends = get_blueprint_references(&entity, impl_fl_others!($game, false, true))
 							.into_iter()
 							.collect::<HashSet<_>>();
 
@@ -3037,7 +3037,15 @@ macro_rules! impl_game {
 							.context("Root entity was non-existent")? as i32,
 						$sub_entities: Vec::with_capacity(entity.entities.len()),
 						property_overrides: vec![],
-						external_scene_type_indices_in_resource_header: vec![],
+						external_scene_type_indices_in_resource_header: factory_meta
+							.references
+							.iter()
+							.enumerate()
+							.filter_map(|(idx, reference)| entity
+								.external_scenes
+								.contains(&reference.resource)
+								.then_some(idx as i32))
+							.collect(),
 						external_scene_runtime_resource_ids: entity
 							.external_scenes
 							.iter()
@@ -3088,6 +3096,18 @@ macro_rules! impl_game {
 						})
 						.collect::<Result<_>>()?
 				);
+
+				let blueprint_meta = ResourceMetadata {
+					id: entity.blueprint.to_owned(),
+					resource_type: "TBLU".try_into()?,
+					compressed: ResourceMetadata::infer_compressed("TBLU".try_into()?),
+					scrambled: ResourceMetadata::infer_scrambled("TBLU".try_into()?),
+					references: [
+						get_blueprint_references(entity, impl_fl_others!($game, false, true)),
+						entity.extra_blueprint_references.to_owned()
+					]
+					.concat()
+				};
 
 				let mut blueprint = impl_h1_others!(
 					$game,
@@ -3267,7 +3287,15 @@ macro_rules! impl_game {
 										)
 									})
 									.collect::<Result<_>>()?,
-								external_scene_type_indices_in_resource_header: vec![],
+								external_scene_type_indices_in_resource_header: blueprint_meta
+									.references
+									.iter()
+									.enumerate()
+									.filter_map(|(idx, reference)| entity
+										.external_scenes
+										.contains(&reference.resource)
+										.then_some(idx as i32))
+									.collect(),
 								pin_connection_overrides,
 								pin_connection_override_deletes,
 								external_scene_runtime_resource_ids: entity
@@ -3312,18 +3340,6 @@ macro_rules! impl_game {
 						)
 					}
 				);
-
-				let blueprint_meta = ResourceMetadata {
-					id: entity.blueprint.to_owned(),
-					resource_type: "TBLU".try_into()?,
-					compressed: ResourceMetadata::infer_compressed("TBLU".try_into()?),
-					scrambled: ResourceMetadata::infer_scrambled("TBLU".try_into()?),
-					references: [
-						get_blueprint_references(entity),
-						entity.extra_blueprint_references.to_owned()
-					]
-					.concat()
-				};
 
 				let blueprint_dependencies_index_mapping: HashMap<RuntimeID, usize, BuildIdentityHasher<u64>> =
 					blueprint_meta
