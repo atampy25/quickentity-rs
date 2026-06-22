@@ -1190,7 +1190,7 @@ mod ref_impl {
 								Some(impl_fl_others!(
 									$game,
 									factory
-										.external_scene_runtime_resource_i_ds
+										.external_scene_runtime_resource_ids
 										.get(self.external_scene_index as usize)
 										.context("No such external scene in factory")?
 										.as_u64()

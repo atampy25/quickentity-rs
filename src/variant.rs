@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use ecow::{EcoString, eco_format};
-use glacier_bin1::types::resource::ZRuntimeResourceID;
+use glacier_bin1::types::resource::{ZResourceID, ZRuntimeResourceID};
 use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use glam::{Affine3, EulerRot, Mat3, Quat};
 use serde::{
@@ -497,6 +497,70 @@ mod color_impl {
 	impl_game!(fl);
 }
 
+#[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
+#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct EnumValue {
+	#[serde(rename = "enum")]
+	pub resource: ResourceReference,
+
+	pub value: u32
+}
+
+#[cfg(feature = "fl")]
+mod enum_impl {
+	use super::*;
+
+	impl ToQuickEntity for glacier_bin1::game::fl::ZEditorEnumValue {
+		type QuickEntity = EnumValue;
+		type Error = anyhow::Error;
+
+		type Factory = game_types::fl::Factory;
+		type Blueprint = game_types::fl::Blueprint;
+
+		#[try_fn]
+		fn to_qn(
+			&self,
+			_: &Self::Factory,
+			factory_meta: &ResourceMetadata,
+			_: &Self::Blueprint,
+			_: &ResourceMetadata,
+			_: bool
+		) -> Result<Self::QuickEntity, Self::Error> {
+			EnumValue {
+				resource: factory_meta
+					.references
+					.get(self.enum_type.as_u64() as usize)
+					.with_context(|| format!("No such reference with index {}", self.enum_type.as_u64()))?
+					.to_owned(),
+				value: self.value
+			}
+		}
+	}
+
+	impl FromQuickEntity<EnumValue> for glacier_bin1::game::fl::ZEditorEnumValue {
+		type Error = !;
+
+		#[try_fn]
+		fn from_qn(
+			value: &EnumValue,
+			_: &HashMap<EntityID, usize>,
+			reference_indices: &HashMap<RuntimeID, usize>,
+			_: &HashMap<RuntimeID, usize>
+		) -> Result<Self, Self::Error> {
+			Self {
+				enum_type: ZRuntimeResourceID::from_u64(
+					*reference_indices.get(&value.resource.resource).unwrap() as u64
+				),
+				value: value.value
+			}
+		}
+	}
+}
+
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -507,7 +571,13 @@ pub enum Variant {
 	Ref(#[cfg_attr(feature = "rune", rune(get, set))] Option<Ref>),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	Resource(#[cfg_attr(feature = "rune", rune(get, set))] Option<ResourceReference>),
+	Resource(
+		#[cfg_attr(feature = "rune", rune(get, set))] bool,
+		#[cfg_attr(feature = "rune", rune(get, set))] Option<ResourceReference>
+	),
+
+	#[cfg_attr(feature = "rune", rune(constructor))]
+	EnumValue(#[cfg_attr(feature = "rune", rune(get, set))] EnumValue),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Transform(#[cfg_attr(feature = "rune", rune(get, set))] Transform),
@@ -579,11 +649,18 @@ impl Variant {
 	pub fn variant_type(&self) -> EcoString {
 		match self {
 			Variant::Ref(_) => "SEntityTemplateReference".into(),
-			Variant::Resource(_) => "ZRuntimeResourceID".into(),
+			Variant::Resource(as_resourceid, _) => {
+				if *as_resourceid {
+					"ZResourceID".into()
+				} else {
+					"ZRuntimeResourceID".into()
+				}
+			}
 			Variant::Transform(_) => "SMatrix43".into(),
 			Variant::Uuid(_) => "ZGuid".into(),
 			Variant::ColorRGB(_) => "SColorRGB".into(),
 			Variant::ColorRGBA(_) => "SColorRGBA".into(),
+			Variant::EnumValue(_) => "ZEditorEnumValue".into(),
 			Variant::PairStringVariant(_, _) => "TPair<ZString,ZVariant>".into(),
 			Variant::Variant(_) => "ZVariant".into(),
 			Variant::Array(ty, _) => eco_format!("TArray<{ty}>"),
@@ -617,7 +694,9 @@ impl Variant {
 			}
 
 			(Self::Ref(a), Self::Ref(b)) => a == b,
-			(Self::Resource(a), Self::Resource(b)) => a == b,
+			(Self::Resource(as_resourceid_a, resource_a), Self::Resource(as_resourceid_b, resource_b)) => {
+				as_resourceid_a == as_resourceid_b && resource_a == resource_b
+			}
 			(Self::Uuid(a), Self::Uuid(b)) => a == b,
 			(Self::ColorRGB(a), Self::ColorRGB(b)) => {
 				(a.r * 255.0).round() == (b.r * 255.0).round()
@@ -653,6 +732,16 @@ impl Variant {
 
 mod variant_impl {
 	use super::*;
+
+	macro_rules! impl_fl_others {
+		(fl, $fl:expr, $others:expr) => {
+			$fl
+		};
+
+		($game:ident, $fl:expr, $others:expr) => {
+			$others
+		};
+	}
 
 	macro_rules! impl_game {
 		($game:ident, $game_uppercase:ident) => {
@@ -705,14 +794,29 @@ mod variant_impl {
 
 						if let Some(value) = self.as_ref::<glacier_bin1::game::$game::SEntityTemplateReference>() {
 							Variant::Ref(value.to_qn(factory, factory_meta, blueprint, blueprint_meta, lossless)?)
+						} else if let Some(value) = self.as_ref::<ZResourceID>() {
+							match value {
+								ZResourceID {
+									id_high: u32::MAX,
+									id_low: u32::MAX
+								} => Variant::Resource(true, None),
+
+								id => Variant::Resource(true, Some(
+									factory_meta
+										.references
+										.get(id.as_u64() as usize)
+										.with_context(|| format!("No such reference with index {}", id.as_u64()))?
+										.to_owned()
+								))
+							}
 						} else if let Some(value) = self.as_ref::<ZRuntimeResourceID>() {
 							match value {
 								ZRuntimeResourceID {
 									id_high: u32::MAX,
 									id_low: u32::MAX
-								} => Variant::Resource(None),
+								} => Variant::Resource(false, None),
 
-								id => Variant::Resource(Some(
+								id => Variant::Resource(false, Some(
 									factory_meta
 										.references
 										.get(id.as_u64() as usize)
@@ -784,19 +888,29 @@ mod variant_impl {
 							external_scene_indices
 						)?),
 
-						Variant::Resource(value) => Self::new(match value {
+						Variant::Resource(as_resourceid, value) => match value {
 							Some(value) => {
 								let &idx = reference_indices.get(&value.resource).unwrap();
 
-								ZRuntimeResourceID::from_u64(idx as u64)
+								if *as_resourceid {
+									Self::new(ZResourceID::from_u64(idx as u64))
+								} else {
+									Self::new(ZRuntimeResourceID::from_u64(idx as u64))
+								}
 							}
 
-							None => ZRuntimeResourceID {
-								id_high: u32::MAX,
-								id_low: u32::MAX
+							None => if *as_resourceid {
+								Self::new(ZResourceID {
+									id_high: u32::MAX,
+									id_low: u32::MAX
+								})
+							} else {
+								Self::new(ZRuntimeResourceID {
+									id_high: u32::MAX,
+									id_low: u32::MAX
+								})
 							}
-
-						}),
+						},
 
 						Variant::Transform(value) => Self::new(glacier_bin1::game::$game::SMatrix43::from_qn(
 							value,
@@ -835,6 +949,17 @@ mod variant_impl {
 							reference_indices,
 							external_scene_indices
 						)?),
+
+						Variant::EnumValue(value) => impl_fl_others!(
+							$game,
+							Self::new(glacier_bin1::game::fl::ZEditorEnumValue::from_qn(
+								value,
+								entity_indices,
+								reference_indices,
+								external_scene_indices
+							)?),
+							anyhow::bail!("ZEditorEnumValue is not a valid variant type for this game")
+						),
 
 						Variant::PairStringVariant(first, second) => Self::new((
 							first.to_owned(),
@@ -909,11 +1034,12 @@ impl Serialize for Variant {
 
 		match self {
 			Self::Ref(value) => state.serialize_field("value", value)?,
-			Self::Resource(value) => state.serialize_field("value", value)?,
+			Self::Resource(_, value) => state.serialize_field("value", value)?,
 			Self::Transform(value) => state.serialize_field("value", value)?,
 			Self::Uuid(value) => state.serialize_field("value", value)?,
 			Self::ColorRGB(value) => state.serialize_field("value", value)?,
 			Self::ColorRGBA(value) => state.serialize_field("value", value)?,
+			Self::EnumValue(value) => state.serialize_field("value", value)?,
 			Self::PairStringVariant(first, second) => state.serialize_field("value", &(first, second))?,
 			Self::Variant(value) => state.serialize_field("value", value)?,
 			Self::Array(_, items) => state.serialize_field(
@@ -922,11 +1048,12 @@ impl Serialize for Variant {
 					.iter()
 					.map(|item| match item {
 						Self::Ref(value) => to_value(value),
-						Self::Resource(value) => to_value(value),
+						Self::Resource(_, value) => to_value(value),
 						Self::Transform(value) => to_value(value),
 						Self::Uuid(value) => to_value(value),
 						Self::ColorRGB(value) => to_value(value),
 						Self::ColorRGBA(value) => to_value(value),
+						Self::EnumValue(value) => to_value(value),
 						Self::PairStringVariant(first, second) => to_value((first, second)),
 						Self::Variant(value) => to_value(value),
 						Self::Array(_, items) => to_value(items),
@@ -953,7 +1080,10 @@ impl<'de> Deserialize<'de> for Variant {
 		{
 			let res = match ty {
 				"SEntityTemplateReference" => Variant::Ref(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"ZRuntimeResourceID" => Variant::Resource(serde_json::from_value(val).map_err(D::Error::custom)?),
+				"ZResourceID" => Variant::Resource(true, serde_json::from_value(val).map_err(D::Error::custom)?),
+				"ZRuntimeResourceID" => {
+					Variant::Resource(false, serde_json::from_value(val).map_err(D::Error::custom)?)
+				}
 				"SMatrix43" => Variant::Transform(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"ZGuid" => Variant::Uuid(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"SColorRGB" => Variant::ColorRGB(serde_json::from_value(val).map_err(D::Error::custom)?),

@@ -11,7 +11,7 @@ use auto_context::auto_context;
 use ecow::{EcoString, string::ToEcoString};
 use entity::{Entity, EntityID, PropertyOverride};
 use fn_error_context::context;
-use glacier_bin1::types::{property::PropertyID, resource::ZResourceID};
+use glacier_bin1::types::{property::PropertyID, resource::ZRuntimeResourceID};
 use glacier_commons::{
 	game::GamePlatform,
 	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
@@ -1964,7 +1964,7 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 						.properties
 						.iter()
 						.filter_map(|(_, prop)| {
-							if let Variant::Resource(res) = &prop.value {
+							if let Variant::Resource(_, res) = &prop.value {
 								res.to_owned()
 							} else {
 								None
@@ -1975,10 +1975,12 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 						.properties
 						.iter()
 						.flat_map(|(_, prop)| match &prop.value {
-							Variant::Array(ty, items) if ty == "ZRuntimeResourceID" => items
+							Variant::Array(ty, items) if ty == "ZResourceID" || ty == "ZRuntimeResourceID" => items
 								.iter()
 								.filter_map(|item| {
-									let Variant::Resource(res) = item else { unreachable!() };
+									let Variant::Resource(_, res) = item else {
+										unreachable!()
+									};
 									res.to_owned()
 								})
 								.collect_vec(),
@@ -1994,7 +1996,7 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 								props
 									.iter()
 									.filter_map(|(_, prop)| {
-										if let Variant::Resource(res) = &prop.value {
+										if let Variant::Resource(_, res) = &prop.value {
 											res.to_owned()
 										} else {
 											None
@@ -2004,13 +2006,19 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 								props
 									.iter()
 									.flat_map(|(_, prop)| match &prop.value {
-										Variant::Array(ty, items) if ty == "ZRuntimeResourceID" => items
-											.iter()
-											.filter_map(|item| {
-												let Variant::Resource(res) = item else { unreachable!() };
-												res.to_owned()
-											})
-											.collect_vec(),
+										Variant::Array(ty, items)
+											if ty == "ZResourceID" || ty == "ZRuntimeResourceID" =>
+										{
+											items
+												.iter()
+												.filter_map(|item| {
+													let Variant::Resource(_, res) = item else {
+														unreachable!()
+													};
+													res.to_owned()
+												})
+												.collect_vec()
+										}
 
 										_ => vec![]
 									})
@@ -2030,7 +2038,7 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 			.into_iter()
 			.flatten()
 			.collect(),
-		// then property override ZRuntimeResourceIDs
+		// then property override resources
 		entity
 			.property_overrides
 			.par_iter()
@@ -2039,7 +2047,7 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 					properties
 						.iter()
 						.filter_map(|(_, prop)| {
-							if let Variant::Resource(res) = prop {
+							if let Variant::Resource(_, res) = prop {
 								res.to_owned()
 							} else {
 								None
@@ -2049,10 +2057,12 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 					properties
 						.iter()
 						.flat_map(|(_, prop)| match prop {
-							Variant::Array(ty, items) if ty == "ZRuntimeResourceID" => items
+							Variant::Array(ty, items) if ty == "ZResourceID" || ty == "ZRuntimeResourceID" => items
 								.iter()
 								.filter_map(|item| {
-									let Variant::Resource(res) = item else { unreachable!() };
+									let Variant::Resource(_, res) = item else {
+										unreachable!()
+									};
 									res.to_owned()
 								})
 								.collect_vec(),
@@ -2544,7 +2554,7 @@ macro_rules! impl_game {
 					external_scenes: impl_fl_others!(
 						$game,
 						factory
-							.external_scene_runtime_resource_i_ds
+							.external_scene_runtime_resource_ids
 							.iter()
 							.map(|scene| scene.as_u64().try_into().context("Invalid external scene ID"))
 							.collect::<Result<_>>()?,
@@ -3028,10 +3038,10 @@ macro_rules! impl_game {
 						$sub_entities: Vec::with_capacity(entity.entities.len()),
 						property_overrides: vec![],
 						external_scene_type_indices_in_resource_header: vec![],
-						external_scene_runtime_resource_i_ds: entity
+						external_scene_runtime_resource_ids: entity
 							.external_scenes
 							.iter()
-							.map(|scene| ZResourceID::from_u64(
+							.map(|scene| ZRuntimeResourceID::from_u64(
 								scene.as_u64() | ((GamePlatform::PC.tag().unwrap() as u64) << 56)
 							))
 							.collect(),
@@ -3260,10 +3270,10 @@ macro_rules! impl_game {
 								external_scene_type_indices_in_resource_header: vec![],
 								pin_connection_overrides,
 								pin_connection_override_deletes,
-								external_scene_runtime_resource_i_ds: entity
+								external_scene_runtime_resource_ids: entity
 									.external_scenes
 									.iter()
-									.map(|scene| ZResourceID::from_u64(
+									.map(|scene| ZRuntimeResourceID::from_u64(
 										scene.as_u64() | ((GamePlatform::PC.tag().unwrap() as u64) << 56)
 									))
 									.collect(),
