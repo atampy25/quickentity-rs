@@ -1,4 +1,4 @@
-use glacier_commons::metadata::{RuntimeID, ResourceMetadata};
+use glacier_commons::metadata::{ResourceMetadata, RuntimeID};
 
 use crate::{HashMap, entity::EntityID};
 

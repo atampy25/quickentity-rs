@@ -792,6 +792,20 @@ mod variant_impl {
 							));
 						}
 
+						impl_fl_others!(
+							$game,
+							if let Some(value) = self.as_ref::<glacier_bin1::game::$game::ZEditorEnumValue>() {
+								return Ok(Variant::EnumValue(value.to_qn(
+									factory,
+									factory_meta,
+									blueprint,
+									blueprint_meta,
+									lossless
+								)?));
+							},
+							{}
+						);
+
 						if let Some(value) = self.as_ref::<glacier_bin1::game::$game::SEntityTemplateReference>() {
 							Variant::Ref(value.to_qn(factory, factory_meta, blueprint, blueprint_meta, lossless)?)
 						} else if let Some(value) = self.as_ref::<ZResourceID>() {
@@ -1088,6 +1102,7 @@ impl<'de> Deserialize<'de> for Variant {
 				"ZGuid" => Variant::Uuid(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"SColorRGB" => Variant::ColorRGB(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"SColorRGBA" => Variant::ColorRGBA(serde_json::from_value(val).map_err(D::Error::custom)?),
+				"ZEditorEnumValue" => Variant::EnumValue(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"TPair<ZString,ZVariant>" => {
 					let (first, second): (EcoString, Value) = serde_json::from_value(val).map_err(D::Error::custom)?;
 
