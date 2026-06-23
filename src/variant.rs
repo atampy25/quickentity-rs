@@ -718,6 +718,7 @@ impl Variant {
 					&& (a.b * 255.0).round() == (b.b * 255.0).round()
 					&& (a.a * 255.0).round() == (b.a * 255.0).round()
 			}
+			(Self::EnumValue(a), Self::EnumValue(b)) => a == b,
 			(Self::PairStringVariant(a1, a2), Self::PairStringVariant(b1, b2)) => a1 == b1 && a2.rough_eq(b2),
 			(Self::Variant(a), Self::Variant(b)) => a.rough_eq(b),
 			(Self::Array(_, a_items), Self::Array(_, b_items)) => {
