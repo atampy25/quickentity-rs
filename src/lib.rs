@@ -1954,7 +1954,7 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 			.par_iter()
 			.map(|(_, sub_entity)| sub_entity.factory.to_owned())
 			.collect(),
-		// then sub-entity ZRuntimeResourceIDs
+		// then sub-entity resources
 		entity
 			.entities
 			.par_iter()
@@ -1966,6 +1966,8 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 						.filter_map(|(_, prop)| {
 							if let Variant::Resource(_, res) = &prop.value {
 								res.to_owned()
+							} else if let Variant::EnumValue(val) = &prop.value {
+								val.resource.to_owned()
 							} else {
 								None
 							}
@@ -1975,15 +1977,22 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 						.properties
 						.iter()
 						.flat_map(|(_, prop)| match &prop.value {
-							Variant::Array(ty, items) if ty == "ZResourceID" || ty == "ZRuntimeResourceID" => items
-								.iter()
-								.filter_map(|item| {
-									let Variant::Resource(_, res) = item else {
-										unreachable!()
-									};
-									res.to_owned()
-								})
-								.collect_vec(),
+							Variant::Array(ty, items)
+								if ty == "ZResourceID" || ty == "ZRuntimeResourceID" || ty == "ZEditorEnumValue" =>
+							{
+								items
+									.iter()
+									.filter_map(|item| {
+										if let Variant::Resource(_, res) = item {
+											res.to_owned()
+										} else if let Variant::EnumValue(val) = item {
+											val.resource.to_owned()
+										} else {
+											None
+										}
+									})
+									.collect_vec()
+							}
 
 							_ => vec![]
 						})
@@ -1998,6 +2007,8 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 									.filter_map(|(_, prop)| {
 										if let Variant::Resource(_, res) = &prop.value {
 											res.to_owned()
+										} else if let Variant::EnumValue(val) = &prop.value {
+											val.resource.to_owned()
 										} else {
 											None
 										}
@@ -2007,15 +2018,19 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 									.iter()
 									.flat_map(|(_, prop)| match &prop.value {
 										Variant::Array(ty, items)
-											if ty == "ZResourceID" || ty == "ZRuntimeResourceID" =>
+											if ty == "ZResourceID"
+												|| ty == "ZRuntimeResourceID" || ty == "ZEditorEnumValue" =>
 										{
 											items
 												.iter()
 												.filter_map(|item| {
-													let Variant::Resource(_, res) = item else {
-														unreachable!()
-													};
-													res.to_owned()
+													if let Variant::Resource(_, res) = item {
+														res.to_owned()
+													} else if let Variant::EnumValue(val) = item {
+														val.resource.to_owned()
+													} else {
+														None
+													}
 												})
 												.collect_vec()
 										}
@@ -2049,6 +2064,8 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 						.filter_map(|(_, prop)| {
 							if let Variant::Resource(_, res) = prop {
 								res.to_owned()
+							} else if let Variant::EnumValue(val) = prop {
+								val.resource.to_owned()
 							} else {
 								None
 							}
@@ -2057,15 +2074,22 @@ fn get_factory_references(entity: &Entity, with_external_scenes: bool) -> Result
 					properties
 						.iter()
 						.flat_map(|(_, prop)| match prop {
-							Variant::Array(ty, items) if ty == "ZResourceID" || ty == "ZRuntimeResourceID" => items
-								.iter()
-								.filter_map(|item| {
-									let Variant::Resource(_, res) = item else {
-										unreachable!()
-									};
-									res.to_owned()
-								})
-								.collect_vec(),
+							Variant::Array(ty, items)
+								if ty == "ZResourceID" || ty == "ZRuntimeResourceID" || ty == "ZEditorEnumValue" =>
+							{
+								items
+									.iter()
+									.filter_map(|item| {
+										if let Variant::Resource(_, res) = item {
+											res.to_owned()
+										} else if let Variant::EnumValue(val) = item {
+											val.resource.to_owned()
+										} else {
+											None
+										}
+									})
+									.collect_vec()
+							}
 
 							_ => vec![]
 						})

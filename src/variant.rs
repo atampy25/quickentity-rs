@@ -505,7 +505,7 @@ mod color_impl {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EnumValue {
 	#[serde(rename = "enum")]
-	pub resource: ResourceReference,
+	pub resource: Option<ResourceReference>,
 
 	pub value: u32
 }
@@ -531,11 +531,15 @@ mod enum_impl {
 			_: bool
 		) -> Result<Self::QuickEntity, Self::Error> {
 			EnumValue {
-				resource: factory_meta
-					.references
-					.get(self.enum_type.as_u64() as usize)
-					.with_context(|| format!("No such reference with index {}", self.enum_type.as_u64()))?
-					.to_owned(),
+				resource: (self.enum_type.as_u64() != u64::MAX)
+					.then(|| {
+						factory_meta
+							.references
+							.get(self.enum_type.as_u64() as usize)
+							.with_context(|| format!("No such reference with index {}", self.enum_type.as_u64()))
+							.map(|x| x.to_owned())
+					})
+					.transpose()?,
 				value: self.value
 			}
 		}
@@ -552,9 +556,14 @@ mod enum_impl {
 			_: &HashMap<RuntimeID, usize>
 		) -> Result<Self, Self::Error> {
 			Self {
-				enum_type: ZRuntimeResourceID::from_u64(
-					*reference_indices.get(&value.resource.resource).unwrap() as u64
-				),
+				enum_type: value
+					.resource
+					.as_ref()
+					.map(|x| ZRuntimeResourceID::from_u64(*reference_indices.get(&x.resource).unwrap() as u64))
+					.unwrap_or(ZRuntimeResourceID {
+						id_high: u32::MAX,
+						id_low: u32::MAX
+					}),
 				value: value.value
 			}
 		}
