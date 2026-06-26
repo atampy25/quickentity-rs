@@ -1,9 +1,9 @@
 use std::{fs, hint::black_box};
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use hitman_commons::game::GameVersion;
 use serde_json::from_slice;
 
+#[cfg(feature = "h3")]
 fn criterion_benchmark(c: &mut Criterion) {
 	let mut group = c.benchmark_group("corpus");
 
@@ -38,7 +38,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 			.unwrap()
 			.path();
 
-		let fac = from_slice(&fs::read(temp_path).unwrap()).unwrap();
+		let fac: glacier_bin1::game::h3::STemplateEntityFactory = from_slice(&fs::read(temp_path).unwrap()).unwrap();
 		let fac_meta = from_slice(&fs::read(temp_meta_path).unwrap()).unwrap();
 		let blu = from_slice(&fs::read(tblu_path).unwrap()).unwrap();
 		let blu_meta = from_slice(&fs::read(tblu_meta_path).unwrap()).unwrap();
@@ -65,12 +65,18 @@ fn criterion_benchmark(c: &mut Criterion) {
 		.unwrap();
 
 		group.bench_function(format!("{} -- generate", item.file_name().to_string_lossy()), |b| {
-			b.iter(|| black_box(&converted).to_game(black_box(GameVersion::H3)))
+			b.iter(|| black_box(&converted).to_game::<(glacier_bin1::game::h3::STemplateEntityFactory, _, _, _)>())
 		});
 	}
 
 	group.finish();
 }
 
-criterion_group!(benches, criterion_benchmark);
-criterion_main!(benches);
+cfg_select! {
+	feature = "h3" => {
+		criterion_group!(benches, criterion_benchmark);
+		criterion_main!(benches);
+	}
+
+	_ => { fn main() {} }
+}

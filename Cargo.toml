@@ -21,14 +21,8 @@ ordermap = { version = "1.2.0", features = ["serde", "rayon"] }
 serde_path_to_error = "0.1.14"
 env_logger = { version = "0.11.8", optional = true }
 specta = { version = "=2.0.0-rc.24", features = ["serde_json"] }
-hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features = [
-    "serde",
-    "specta",
-] }
+glacier-commons = { git = "https://github.com/atampy25/hitman-commons", branch = "fl", features = ["serde", "specta", "macros"] }
 glacier-bin1 = { git = "https://github.com/atampy25/glacier-bin1", features = [
-    "h1",
-    "h2",
-    "h3",
     "TBLU",
     "TEMP",
 ] }
@@ -39,19 +33,25 @@ ecow = { version = "0.3.0", features = ["serde"] }
 educe = "0.6.0"
 crc32fast = "1.5.0"
 thiserror = "2.0.18"
-log = { version = "0.4.27", optional = true }
-glam = { version = "0.33.0", features = ["glam-assert"] }
-uuid = { version = "1.23.1", features = ["serde"] }
-hotpath = "0.16.1"
+log = { version = "0.4.32", optional = true }
+glam = { version = "0.33.1", features = ["glam-assert"] }
+uuid = { version = "1.23.3", features = ["serde"] }
 schemars = { version = "1.2.1", features = ["uuid1"], optional = true }
 identity-hash = "0.1.0"
 rapidhash = { version = "4.4.1", features = ["unsafe", "rand"] }
+hotpath = "0.17.0"
 
 [features]
+h1 = ["glacier-bin1/h1"]
+h2 = ["glacier-bin1/h2"]
+h3 = ["glacier-bin1/h3"]
+fl = ["glacier-bin1/fl"]
+all-games = ["h1", "h2", "h3", "fl"]
+
 cli = ["dep:log", "dep:env_logger", "dep:clap"]
 
-rune = ["dep:rune", "dep:better-rune-derive", "hitman-commons/rune"]
-schemars = ["dep:schemars", "hitman-commons/schemars"]
+rune = ["dep:rune", "dep:better-rune-derive", "glacier-commons/rune"]
+schemars = ["dep:schemars", "glacier-commons/schemars"]
 
 hotpath = ["hotpath/hotpath"]
 hotpath-alloc = ["hotpath/hotpath-alloc"]

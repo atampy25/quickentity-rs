@@ -5,26 +5,15 @@ use std::{
 
 use anyhow::{Context, Result};
 use ecow::{EcoString, eco_format};
-use fn_error_context::context;
-use glacier_bin1::{
-	game::h3::{
-		SColorRGB, SColorRGBA, SEntityTemplateReference, SMatrix43, STemplateEntityBlueprint, STemplateEntityFactory,
-		SVector3, ZGuid, ZVariant
-	},
-	types::{repository::ZRepositoryID, resource::ZRuntimeResourceID}
-};
+use glacier_bin1::types::resource::{ZResourceID, ZRuntimeResourceID};
+use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use glam::{Affine3, EulerRot, Mat3, Quat};
-use hitman_commons::{
-	game::GameVersion,
-	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
-};
-use identity_hash::BuildIdentityHasher;
 use serde::{
 	Deserialize, Serialize,
 	de::Error as _,
 	ser::{Error as _, SerializeStruct}
 };
-use serde_json::{Value, from_value, json, to_value};
+use serde_json::{Value, json, to_value};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use specta::Type;
 use tryvial::try_fn;
@@ -32,7 +21,8 @@ use uuid::Uuid;
 
 use crate::{
 	HashMap,
-	entity::{EntityID, Ref}
+	entity::{EntityID, Ref},
+	game::{FromQuickEntity, ToQuickEntity, types as game_types}
 };
 
 #[cfg(feature = "rune")]
@@ -102,47 +92,6 @@ impl Transform {
 		}
 	}
 
-	pub fn from_game(transform: &SMatrix43, lossless: bool) -> Self {
-		// Mat3 is column-major while SMatrix43 is row-major, so we have to transpose
-		let matrix = Mat3 {
-			x_axis: glam::Vec3 {
-				x: transform.x_axis.x,
-				y: transform.y_axis.x,
-				z: transform.z_axis.x
-			},
-			y_axis: glam::Vec3 {
-				x: transform.x_axis.y,
-				y: transform.y_axis.y,
-				z: transform.z_axis.y
-			},
-			z_axis: glam::Vec3 {
-				x: transform.x_axis.z,
-				y: transform.y_axis.z,
-				z: transform.z_axis.z
-			}
-		};
-
-		let transform = Affine3::from_mat3_translation(
-			if matrix.determinant() == 0.0
-				|| matrix.x_axis.length() == 0.0
-				|| matrix.y_axis.length() == 0.0
-				|| matrix.z_axis.length() == 0.0
-			{
-				// Reset invalid rotations to identity
-				Mat3::IDENTITY
-			} else {
-				matrix
-			},
-			glam::Vec3 {
-				x: transform.trans.x,
-				y: transform.trans.y,
-				z: transform.trans.z
-			}
-		);
-
-		Self::from_glam(transform, lossless)
-	}
-
 	pub fn to_glam(&self) -> Affine3 {
 		let scale = if let Some(scale) = self.scale {
 			scale.into()
@@ -152,34 +101,122 @@ impl Transform {
 
 		Affine3::from_scale_rotation_translation(scale, self.rotation.into(), self.position.into())
 	}
+}
 
-	pub fn to_game(&self) -> SMatrix43 {
-		let transform = self.to_glam();
+mod transform_impl {
+	use super::*;
 
-		// Transpose
-		SMatrix43 {
-			x_axis: SVector3 {
-				x: transform.matrix3.x_axis.x,
-				y: transform.matrix3.y_axis.x,
-				z: transform.matrix3.z_axis.x
-			},
-			y_axis: SVector3 {
-				x: transform.matrix3.x_axis.y,
-				y: transform.matrix3.y_axis.y,
-				z: transform.matrix3.z_axis.y
-			},
-			z_axis: SVector3 {
-				x: transform.matrix3.x_axis.z,
-				y: transform.matrix3.y_axis.z,
-				z: transform.matrix3.z_axis.z
-			},
-			trans: SVector3 {
-				x: transform.translation.x,
-				y: transform.translation.y,
-				z: transform.translation.z
+	macro_rules! impl_game {
+		($game:ident) => {
+			impl ToQuickEntity for glacier_bin1::game::$game::SMatrix43 {
+				type QuickEntity = Transform;
+				type Error = !;
+
+				type Factory = game_types::$game::Factory;
+				type Blueprint = game_types::$game::Blueprint;
+
+				#[try_fn]
+				fn to_qn(
+					&self,
+					_: &Self::Factory,
+					_: &ResourceMetadata,
+					_: &Self::Blueprint,
+					_: &ResourceMetadata,
+					lossless: bool
+				) -> Result<Self::QuickEntity, Self::Error> {
+					// Mat3 is column-major while SMatrix43 is row-major, so we have to transpose
+					let matrix = Mat3 {
+						x_axis: glam::Vec3 {
+							x: self.x_axis.x,
+							y: self.y_axis.x,
+							z: self.z_axis.x
+						},
+						y_axis: glam::Vec3 {
+							x: self.x_axis.y,
+							y: self.y_axis.y,
+							z: self.z_axis.y
+						},
+						z_axis: glam::Vec3 {
+							x: self.x_axis.z,
+							y: self.y_axis.z,
+							z: self.z_axis.z
+						}
+					};
+
+					Transform::from_glam(
+						Affine3::from_mat3_translation(
+							if matrix.determinant() == 0.0
+								|| matrix.x_axis.length() == 0.0
+								|| matrix.y_axis.length() == 0.0
+								|| matrix.z_axis.length() == 0.0
+							{
+								// Reset invalid rotations to identity
+								Mat3::IDENTITY
+							} else {
+								matrix
+							},
+							glam::Vec3 {
+								x: self.trans.x,
+								y: self.trans.y,
+								z: self.trans.z
+							}
+						),
+						lossless
+					)
+				}
 			}
-		}
+
+			impl FromQuickEntity<Transform> for glacier_bin1::game::$game::SMatrix43 {
+				type Error = !;
+
+				#[try_fn]
+				fn from_qn(
+					trans: &Transform,
+					_: &HashMap<EntityID, usize>,
+					_: &HashMap<RuntimeID, usize>,
+					_: &HashMap<RuntimeID, usize>
+				) -> Result<Self, Self::Error> {
+					let transform = trans.to_glam();
+
+					// Transpose
+					Self {
+						x_axis: glacier_bin1::game::$game::SVector3 {
+							x: transform.matrix3.x_axis.x,
+							y: transform.matrix3.y_axis.x,
+							z: transform.matrix3.z_axis.x
+						},
+						y_axis: glacier_bin1::game::$game::SVector3 {
+							x: transform.matrix3.x_axis.y,
+							y: transform.matrix3.y_axis.y,
+							z: transform.matrix3.z_axis.y
+						},
+						z_axis: glacier_bin1::game::$game::SVector3 {
+							x: transform.matrix3.x_axis.z,
+							y: transform.matrix3.y_axis.z,
+							z: transform.matrix3.z_axis.z
+						},
+						trans: glacier_bin1::game::$game::SVector3 {
+							x: transform.translation.x,
+							y: transform.translation.y,
+							z: transform.translation.z
+						}
+					}
+				}
+			}
+		};
 	}
+
+	#[cfg(feature = "h1")]
+	impl_game!(h1);
+
+	#[cfg(feature = "h2")]
+	impl_game!(h2);
+
+	#[cfg(feature = "h3")]
+	impl_game!(h3);
+
+	#[cfg(feature = "fl")]
+	impl_game!(fl);
 }
 
 #[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
@@ -354,6 +391,185 @@ impl FromStr for ColorRGBA {
 	}
 }
 
+mod color_impl {
+	use super::*;
+
+	macro_rules! impl_game {
+		($game:ident) => {
+			impl ToQuickEntity for glacier_bin1::game::$game::SColorRGB {
+				type QuickEntity = ColorRGB;
+				type Error = !;
+
+				type Factory = game_types::$game::Factory;
+				type Blueprint = game_types::$game::Blueprint;
+
+				#[try_fn]
+				fn to_qn(
+					&self,
+					_: &Self::Factory,
+					_: &ResourceMetadata,
+					_: &Self::Blueprint,
+					_: &ResourceMetadata,
+					_: bool
+				) -> Result<Self::QuickEntity, Self::Error> {
+					ColorRGB {
+						r: self.r,
+						g: self.g,
+						b: self.b
+					}
+				}
+			}
+
+			impl FromQuickEntity<ColorRGB> for glacier_bin1::game::$game::SColorRGB {
+				type Error = !;
+
+				#[try_fn]
+				fn from_qn(
+					color: &ColorRGB,
+					_: &HashMap<EntityID, usize>,
+					_: &HashMap<RuntimeID, usize>,
+					_: &HashMap<RuntimeID, usize>
+				) -> Result<Self, Self::Error> {
+					Self {
+						r: color.r,
+						g: color.g,
+						b: color.b
+					}
+				}
+			}
+
+			impl ToQuickEntity for glacier_bin1::game::$game::SColorRGBA {
+				type QuickEntity = ColorRGBA;
+				type Error = !;
+
+				type Factory = game_types::$game::Factory;
+				type Blueprint = game_types::$game::Blueprint;
+
+				#[try_fn]
+				fn to_qn(
+					&self,
+					_: &Self::Factory,
+					_: &ResourceMetadata,
+					_: &Self::Blueprint,
+					_: &ResourceMetadata,
+					_: bool
+				) -> Result<Self::QuickEntity, Self::Error> {
+					ColorRGBA {
+						r: self.r,
+						g: self.g,
+						b: self.b,
+						a: self.a
+					}
+				}
+			}
+
+			impl FromQuickEntity<ColorRGBA> for glacier_bin1::game::$game::SColorRGBA {
+				type Error = !;
+
+				#[try_fn]
+				fn from_qn(
+					color: &ColorRGBA,
+					_: &HashMap<EntityID, usize>,
+					_: &HashMap<RuntimeID, usize>,
+					_: &HashMap<RuntimeID, usize>
+				) -> Result<Self, Self::Error> {
+					Self {
+						r: color.r,
+						g: color.g,
+						b: color.b,
+						a: color.a
+					}
+				}
+			}
+		};
+	}
+
+	#[cfg(feature = "h1")]
+	impl_game!(h1);
+
+	#[cfg(feature = "h2")]
+	impl_game!(h2);
+
+	#[cfg(feature = "h3")]
+	impl_game!(h3);
+
+	#[cfg(feature = "fl")]
+	impl_game!(fl);
+}
+
+#[cfg_attr(feature = "rune", serde_with::apply(_ => #[rune(get, set)]))]
+#[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
+#[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
+#[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct EnumValue {
+	#[serde(rename = "enum")]
+	pub resource: Option<ResourceReference>,
+
+	pub value: u32
+}
+
+#[cfg(feature = "fl")]
+mod enum_impl {
+	use super::*;
+
+	impl ToQuickEntity for glacier_bin1::game::fl::ZEditorEnumValue {
+		type QuickEntity = EnumValue;
+		type Error = anyhow::Error;
+
+		type Factory = game_types::fl::Factory;
+		type Blueprint = game_types::fl::Blueprint;
+
+		#[try_fn]
+		fn to_qn(
+			&self,
+			_: &Self::Factory,
+			factory_meta: &ResourceMetadata,
+			_: &Self::Blueprint,
+			_: &ResourceMetadata,
+			_: bool
+		) -> Result<Self::QuickEntity, Self::Error> {
+			EnumValue {
+				resource: (self.enum_type.as_u64() != u64::MAX)
+					.then(|| {
+						factory_meta
+							.references
+							.get(self.enum_type.as_u64() as usize)
+							.with_context(|| format!("No such reference with index {}", self.enum_type.as_u64()))
+							.map(|x| x.to_owned())
+					})
+					.transpose()?,
+				value: self.value
+			}
+		}
+	}
+
+	impl FromQuickEntity<EnumValue> for glacier_bin1::game::fl::ZEditorEnumValue {
+		type Error = !;
+
+		#[try_fn]
+		fn from_qn(
+			value: &EnumValue,
+			_: &HashMap<EntityID, usize>,
+			reference_indices: &HashMap<RuntimeID, usize>,
+			_: &HashMap<RuntimeID, usize>
+		) -> Result<Self, Self::Error> {
+			Self {
+				enum_type: value
+					.resource
+					.as_ref()
+					.map(|x| ZRuntimeResourceID::from_u64(*reference_indices.get(&x.resource).unwrap() as u64))
+					.unwrap_or(ZRuntimeResourceID {
+						id_high: u32::MAX,
+						id_low: u32::MAX
+					}),
+				value: value.value
+			}
+		}
+	}
+}
+
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::variant))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -364,15 +580,18 @@ pub enum Variant {
 	Ref(#[cfg_attr(feature = "rune", rune(get, set))] Option<Ref>),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	Resource(#[cfg_attr(feature = "rune", rune(get, set))] Option<ResourceReference>),
+	Resource(
+		#[cfg_attr(feature = "rune", rune(get, set))] bool,
+		#[cfg_attr(feature = "rune", rune(get, set))] Option<ResourceReference>
+	),
+
+	#[cfg_attr(feature = "rune", rune(constructor))]
+	EnumValue(#[cfg_attr(feature = "rune", rune(get, set))] EnumValue),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	Transform(#[cfg_attr(feature = "rune", rune(get, set))] Transform),
 
 	Uuid(Uuid),
-
-	// Rune doesn't need to know about this
-	RepositoryId(glacier_bin1::types::repository::ZRepositoryID),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
 	ColorRGB(#[cfg_attr(feature = "rune", rune(get, set))] ColorRGB),
@@ -420,17 +639,17 @@ impl schemars::JsonSchema for Variant {
 impl Variant {
 	#[rune::function(instance, path = Self::get)]
 	fn r_get(&self) -> rune::Value {
-		from_value(to_value(self).unwrap()).unwrap()
+		serde_json::from_value(to_value(self).unwrap()).unwrap()
 	}
 
 	#[rune::function(instance, path = Self::set)]
 	fn r_set(&mut self, value: rune::Value) {
-		*self = from_value(to_value(value).unwrap()).unwrap();
+		*self = serde_json::from_value(to_value(value).unwrap()).unwrap();
 	}
 
 	#[rune::function(path = Self::from)]
 	fn r_from(value: rune::Value) -> Self {
-		from_value(to_value(value).unwrap()).unwrap()
+		serde_json::from_value(to_value(value).unwrap()).unwrap()
 	}
 }
 
@@ -439,12 +658,18 @@ impl Variant {
 	pub fn variant_type(&self) -> EcoString {
 		match self {
 			Variant::Ref(_) => "SEntityTemplateReference".into(),
-			Variant::Resource(_) => "ZRuntimeResourceID".into(),
+			Variant::Resource(as_resourceid, _) => {
+				if *as_resourceid {
+					"ZResourceID".into()
+				} else {
+					"ZRuntimeResourceID".into()
+				}
+			}
 			Variant::Transform(_) => "SMatrix43".into(),
 			Variant::Uuid(_) => "ZGuid".into(),
-			Variant::RepositoryId(_) => "ZRepositoryID".into(),
 			Variant::ColorRGB(_) => "SColorRGB".into(),
 			Variant::ColorRGBA(_) => "SColorRGBA".into(),
+			Variant::EnumValue(_) => "ZEditorEnumValue".into(),
 			Variant::PairStringVariant(_, _) => "TPair<ZString,ZVariant>".into(),
 			Variant::Variant(_) => "ZVariant".into(),
 			Variant::Array(ty, _) => eco_format!("TArray<{ty}>"),
@@ -452,208 +677,9 @@ impl Variant {
 		}
 	}
 
-	/// Creates a Variant from a raw ZVariant without doing ANY conversion.
-	/// You must only use this for types that are usually represented as raw values (e.g. primitives). Types with QN handling will not be converted and will just be wrapped as raw, producing an invalid value.
-	pub fn from_raw(value: &ZVariant) -> Self {
-		Self::Raw(RawVariant::H3(value.to_owned()))
-	}
-
-	#[try_fn]
-	#[context("Failure converting game variant value to QN")]
-	pub fn from_game(
-		value: &ZVariant,
-		factory: &STemplateEntityFactory,
-		factory_meta: &ResourceMetadata,
-		blueprint: &STemplateEntityBlueprint,
-		convert_lossless: bool
-	) -> Result<Self> {
-		if let Some(items) = value.as_vec() {
-			Self::Array(
-				value
-					.variant_type()
-					.strip_prefix("TArray<")
-					.unwrap()
-					.strip_suffix(">")
-					.unwrap()
-					.into(),
-				items
-					.into_iter()
-					.map(|item| {
-						Self::from_game(
-							&from_value(json!({ "$type": item.variant_type(), "$val": item.to_serde()? }))?,
-							factory,
-							factory_meta,
-							blueprint,
-							convert_lossless
-						)
-					})
-					.collect::<Result<Vec<_>>>()?
-			)
-		} else if let Some((first, second)) = value.as_ref::<(EcoString, ZVariant)>() {
-			Self::PairStringVariant(
-				first.into(),
-				Self::from_game(second, factory, factory_meta, blueprint, convert_lossless)?.into()
-			)
-		} else if let Some(value) = value.as_ref::<SEntityTemplateReference>() {
-			Self::Ref(Ref::from_game(value, factory, blueprint, factory_meta)?)
-		} else if let Some(value) = value.as_ref::<ZRuntimeResourceID>() {
-			match value {
-				ZRuntimeResourceID {
-					id_high: u32::MAX,
-					id_low: u32::MAX
-				} => Self::Resource(None),
-
-				id => Self::Resource(Some(
-					factory_meta
-						.references
-						.get(id.as_u64() as usize)
-						.context("ZRuntimeResourceID referred to non-existent dependency")?
-						.to_owned()
-				))
-			}
-		} else if let Some(value) = value.as_ref::<SMatrix43>() {
-			Self::Transform(Transform::from_game(value, convert_lossless))
-		} else if let Some(value) = value.as_ref::<ZGuid>() {
-			Self::Uuid(Uuid::from_fields(
-				value._a,
-				value._b,
-				value._c,
-				&[
-					value._d, value._e, value._f, value._g, value._h, value._i, value._j, value._k
-				]
-			))
-		} else if let Some(value) = value.as_ref::<SColorRGB>() {
-			Self::ColorRGB(ColorRGB {
-				r: value.r,
-				g: value.g,
-				b: value.b
-			})
-		} else if let Some(value) = value.as_ref::<SColorRGBA>() {
-			Self::ColorRGBA(ColorRGBA {
-				r: value.r,
-				g: value.g,
-				b: value.b,
-				a: value.a
-			})
-		} else if let Some(value) = value.as_ref::<ZRepositoryID>() {
-			Self::RepositoryId(value.to_owned())
-		} else if let Some(value) = value.as_ref::<ZVariant>() {
-			Self::Variant(Self::from_game(value, factory, factory_meta, blueprint, convert_lossless)?.into())
-		} else {
-			Self::Raw(RawVariant::H3(value.to_owned()))
-		}
-	}
-
-	#[try_fn]
-	#[context("Failure converting QN variant value to game")]
-	pub fn to_game(
-		&self,
-		version: GameVersion,
-		factory: &STemplateEntityFactory,
-		factory_meta: &ResourceMetadata,
-		entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>,
-		factory_dependencies_index_mapping: &HashMap<RuntimeID, usize, BuildIdentityHasher<u64>>
-	) -> Result<ZVariant> {
-		match self {
-			Self::Ref(value) => ZVariant::new(Ref::to_game_opt(
-				value.as_ref(),
-				factory,
-				factory_meta,
-				entity_id_to_index_mapping
-			)?),
-
-			Self::Resource(value) => match value {
-				Some(value) => {
-					let &idx = factory_dependencies_index_mapping
-						.get(&value.resource)
-						.context("Factory dependency is missing for resource reference")?;
-
-					ZVariant::new(ZRuntimeResourceID::from_u64(idx as u64))
-				}
-
-				None => ZVariant::new(ZRuntimeResourceID {
-					id_high: u32::MAX,
-					id_low: u32::MAX
-				})
-			},
-
-			Self::Transform(value) => ZVariant::new(value.to_game()),
-
-			Self::Uuid(value) => {
-				let (a, b, c, d) = value.as_fields();
-				ZVariant::new(ZGuid {
-					_a: a,
-					_b: b,
-					_c: c,
-					_d: d[0],
-					_e: d[1],
-					_f: d[2],
-					_g: d[3],
-					_h: d[4],
-					_i: d[5],
-					_j: d[6],
-					_k: d[7]
-				})
-			}
-
-			Self::RepositoryId(value) => ZVariant::new(value.to_owned()),
-
-			Self::ColorRGB(value) => ZVariant::new(SColorRGB {
-				r: value.r,
-				g: value.g,
-				b: value.b
-			}),
-
-			Self::ColorRGBA(value) => ZVariant::new(SColorRGBA {
-				r: value.r,
-				g: value.g,
-				b: value.b,
-				a: value.a
-			}),
-
-			Self::PairStringVariant(first, second) => ZVariant::new((
-				first.to_owned(),
-				second.to_game(
-					version,
-					factory,
-					factory_meta,
-					entity_id_to_index_mapping,
-					factory_dependencies_index_mapping
-				)?
-			)),
-
-			Self::Variant(value) => ZVariant::new(value.to_game(
-				version,
-				factory,
-				factory_meta,
-				entity_id_to_index_mapping,
-				factory_dependencies_index_mapping
-			)?),
-
-			Self::Array(ty, items) => {
-				let val = json!({
-					"$type": format!("TArray<{ty}>"),
-					"$val": items
-						.iter()
-						.map(|item| {
-							item.to_game(version,
-								factory,
-								factory_meta,
-								entity_id_to_index_mapping,
-								factory_dependencies_index_mapping
-							)
-						})
-						.collect::<Result<Vec<_>>>()?
-						.into_iter()
-						.map(|x| x.to_serde())
-						.collect::<Result<Vec<_>, _>>()?
-				});
-
-				RawVariant::from_value(val)?.to_h3_wrapped(version)?
-			}
-
-			Self::Raw(value) => value.to_h3_wrapped(version)?
-		}
+	/// Directly wrap a raw ZVariant without applying QN conversion.
+	pub fn from_raw(raw: impl Into<RawVariant>) -> Self {
+		Self::Raw(raw.into())
 	}
 
 	pub fn rough_eq(&self, other: &Self) -> bool {
@@ -677,9 +703,10 @@ impl Variant {
 			}
 
 			(Self::Ref(a), Self::Ref(b)) => a == b,
-			(Self::Resource(a), Self::Resource(b)) => a == b,
+			(Self::Resource(as_resourceid_a, resource_a), Self::Resource(as_resourceid_b, resource_b)) => {
+				as_resourceid_a == as_resourceid_b && resource_a == resource_b
+			}
 			(Self::Uuid(a), Self::Uuid(b)) => a == b,
-			(Self::RepositoryId(a), Self::RepositoryId(b)) => a == b,
 			(Self::ColorRGB(a), Self::ColorRGB(b)) => {
 				(a.r * 255.0).round() == (b.r * 255.0).round()
 					&& (a.g * 255.0).round() == (b.g * 255.0).round()
@@ -691,6 +718,7 @@ impl Variant {
 					&& (a.b * 255.0).round() == (b.b * 255.0).round()
 					&& (a.a * 255.0).round() == (b.a * 255.0).round()
 			}
+			(Self::EnumValue(a), Self::EnumValue(b)) => a == b,
 			(Self::PairStringVariant(a1, a2), Self::PairStringVariant(b1, b2)) => a1 == b1 && a2.rough_eq(b2),
 			(Self::Variant(a), Self::Variant(b)) => a.rough_eq(b),
 			(Self::Array(_, a_items), Self::Array(_, b_items)) => {
@@ -712,6 +740,314 @@ impl Variant {
 	}
 }
 
+mod variant_impl {
+	use super::*;
+
+	macro_rules! impl_fl_others {
+		(fl, $fl:expr, $others:expr) => {
+			$fl
+		};
+
+		($game:ident, $fl:expr, $others:expr) => {
+			$others
+		};
+	}
+
+	macro_rules! impl_game {
+		($game:ident, $game_uppercase:ident) => {
+			impl ToQuickEntity for glacier_bin1::game::$game::ZVariant {
+				type QuickEntity = Variant;
+				type Error = anyhow::Error;
+
+				type Factory = game_types::$game::Factory;
+				type Blueprint = game_types::$game::Blueprint;
+
+				#[try_fn]
+				fn to_qn(
+					&self,
+					factory: &Self::Factory,
+					factory_meta: &ResourceMetadata,
+					blueprint: &Self::Blueprint,
+					blueprint_meta: &ResourceMetadata,
+					lossless: bool
+				) -> Result<Self::QuickEntity, Self::Error> {
+					if let Some(items) = self.as_vec() {
+						Variant::Array(
+							self.variant_type()
+								.strip_prefix("TArray<")
+								.unwrap()
+								.strip_suffix(">")
+								.unwrap()
+								.into(),
+							items
+								.into_iter()
+								.map(|item| {
+									Self::from(item.clone_underlying()).to_qn(
+										factory,
+										factory_meta,
+										blueprint,
+										blueprint_meta,
+										lossless
+									)
+								})
+								.collect::<Result<Vec<_>>>()?
+						)
+					} else {
+						if let Some((first, second)) = self.as_ref::<(EcoString, Self)>() {
+							return Ok(Variant::PairStringVariant(
+								first.into(),
+								second
+									.to_qn(factory, factory_meta, blueprint, blueprint_meta, lossless)?
+									.into()
+							));
+						}
+
+						impl_fl_others!(
+							$game,
+							if let Some(value) = self.as_ref::<glacier_bin1::game::$game::ZEditorEnumValue>() {
+								return Ok(Variant::EnumValue(value.to_qn(
+									factory,
+									factory_meta,
+									blueprint,
+									blueprint_meta,
+									lossless
+								)?));
+							},
+							{}
+						);
+
+						if let Some(value) = self.as_ref::<glacier_bin1::game::$game::SEntityTemplateReference>() {
+							Variant::Ref(value.to_qn(factory, factory_meta, blueprint, blueprint_meta, lossless)?)
+						} else if let Some(value) = self.as_ref::<ZResourceID>() {
+							match value {
+								ZResourceID {
+									id_high: u32::MAX,
+									id_low: u32::MAX
+								} => Variant::Resource(true, None),
+
+								id => Variant::Resource(true, Some(
+									factory_meta
+										.references
+										.get(id.as_u64() as usize)
+										.with_context(|| format!("No such reference with index {}", id.as_u64()))?
+										.to_owned()
+								))
+							}
+						} else if let Some(value) = self.as_ref::<ZRuntimeResourceID>() {
+							match value {
+								ZRuntimeResourceID {
+									id_high: u32::MAX,
+									id_low: u32::MAX
+								} => Variant::Resource(false, None),
+
+								id => Variant::Resource(false, Some(
+									factory_meta
+										.references
+										.get(id.as_u64() as usize)
+										.with_context(|| format!("No such reference with index {}", id.as_u64()))?
+										.to_owned()
+								))
+							}
+						} else if let Some(value) = self.as_ref::<glacier_bin1::game::$game::SMatrix43>() {
+							Variant::Transform(value.to_qn(
+								factory,
+								factory_meta,
+								blueprint,
+								blueprint_meta,
+								lossless
+							)?)
+						} else if let Some(value) = self.as_ref::<glacier_bin1::game::$game::ZGuid>() {
+							Variant::Uuid(Uuid::from_fields(
+								value._a,
+								value._b,
+								value._c,
+								&[
+									value._d, value._e, value._f, value._g, value._h, value._i, value._j, value._k
+								]
+							))
+						} else if let Some(value) = self.as_ref::<glacier_bin1::game::$game::SColorRGB>() {
+							Variant::ColorRGB(value.to_qn(
+								factory,
+								factory_meta,
+								blueprint,
+								blueprint_meta,
+								lossless
+							)?)
+						} else if let Some(value) = self.as_ref::<glacier_bin1::game::$game::SColorRGBA>() {
+							Variant::ColorRGBA(value.to_qn(
+								factory,
+								factory_meta,
+								blueprint,
+								blueprint_meta,
+								lossless
+							)?)
+						} else if let Some(value) = self.as_ref::<Self>() {
+							Variant::Variant(
+								value
+									.to_qn(factory, factory_meta, blueprint, blueprint_meta, lossless)?
+									.into()
+							)
+						} else {
+							Variant::Raw(RawVariant::$game_uppercase(self.clone()))
+						}
+					}
+				}
+			}
+
+			impl FromQuickEntity<Variant> for glacier_bin1::game::$game::ZVariant {
+				type Error = anyhow::Error;
+
+				#[try_fn]
+				fn from_qn(
+					variant: &Variant,
+					entity_indices: &HashMap<EntityID, usize>,
+					reference_indices: &HashMap<RuntimeID, usize>,
+					external_scene_indices: &HashMap<RuntimeID, usize>
+				) -> Result<Self, Self::Error> {
+					match variant {
+						Variant::Ref(value) => Self::new(glacier_bin1::game::$game::SEntityTemplateReference::from_qn(
+							value,
+							entity_indices,
+							reference_indices,
+							external_scene_indices
+						)?),
+
+						Variant::Resource(as_resourceid, value) => match value {
+							Some(value) => {
+								let &idx = reference_indices.get(&value.resource).unwrap();
+
+								if *as_resourceid {
+									Self::new(ZResourceID::from_u64(idx as u64))
+								} else {
+									Self::new(ZRuntimeResourceID::from_u64(idx as u64))
+								}
+							}
+
+							None => if *as_resourceid {
+								Self::new(ZResourceID {
+									id_high: u32::MAX,
+									id_low: u32::MAX
+								})
+							} else {
+								Self::new(ZRuntimeResourceID {
+									id_high: u32::MAX,
+									id_low: u32::MAX
+								})
+							}
+						},
+
+						Variant::Transform(value) => Self::new(glacier_bin1::game::$game::SMatrix43::from_qn(
+							value,
+							entity_indices,
+							reference_indices,
+							external_scene_indices
+						)?),
+
+						Variant::Uuid(value) => {
+							let (a, b, c, d) = value.as_fields();
+							Self::new(glacier_bin1::game::$game::ZGuid {
+								_a: a,
+								_b: b,
+								_c: c,
+								_d: d[0],
+								_e: d[1],
+								_f: d[2],
+								_g: d[3],
+								_h: d[4],
+								_i: d[5],
+								_j: d[6],
+								_k: d[7]
+							})
+						}
+
+						Variant::ColorRGB(value) => Self::new(glacier_bin1::game::$game::SColorRGB::from_qn(
+							value,
+							entity_indices,
+							reference_indices,
+							external_scene_indices
+						)?),
+
+						Variant::ColorRGBA(value) => Self::new(glacier_bin1::game::$game::SColorRGBA::from_qn(
+							value,
+							entity_indices,
+							reference_indices,
+							external_scene_indices
+						)?),
+
+						Variant::EnumValue(value) => impl_fl_others!(
+							$game,
+							Self::new(glacier_bin1::game::fl::ZEditorEnumValue::from_qn(
+								value,
+								entity_indices,
+								reference_indices,
+								external_scene_indices
+							)?),
+							anyhow::bail!("ZEditorEnumValue is not a valid variant type for this game")
+						),
+
+						Variant::PairStringVariant(first, second) => Self::new((
+							first.to_owned(),
+							Self::from_qn(
+								second,
+								entity_indices,
+								reference_indices,
+								external_scene_indices
+							)?
+						)),
+
+						Variant::Variant(value) => {
+							Self::new(Self::from_qn(
+								value,
+								entity_indices,
+								reference_indices,
+								external_scene_indices
+							)?)
+						}
+
+						Variant::Array(ty, items) => {
+							let val = json!({
+								"$type": format!("TArray<{ty}>"),
+								"$val": items
+									.iter()
+									.map(|item| {
+										Self::from_qn(
+											item,
+											entity_indices,reference_indices,
+											external_scene_indices
+										)
+									})
+									.collect::<Result<Vec<_>>>()?
+									.into_iter()
+									.map(|x| x.to_serde())
+									.collect::<Result<Vec<_>, _>>()?
+							});
+
+							serde_json::from_value(val)?
+						}
+
+						Variant::Raw(value) => match value {
+							RawVariant::$game_uppercase(raw) => raw.clone(),
+							_ => serde_json::from_value(serde_json::to_value(value)?)?
+						}
+					}
+				}
+			}
+		};
+	}
+
+	#[cfg(feature = "h1")]
+	impl_game!(h1, H1);
+
+	#[cfg(feature = "h2")]
+	impl_game!(h2, H2);
+
+	#[cfg(feature = "h3")]
+	impl_game!(h3, H3);
+
+	#[cfg(feature = "fl")]
+	impl_game!(fl, FL);
+}
+
 impl Serialize for Variant {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -722,12 +1058,12 @@ impl Serialize for Variant {
 
 		match self {
 			Self::Ref(value) => state.serialize_field("value", value)?,
-			Self::Resource(value) => state.serialize_field("value", value)?,
+			Self::Resource(_, value) => state.serialize_field("value", value)?,
 			Self::Transform(value) => state.serialize_field("value", value)?,
 			Self::Uuid(value) => state.serialize_field("value", value)?,
-			Self::RepositoryId(value) => state.serialize_field("value", value)?,
 			Self::ColorRGB(value) => state.serialize_field("value", value)?,
 			Self::ColorRGBA(value) => state.serialize_field("value", value)?,
+			Self::EnumValue(value) => state.serialize_field("value", value)?,
 			Self::PairStringVariant(first, second) => state.serialize_field("value", &(first, second))?,
 			Self::Variant(value) => state.serialize_field("value", value)?,
 			Self::Array(_, items) => state.serialize_field(
@@ -736,12 +1072,12 @@ impl Serialize for Variant {
 					.iter()
 					.map(|item| match item {
 						Self::Ref(value) => to_value(value),
-						Self::Resource(value) => to_value(value),
+						Self::Resource(_, value) => to_value(value),
 						Self::Transform(value) => to_value(value),
 						Self::Uuid(value) => to_value(value),
-						Self::RepositoryId(value) => to_value(value.to_string().to_lowercase()),
 						Self::ColorRGB(value) => to_value(value),
 						Self::ColorRGBA(value) => to_value(value),
+						Self::EnumValue(value) => to_value(value),
 						Self::PairStringVariant(first, second) => to_value((first, second)),
 						Self::Variant(value) => to_value(value),
 						Self::Array(_, items) => to_value(items),
@@ -768,12 +1104,15 @@ impl<'de> Deserialize<'de> for Variant {
 		{
 			let res = match ty {
 				"SEntityTemplateReference" => Variant::Ref(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"ZRuntimeResourceID" => Variant::Resource(serde_json::from_value(val).map_err(D::Error::custom)?),
+				"ZResourceID" => Variant::Resource(true, serde_json::from_value(val).map_err(D::Error::custom)?),
+				"ZRuntimeResourceID" => {
+					Variant::Resource(false, serde_json::from_value(val).map_err(D::Error::custom)?)
+				}
 				"SMatrix43" => Variant::Transform(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"ZGuid" => Variant::Uuid(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"ZRepositoryID" => Variant::RepositoryId(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"SColorRGB" => Variant::ColorRGB(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"SColorRGBA" => Variant::ColorRGBA(serde_json::from_value(val).map_err(D::Error::custom)?),
+				"ZEditorEnumValue" => Variant::EnumValue(serde_json::from_value(val).map_err(D::Error::custom)?),
 				"TPair<ZString,ZVariant>" => {
 					let (first, second): (EcoString, Value) = serde_json::from_value(val).map_err(D::Error::custom)?;
 
@@ -794,13 +1133,7 @@ impl<'de> Deserialize<'de> for Variant {
 					Variant::Array(inner.into(), variants)
 				}
 
-				_ => Variant::Raw(
-					RawVariant::from_value(json!({
-						"$type": ty,
-						"$val": val
-					}))
-					.map_err(D::Error::custom)?
-				)
+				_ => Variant::Raw(RawVariant::Unknown(ty.into(), val))
 			};
 
 			Ok(res)
@@ -825,65 +1158,108 @@ impl<'de> Deserialize<'de> for Variant {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "h1")]
+impl From<glacier_bin1::game::h1::ZVariant> for RawVariant {
+	fn from(value: glacier_bin1::game::h1::ZVariant) -> Self {
+		Self::H1(value)
+	}
+}
+
+#[cfg(feature = "h2")]
+impl From<glacier_bin1::game::h2::ZVariant> for RawVariant {
+	fn from(value: glacier_bin1::game::h2::ZVariant) -> Self {
+		Self::H2(value)
+	}
+}
+
+#[cfg(feature = "h3")]
+impl From<glacier_bin1::game::h3::ZVariant> for RawVariant {
+	fn from(value: glacier_bin1::game::h3::ZVariant) -> Self {
+		Self::H3(value)
+	}
+}
+
+#[cfg(feature = "fl")]
+impl From<glacier_bin1::game::fl::ZVariant> for RawVariant {
+	fn from(value: glacier_bin1::game::fl::ZVariant) -> Self {
+		Self::FL(value)
+	}
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum RawVariant {
+	#[cfg(feature = "h1")]
 	H1(glacier_bin1::game::h1::ZVariant),
+
+	#[cfg(feature = "h2")]
 	H2(glacier_bin1::game::h2::ZVariant),
-	H3(glacier_bin1::game::h3::ZVariant)
+
+	#[cfg(feature = "h3")]
+	H3(glacier_bin1::game::h3::ZVariant),
+
+	#[cfg(feature = "fl")]
+	FL(glacier_bin1::game::fl::ZVariant),
+
+	Unknown(EcoString, Value)
+}
+
+impl PartialEq for RawVariant {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			#[cfg(feature = "h1")]
+			(Self::H1(a), Self::H1(b)) => a == b,
+
+			#[cfg(feature = "h2")]
+			(Self::H2(a), Self::H2(b)) => a == b,
+
+			#[cfg(feature = "h3")]
+			(Self::H3(a), Self::H3(b)) => a == b,
+
+			#[cfg(feature = "fl")]
+			(Self::FL(a), Self::FL(b)) => a == b,
+
+			_ => self.variant_type() == other.variant_type() && self.to_serde().ok() == other.to_serde().ok()
+		}
+	}
 }
 
 impl RawVariant {
 	/// Get the variant type (i.e., the $type field).
-	pub fn variant_type(&self) -> &'static str {
+	pub fn variant_type(&self) -> &str {
 		match self {
+			#[cfg(feature = "h1")]
 			Self::H1(value) => value.variant_type(),
+
+			#[cfg(feature = "h2")]
 			Self::H2(value) => value.variant_type(),
-			Self::H3(value) => value.variant_type()
+
+			#[cfg(feature = "h3")]
+			Self::H3(value) => value.variant_type(),
+
+			#[cfg(feature = "fl")]
+			Self::FL(value) => value.variant_type(),
+
+			Self::Unknown(ty, _) => ty
 		}
 	}
 
 	/// Serialize the variant's value to a serde_json::Value, without type information (i.e., the $val field).
 	pub fn to_serde(&self) -> Result<Value, serde_json::Error> {
 		match self {
+			#[cfg(feature = "h1")]
 			Self::H1(value) => value.to_serde(),
+
+			#[cfg(feature = "h2")]
 			Self::H2(value) => value.to_serde(),
-			Self::H3(value) => value.to_serde()
-		}
-	}
 
-	pub fn from_value(value: Value) -> Result<Self, serde_json::Error> {
-		glacier_bin1::game::h3::ZVariant::deserialize(&value)
-			.map(Self::H3)
-			.or_else(|_| glacier_bin1::game::h2::ZVariant::deserialize(&value).map(Self::H2))
-			.or_else(|_| glacier_bin1::game::h1::ZVariant::deserialize(&value).map(Self::H1))
-	}
+			#[cfg(feature = "h3")]
+			Self::H3(value) => value.to_serde(),
 
-	#[try_fn]
-	pub fn to_h3_wrapped(&self, version: GameVersion) -> Result<ZVariant, serde_json::Error> {
-		match self {
-			RawVariant::H1(value) => match version {
-				GameVersion::H1 => value.to_owned().into_inner().into(),
-				GameVersion::H2 => from_value::<glacier_bin1::game::h2::ZVariant>(to_value(value)?)?
-					.into_inner()
-					.into(),
-				GameVersion::H3 => from_value::<glacier_bin1::game::h3::ZVariant>(to_value(value)?)?
-			},
-			RawVariant::H2(value) => match version {
-				GameVersion::H1 => from_value::<glacier_bin1::game::h1::ZVariant>(to_value(value)?)?
-					.into_inner()
-					.into(),
-				GameVersion::H2 => value.to_owned().into_inner().into(),
-				GameVersion::H3 => from_value::<glacier_bin1::game::h3::ZVariant>(to_value(value)?)?
-			},
-			RawVariant::H3(value) => match version {
-				GameVersion::H1 => from_value::<glacier_bin1::game::h1::ZVariant>(to_value(value)?)?
-					.into_inner()
-					.into(),
-				GameVersion::H2 => from_value::<glacier_bin1::game::h2::ZVariant>(to_value(value)?)?
-					.into_inner()
-					.into(),
-				GameVersion::H3 => value.to_owned()
-			}
+			#[cfg(feature = "fl")]
+			Self::FL(value) => value.to_serde(),
+
+			Self::Unknown(_, val) => Ok(val.to_owned())
 		}
 	}
 }
@@ -894,9 +1270,23 @@ impl Serialize for RawVariant {
 		S: serde::Serializer
 	{
 		match self {
+			#[cfg(feature = "h1")]
 			Self::H1(value) => value.serialize(serializer),
+
+			#[cfg(feature = "h2")]
 			Self::H2(value) => value.serialize(serializer),
-			Self::H3(value) => value.serialize(serializer)
+
+			#[cfg(feature = "h3")]
+			Self::H3(value) => value.serialize(serializer),
+
+			#[cfg(feature = "fl")]
+			Self::FL(value) => value.serialize(serializer),
+
+			Self::Unknown(ty, val) => json!({
+				"$type": ty,
+				"$val": val
+			})
+			.serialize(serializer)
 		}
 	}
 }

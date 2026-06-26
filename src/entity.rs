@@ -8,15 +8,18 @@ use std::{
 use anyhow::{Context, Result};
 use ecow::EcoString;
 use fn_error_context::context;
-use glacier_bin1::game::h3::{SEntityTemplateReference, STemplateEntityBlueprint, STemplateEntityFactory};
-use hitman_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
+use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
 use identity_hash::BuildIdentityHasher;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use specta::Type;
 use tryvial::try_fn;
 
-use crate::{HashMap, OrderMap, variant::Variant};
+use crate::{
+	HashMap, OrderMap,
+	game::{FromQuickEntity, ToQuickEntity, types as game_types},
+	variant::Variant
+};
 
 #[cfg(feature = "rune")]
 pub fn rune_module() -> Result<rune::Module, rune::ContextError> {
@@ -142,14 +145,7 @@ impl Type for EntityID {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
 #[cfg_attr(
 	feature = "rune",
-	rune_functions(
-		Self::r_entities,
-		Self::r_get_entity,
-		Self::r_insert_entity,
-		Self::r_remove_entity,
-		Self::r_from_game,
-		Self::r_to_game
-	)
+	rune_functions(Self::r_entities, Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
@@ -338,6 +334,14 @@ pub struct SubEntity {
 	#[serde(skip_serializing_if = "std::ops::Not::not")]
 	pub editor_only: bool,
 
+	/// Platforms on which the entity will not be loaded.
+	#[serde(rename = "excludedPlatforms")]
+	#[serde(default)]
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	#[specta(type = Vec<String>)]
+	#[cfg_attr(feature = "schemars", schemars(with = "Vec<String>"))]
+	pub excluded_platforms: Vec<EcoString>,
+
 	/// Properties of the entity.
 	#[serde(rename = "properties")]
 	#[serde(default)]
@@ -347,7 +351,7 @@ pub struct SubEntity {
 	pub properties: OrderMap<EcoString, Property>,
 
 	/// Properties to apply conditionally to the entity based on platform.
-	#[serde(rename = "platformProperties")]
+	#[serde(rename = "platformSpecificProperties")]
 	#[serde(default)]
 	#[serde(skip_serializing_if = "OrderMap::is_empty")]
 	#[specta(type = std::collections::HashMap<String, std::collections::HashMap<String, Property>>)]
@@ -355,7 +359,7 @@ pub struct SubEntity {
 		feature = "schemars",
 		schemars(with = "std::collections::HashMap<String, std::collections::HashMap<String, Property>>")
 	)]
-	pub platform_properties: OrderMap<EcoString, OrderMap<EcoString, Property>>,
+	pub platform_specific_properties: OrderMap<EcoString, OrderMap<EcoString, Property>>,
 
 	/// Inputs on entities to trigger when events occur.
 	#[serde(rename = "events")]
@@ -436,6 +440,31 @@ pub struct SubEntity {
 	pub subsets: OrderMap<EcoString, Vec<EntityID>>
 }
 
+impl Default for SubEntity {
+	fn default() -> Self {
+		Self {
+			parent: None,
+			name: Default::default(),
+			factory: ResourceReference {
+				resource: glacier_commons::rid!("[modules:/zentity.class].entitytype"),
+				flags: Default::default()
+			},
+			blueprint: glacier_commons::rid!("[modules:/zentity.class].entityblueprint"),
+			editor_only: false,
+			excluded_platforms: Default::default(),
+			properties: Default::default(),
+			platform_specific_properties: Default::default(),
+			events: Default::default(),
+			input_forwardings: Default::default(),
+			output_forwardings: Default::default(),
+			property_aliases: Default::default(),
+			exposed_entities: Default::default(),
+			exposed_interfaces: Default::default(),
+			subsets: Default::default()
+		}
+	}
+}
+
 #[cfg(feature = "rune")]
 impl SubEntity {
 	/// Constructor function. An actual struct constructor cannot be made as Rune only supports up to five parameters in functions.
@@ -446,20 +475,27 @@ impl SubEntity {
 			name: name.into(),
 			factory,
 			blueprint,
-			editor_only: false,
-			properties: Default::default(),
-			platform_properties: Default::default(),
-			events: Default::default(),
-			input_forwardings: Default::default(),
-			output_forwardings: Default::default(),
-			property_aliases: Default::default(),
-			exposed_entities: Default::default(),
-			exposed_interfaces: Default::default(),
-			subsets: Default::default()
+			..Default::default()
 		}
 	}
 
 	fn rune_install(module: &mut rune::Module) -> Result<(), rune::ContextError> {
+		module.field_function(&rune::runtime::Protocol::GET, "excluded_platforms", |s: &Self| {
+			s.excluded_platforms
+				.clone()
+				.into_iter()
+				.map(|x| String::from(x))
+				.collect::<Vec<_>>()
+		})?;
+
+		module.field_function(
+			&rune::runtime::Protocol::SET,
+			"excluded_platforms",
+			|s: &mut Self, value: Vec<String>| {
+				s.excluded_platforms = value.into_iter().map(|x| x.into()).collect();
+			}
+		)?;
+
 		module.field_function(&rune::runtime::Protocol::GET, "properties", |s: &Self| {
 			s.properties
 				.clone()
@@ -476,26 +512,30 @@ impl SubEntity {
 			}
 		)?;
 
-		module.field_function(&rune::runtime::Protocol::GET, "platform_properties", |s: &Self| {
-			s.platform_properties
-				.clone()
-				.into_iter()
-				.map(|(x, y)| {
-					(
-						String::from(x),
-						y.into_iter()
-							.map(|(x, y)| (String::from(x), y))
-							.collect::<std::collections::HashMap<_, _>>()
-					)
-				})
-				.collect::<std::collections::HashMap<_, _>>()
-		})?;
+		module.field_function(
+			&rune::runtime::Protocol::GET,
+			"platform_specific_properties",
+			|s: &Self| {
+				s.platform_specific_properties
+					.clone()
+					.into_iter()
+					.map(|(x, y)| {
+						(
+							String::from(x),
+							y.into_iter()
+								.map(|(x, y)| (String::from(x), y))
+								.collect::<std::collections::HashMap<_, _>>()
+						)
+					})
+					.collect::<std::collections::HashMap<_, _>>()
+			}
+		)?;
 
 		module.field_function(
 			&rune::runtime::Protocol::SET,
-			"platform_properties",
+			"platform_specific_properties",
 			|s: &mut Self, value: std::collections::HashMap<String, std::collections::HashMap<String, Property>>| {
-				s.platform_properties = value
+				s.platform_specific_properties = value
 					.into_iter()
 					.map(|(x, y)| (x.into(), y.into_iter().map(|(x, y)| (x.into(), y)).collect()))
 					.collect()
@@ -934,15 +974,26 @@ pub struct PropertyOverride {
 	#[serde(rename = "properties")]
 	#[specta(type = std::collections::HashMap<String, Variant>)]
 	#[cfg_attr(feature = "schemars", schemars(with = "std::collections::HashMap<String, Variant>"))]
-	pub properties: OrderMap<EcoString, Variant>
+	pub properties: OrderMap<EcoString, Variant>,
+
+	/// Which of the overridden properties can be edited at runtime.
+	#[serde(rename = "runtimeEditable", default, skip_serializing_if = "Vec::is_empty")]
+	#[specta(type = Vec<String>)]
+	#[cfg_attr(feature = "schemars", schemars(with = "Vec<String>"))]
+	pub runtime_editable: Vec<EcoString>
 }
 
 #[cfg(feature = "rune")]
 impl PropertyOverride {
-	fn rune_construct(entities: Vec<Ref>, properties: std::collections::HashMap<String, Variant>) -> Self {
+	fn rune_construct(
+		entities: Vec<Ref>,
+		properties: std::collections::HashMap<String, Variant>,
+		runtime_editable: Vec<String>
+	) -> Self {
 		Self {
 			entities,
-			properties: properties.into_iter().map(|(x, y)| (x.into(), y)).collect()
+			properties: properties.into_iter().map(|(x, y)| (x.into(), y)).collect(),
+			runtime_editable: runtime_editable.into_iter().map(|x| x.into()).collect()
 		}
 	}
 
@@ -962,6 +1013,24 @@ impl PropertyOverride {
 			"properties",
 			|s: &mut Self, value: std::collections::HashMap<String, Variant>| {
 				s.properties = value.into_iter().map(|(x, y)| (x.into(), y)).collect();
+			}
+		)?;
+
+		module.field_function(&rune::runtime::Protocol::GET, "runtime_editable", |s: &Self| {
+			Some(
+				s.runtime_editable
+					.clone()
+					.into_iter()
+					.map(|x| String::from(x))
+					.collect::<Vec<_>>()
+			)
+		})?;
+
+		module.field_function(
+			&rune::runtime::Protocol::SET,
+			"runtime_editable",
+			|s: &mut Self, value: Vec<String>| {
+				s.runtime_editable = value.into_iter().map(|x| x.into()).collect();
 			}
 		)?;
 
@@ -1056,102 +1125,170 @@ impl Ref {
 			exposed_entity: self.exposed_entity.to_owned()
 		}
 	}
+}
 
-	#[try_fn]
-	#[context("Failure converting reference to QN")]
-	pub fn from_game(
-		reference: &SEntityTemplateReference,
-		factory: &STemplateEntityFactory,
-		blueprint: &STemplateEntityBlueprint,
-		factory_meta: &ResourceMetadata
-	) -> Result<Option<Self>> {
-		if reference.entity_index == -1 {
-			None
-		} else {
-			Some(Ref {
-				entity_id: if reference.entity_index == -2 {
-					reference.entity_id.into()
-				} else {
-					blueprint
-						.sub_entities
-						.get(reference.entity_index as usize)
-						.with_context(|| format!("Invalid entity index {} for reference", reference.entity_index))?
-						.entity_id
-						.into()
-				},
-				external_scene: if reference.external_scene_index == -1 {
-					None
-				} else {
-					Some(
-						factory_meta
-							.references
-							.get(
-								factory
-									.external_scene_type_indices_in_resource_header
-									.get(reference.external_scene_index as usize)
-									.context("No such external scene in factory")?
-									.to_owned() as usize
-							)
-							.context("External scene type index does not exist in factory metadata")?
-							.resource
-					)
-				},
-				exposed_entity: (!reference.exposed_entity.is_empty()).then(|| reference.exposed_entity.to_owned())
-			})
-		}
+mod ref_impl {
+	use super::*;
+
+	macro_rules! sub_entities {
+		(h1, $a:expr) => {
+			$a.entity_templates
+		};
+
+		($game:ident, $a:expr) => {
+			$a.sub_entities
+		};
 	}
 
-	#[try_fn]
-	#[context("Invalid reference")]
-	pub fn to_game(
-		&self,
-		factory: &STemplateEntityFactory,
-		factory_meta: &ResourceMetadata,
-		entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>
-	) -> Result<SEntityTemplateReference> {
-		if let Some(external_scene) = &self.external_scene {
-			SEntityTemplateReference {
-				entity_id: self.entity_id.as_u64(),
-				external_scene_index: factory
-					.external_scene_type_indices_in_resource_header
-					.iter()
-					.position(|x| factory_meta.references.get(*x as usize).unwrap().resource == *external_scene)
-					.with_context(|| format!("External scene {external_scene} is not listed in externalScenes"))?
-					.try_into()?,
-				entity_index: -2,
-				exposed_entity: self.exposed_entity.to_owned().unwrap_or_default()
+	macro_rules! impl_fl_others {
+		(fl, $fl:expr, $others:expr) => {
+			$fl
+		};
+
+		($game:ident, $fl:expr, $others:expr) => {
+			$others
+		};
+	}
+
+	macro_rules! impl_game {
+		($game:ident) => {
+			impl ToQuickEntity for glacier_bin1::game::$game::SEntityTemplateReference {
+				type QuickEntity = Option<Ref>;
+				type Error = anyhow::Error;
+
+				type Factory = game_types::$game::Factory;
+				type Blueprint = game_types::$game::Blueprint;
+
+				#[try_fn]
+				#[context("Failed to convert game reference to QN")]
+				fn to_qn(
+					&self,
+					factory: &Self::Factory,
+					_factory_meta: &ResourceMetadata,
+					blueprint: &Self::Blueprint,
+					_: &ResourceMetadata,
+					_: bool
+				) -> Result<Self::QuickEntity, Self::Error> {
+					if self.entity_index == -1 {
+						None
+					} else {
+						Some(Ref {
+							entity_id: if self.entity_index == -2 {
+								self.entity_id.into()
+							} else {
+								sub_entities!($game, blueprint)
+									.get(self.entity_index as usize)
+									.with_context(|| {
+										format!("Invalid entity index {} for reference", self.entity_index)
+									})?
+									.entity_id
+									.into()
+							},
+							external_scene: if self.external_scene_index == -1 {
+								None
+							} else {
+								Some(impl_fl_others!(
+									$game,
+									factory
+										.external_scene_runtime_resource_ids
+										.get(self.external_scene_index as usize)
+										.context("No such external scene in factory")?
+										.as_u64()
+										.try_into()
+										.context("Invalid external scene ID")?,
+									_factory_meta
+										.references
+										.get(
+											factory
+												.external_scene_type_indices_in_resource_header
+												.get(self.external_scene_index as usize)
+												.context("No such external scene in factory")?
+												.to_owned() as usize
+										)
+										.context("External scene type index does not exist in factory metadata")?
+										.resource
+								))
+							},
+							exposed_entity: (!self.exposed_entity.is_empty()).then(|| self.exposed_entity.to_owned())
+						})
+					}
+				}
 			}
-		} else {
-			SEntityTemplateReference {
-				entity_id: u64::MAX,
-				external_scene_index: -1,
-				entity_index: entity_id_to_index_mapping
-					.get(&self.entity_id)
-					.with_context(|| format!("Entity {} does not exist", self.entity_id))?
-					.to_owned() as i32,
-				exposed_entity: self.exposed_entity.to_owned().unwrap_or_default()
+
+			impl FromQuickEntity<Ref> for glacier_bin1::game::$game::SEntityTemplateReference {
+				type Error = anyhow::Error;
+
+				#[try_fn]
+				#[context("Invalid reference")]
+				fn from_qn(
+					value: &Ref,
+					entity_indices: &HashMap<EntityID, usize>,
+					_: &HashMap<RuntimeID, usize>,
+					external_scene_indices: &HashMap<RuntimeID, usize>
+				) -> Result<Self, Self::Error> {
+					if let Some(external_scene) = &value.external_scene {
+						Self {
+							entity_id: value.entity_id.as_u64(),
+							external_scene_index: external_scene_indices
+								.get(&external_scene)
+								.copied()
+								.with_context(|| {
+									format!("External scene {external_scene} is not listed in externalScenes")
+								})?
+								.try_into()?,
+							entity_index: -2,
+							exposed_entity: value.exposed_entity.to_owned().unwrap_or_default()
+						}
+					} else {
+						Self {
+							entity_id: impl_fl_others!($game, value.entity_id.as_u64(), u64::MAX),
+							external_scene_index: -1,
+							entity_index: entity_indices
+								.get(&value.entity_id)
+								.with_context(|| format!("Entity {} does not exist", value.entity_id))?
+								.to_owned() as i32,
+							exposed_entity: value.exposed_entity.to_owned().unwrap_or_default()
+						}
+					}
+				}
 			}
-		}
+
+			impl FromQuickEntity<Option<Ref>> for glacier_bin1::game::$game::SEntityTemplateReference {
+				type Error = anyhow::Error;
+
+				#[try_fn]
+				fn from_qn(
+					value: &Option<Ref>,
+					entity_indices: &HashMap<EntityID, usize>,
+					reference_indices: &HashMap<RuntimeID, usize>,
+					external_scene_indices: &HashMap<RuntimeID, usize>
+				) -> Result<Self, Self::Error> {
+					match value {
+						None => Self {
+							entity_id: u64::MAX,
+							external_scene_index: -1,
+							entity_index: -1,
+							exposed_entity: "".into()
+						},
+
+						Some(value) => Self::from_qn(value, entity_indices, reference_indices, external_scene_indices)?
+					}
+				}
+			}
+		};
 	}
 
-	#[try_fn]
-	pub fn to_game_opt(
-		value: Option<&Self>,
-		factory: &STemplateEntityFactory,
-		factory_meta: &ResourceMetadata,
-		entity_id_to_index_mapping: &HashMap<EntityID, usize, BuildIdentityHasher<u64>>
-	) -> Result<SEntityTemplateReference> {
-		match value {
-			None => SEntityTemplateReference {
-				entity_id: u64::MAX,
-				external_scene_index: -1,
-				entity_index: -1,
-				exposed_entity: "".into()
-			},
+	#[cfg(feature = "h1")]
+	impl_game!(h1);
 
-			Some(value) => value.to_game(factory, factory_meta, entity_id_to_index_mapping)?
-		}
-	}
+	#[cfg(feature = "h2")]
+	impl_game!(h2);
+
+	#[cfg(feature = "h3")]
+	impl_game!(h3);
+
+	#[cfg(feature = "fl")]
+	impl_game!(fl);
 }
 
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]

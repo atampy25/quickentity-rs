@@ -1,5 +1,5 @@
 use ecow::EcoString;
-use hitman_commons::metadata::{ResourceReference, RuntimeID};
+use glacier_commons::metadata::{ResourceReference, RuntimeID};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tryvial::try_fn;
@@ -199,7 +199,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	AddPlatformProperty(
+	AddPlatformSpecificProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -210,7 +210,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	PatchPlatformPropertyValue(
+	PatchPlatformSpecificPropertyValue(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -224,7 +224,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	SetPlatformPropertyPostInit(
+	SetPlatformSpecificPropertyPostInit(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -235,7 +235,7 @@ pub enum SubEntityOperation {
 	),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
-	RemovePlatformProperty(
+	RemovePlatformSpecificProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
 		EcoString,
@@ -448,5 +448,7 @@ pub struct PropertyOverrideConnection {
 	pub property: EcoString,
 
 	/// The overridden property.
-	pub value: Variant
+	pub value: Variant,
+
+	pub runtime_editable: bool
 }
