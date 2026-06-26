@@ -21,7 +21,7 @@ ordermap = { version = "1.2.0", features = ["serde", "rayon"] }
 serde_path_to_error = "0.1.14"
 env_logger = { version = "0.11.8", optional = true }
 specta = { version = "=2.0.0-rc.24", features = ["serde_json"] }
-glacier-commons = { git = "https://github.com/atampy25/hitman-commons", branch = "fl", features = ["serde", "specta", "macros"] }
+glacier-commons = { git = "https://github.com/atampy25/glacier-commons", features = ["serde", "specta", "macros"] }
 glacier-bin1 = { git = "https://github.com/atampy25/glacier-bin1", features = [
     "TBLU",
     "TEMP",
@@ -39,7 +39,7 @@ uuid = { version = "1.23.3", features = ["serde"] }
 schemars = { version = "1.2.1", features = ["uuid1"], optional = true }
 identity-hash = "0.1.0"
 rapidhash = { version = "4.4.1", features = ["unsafe", "rand"] }
-hotpath = "0.17.0"
+hotpath = "0.18.0"
 
 [features]
 h1 = ["glacier-bin1/h1"]
