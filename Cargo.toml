@@ -28,7 +28,7 @@ specta = { version = "=2.0.0-rc.24", features = [
     "indexmap",
     "serde_json",
 ] }
-hitman-commons = { git = "https://github.com/atampy25/hitman-commons", features = [
+hitman-commons = { git = "https://github.com/atampy25/glacier-commons", rev = "455c9fc2f17a87ce3d164b6de65ecc527de7fe21", features = [
     "resourcelib",
     "serde",
     "specta",
