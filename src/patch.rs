@@ -163,6 +163,20 @@ pub enum SubEntityOperation {
 	SetEditorOnly(#[cfg_attr(feature = "rune", rune(get, set))] bool),
 
 	#[cfg_attr(feature = "rune", rune(constructor))]
+	AddExcludedPlatform(
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
+		#[specta(type = String)]
+		EcoString
+	),
+
+	#[cfg_attr(feature = "rune", rune(constructor))]
+	RemoveExcludedPlatform(
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
+		#[specta(type = String)]
+		EcoString
+	),
+
+	#[cfg_attr(feature = "rune", rune(constructor))]
 	AddProperty(
 		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))]
 		#[specta(type = String)]
@@ -403,7 +417,7 @@ pub enum ArrayPatchOperation {
 	Add {
 		/// Preferred over `after`.
 		#[cfg_attr(feature = "rune", rune(get, set))]
-		before: Option<ItemSelector>,
+		before: Option<ItemSelector>, // TODO: Supply all before/after items, not just immediate neighbours?
 
 		#[cfg_attr(feature = "rune", rune(get, set))]
 		after: Option<ItemSelector>,

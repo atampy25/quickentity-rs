@@ -211,6 +211,20 @@ fn apply_patch_operation(
 					entity.editor_only = value;
 				}
 
+				SubEntityOperation::AddExcludedPlatform(value) => {
+					if !entity.excluded_platforms.contains(&value) {
+						modified = true;
+						entity.excluded_platforms.push(value);
+					}
+				}
+
+				SubEntityOperation::RemoveExcludedPlatform(value) => {
+					if entity.excluded_platforms.contains(&value) {
+						modified = true;
+						entity.excluded_platforms.retain(|x| *x != value);
+					}
+				}
+
 				SubEntityOperation::AddProperty(name, data) => {
 					if let Some(existing) = entity.properties.get(&name) {
 						modified = data != *existing;
@@ -1202,6 +1216,24 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 					entity_id.to_owned(),
 					SubEntityOperation::SetEditorOnly(new_entity_data.editor_only.to_owned())
 				));
+			}
+
+			for excluded_platform in &old_entity_data.excluded_platforms {
+				if !new_entity_data.excluded_platforms.contains(excluded_platform) {
+					patch.push(PatchOperation::PatchEntity(
+						entity_id.to_owned(),
+						SubEntityOperation::RemoveExcludedPlatform(excluded_platform.to_owned())
+					));
+				}
+			}
+
+			for excluded_platform in &new_entity_data.excluded_platforms {
+				if !old_entity_data.excluded_platforms.contains(excluded_platform) {
+					patch.push(PatchOperation::PatchEntity(
+						entity_id.to_owned(),
+						SubEntityOperation::AddExcludedPlatform(excluded_platform.to_owned())
+					));
+				}
 			}
 
 			for property_name in old_entity_data.properties.keys() {
