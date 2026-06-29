@@ -145,7 +145,12 @@ impl Type for EntityID {
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
 #[cfg_attr(
 	feature = "rune",
-	rune_functions(Self::r_entities, Self::r_get_entity, Self::r_insert_entity, Self::r_remove_entity)
+	rune_functions(
+		Self::r_sub_entities,
+		Self::r_get_sub_entity,
+		Self::r_insert_sub_entity,
+		Self::r_remove_sub_entity
+	)
 )]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
@@ -160,19 +165,24 @@ pub struct Entity {
 	#[serde(rename = "blueprint")]
 	pub blueprint: RuntimeID,
 
+	/// The type of this entity.
+	#[cfg_attr(feature = "rune", rune(get, set))]
+	#[serde(rename = "subType")]
+	pub sub_type: SubType,
+
 	/// The root sub-entity of this entity.
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "rootEntity")]
 	pub root_entity: EntityID,
 
 	/// The sub-entities of this entity.
-	#[serde(rename = "entities")]
+	#[serde(rename = "subEntities")]
 	#[specta(type = std::collections::HashMap<EntityID, SubEntity>)]
 	#[cfg_attr(
 		feature = "schemars",
 		schemars(with = "std::collections::HashMap<EntityID, SubEntity>")
 	)]
-	pub entities: OrderMap<EntityID, SubEntity, BuildIdentityHasher<u64>>,
+	pub sub_entities: OrderMap<EntityID, SubEntity, BuildIdentityHasher<u64>>,
 
 	/// Properties on other entities (local or external) to override when this entity is loaded.
 	///
@@ -205,11 +215,6 @@ pub struct Entity {
 	#[cfg_attr(feature = "rune", rune(get, set))]
 	#[serde(rename = "externalScenes")]
 	pub external_scenes: Vec<RuntimeID>,
-
-	/// The type of this entity.
-	#[cfg_attr(feature = "rune", rune(get, set))]
-	#[serde(rename = "subType")]
-	pub sub_type: SubType,
 
 	/// The QuickEntity format version of this entity. The current version is 3.2.
 	#[cfg_attr(feature = "rune", rune(get, set))]
@@ -249,24 +254,24 @@ fn validate_qn_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Res
 
 #[cfg(feature = "rune")]
 impl Entity {
-	#[rune::function(instance, path = Self::entities)]
-	fn r_entities(&self) -> Vec<EntityID> {
-		self.entities.keys().copied().collect()
+	#[rune::function(instance, path = Self::sub_entities)]
+	fn r_sub_entities(&self) -> Vec<EntityID> {
+		self.sub_entities.keys().copied().collect()
 	}
 
-	#[rune::function(instance, path = Self::get_entity)]
-	fn r_get_entity(&self, id: EntityID) -> Option<SubEntity> {
-		self.entities.get(&id).cloned()
+	#[rune::function(instance, path = Self::get_sub_entity)]
+	fn r_get_sub_entity(&self, id: EntityID) -> Option<SubEntity> {
+		self.sub_entities.get(&id).cloned()
 	}
 
-	#[rune::function(instance, path = Self::insert_entity)]
-	fn r_insert_entity(&mut self, id: EntityID, entity: SubEntity) {
-		self.entities.insert(id, entity);
+	#[rune::function(instance, path = Self::insert_sub_entity)]
+	fn r_insert_sub_entity(&mut self, id: EntityID, entity: SubEntity) {
+		self.sub_entities.insert(id, entity);
 	}
 
-	#[rune::function(instance, path = Self::remove_entity)]
-	fn r_remove_entity(&mut self, id: EntityID) {
-		self.entities.remove(&id);
+	#[rune::function(instance, path = Self::remove_sub_entity)]
+	fn r_remove_sub_entity(&mut self, id: EntityID) {
+		self.sub_entities.remove(&id);
 	}
 }
 

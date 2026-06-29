@@ -160,7 +160,7 @@ fn apply_patch_operation(
 		}
 
 		PatchOperation::RemoveEntity(value) => {
-			let removed = entity.entities.remove(&value);
+			let removed = entity.sub_entities.remove(&value);
 			modified = removed.is_some();
 
 			if !modified {
@@ -169,19 +169,19 @@ fn apply_patch_operation(
 		}
 
 		PatchOperation::AddEntity(id, data) => {
-			if let Some(existing) = entity.entities.get(&id) {
+			if let Some(existing) = entity.sub_entities.get(&id) {
 				emit(Diagnostic::EntityAlreadyExisted { entity: id });
 				modified = *data != *existing;
 			} else {
 				modified = true;
 			}
 
-			entity.entities.insert(id, *data);
+			entity.sub_entities.insert(id, *data);
 		}
 
 		PatchOperation::PatchEntity(entity_id, op) => {
 			let entity = entity
-				.entities
+				.sub_entities
 				.get_mut(&entity_id)
 				.with_context(|| format!("SubEntityOperation couldn't find entity ID: {entity_id}!"))?;
 
@@ -1161,14 +1161,14 @@ pub fn generate_patch(original: &Entity, modified: &Entity) -> Result<Patch> {
 		patch.push(PatchOperation::SetSubType(modified.sub_type.to_owned()));
 	}
 
-	for entity_id in original.entities.keys() {
-		if !modified.entities.contains_key(entity_id) {
+	for entity_id in original.sub_entities.keys() {
+		if !modified.sub_entities.contains_key(entity_id) {
 			patch.push(PatchOperation::RemoveEntity(entity_id.to_owned()));
 		}
 	}
 
-	for (entity_id, new_entity_data) in &modified.entities {
-		if let Some(old_entity_data) = original.entities.get(entity_id) {
+	for (entity_id, new_entity_data) in &modified.sub_entities {
+		if let Some(old_entity_data) = original.sub_entities.get(entity_id) {
 			if old_entity_data.parent != new_entity_data.parent {
 				patch.push(PatchOperation::PatchEntity(
 					entity_id.to_owned(),
@@ -1950,13 +1950,13 @@ fn get_factory_references(entity: &Entity) -> Result<Vec<ResourceReference>> {
 		},
 		// then factories of sub-entities
 		entity
-			.entities
+			.sub_entities
 			.par_iter()
 			.map(|(_, sub_entity)| sub_entity.factory.to_owned())
 			.collect(),
 		// then sub-entity resources
 		entity
-			.entities
+			.sub_entities
 			.par_iter()
 			.map(|(_, sub_entity)| -> Result<_> {
 				Ok(vec![
@@ -2125,7 +2125,7 @@ fn get_blueprint_references(entity: &Entity) -> Vec<ResourceReference> {
 			vec![]
 		},
 		entity
-			.entities
+			.sub_entities
 			.iter()
 			.map(|(_, sub_entity)| ResourceReference {
 				resource: sub_entity.blueprint.to_owned(),
@@ -2417,7 +2417,7 @@ macro_rules! impl_game {
 						.context("Root entity index referred to nonexistent entity")?
 						.entity_id
 						.into(),
-					entities: factory
+					sub_entities: factory
 						.$sub_entities
 						.par_iter()
 						.zip(&blueprint.$sub_entities)
@@ -2721,7 +2721,7 @@ macro_rules! impl_game {
 
 				for pin in &blueprint.pin_connections {
 					let relevant_sub_entity = entity
-						.entities
+						.sub_entities
 						.get_mut(&EntityID::from(
 							blueprint
 								.$sub_entities
@@ -2771,7 +2771,7 @@ macro_rules! impl_game {
 						.filter(|x| x.from_entity.external_scene_index == -1)
 					{
 						let relevant_sub_entity = entity
-							.entities
+							.sub_entities
 							.get_mut(&EntityID::from(
 								blueprint
 									.$sub_entities
@@ -2809,7 +2809,7 @@ macro_rules! impl_game {
 
 				for forwarding in &blueprint.input_pin_forwardings {
 					let relevant_sub_entity = entity
-						.entities
+						.sub_entities
 						.get_mut(&EntityID::from(
 							blueprint
 								.$sub_entities
@@ -2852,7 +2852,7 @@ macro_rules! impl_game {
 
 				for forwarding in &blueprint.output_pin_forwardings {
 					let relevant_sub_entity = entity
-						.entities
+						.sub_entities
 						.get_mut(&EntityID::from(
 							blueprint
 								.$sub_entities
@@ -2898,7 +2898,7 @@ macro_rules! impl_game {
 						for (subset, data) in &sub_entity.entity_subsets {
 							for subset_entity in &data.entities {
 								let relevant_qn = entity
-									.entities
+									.sub_entities
 									.get_mut(&EntityID::from(
 										blueprint
 											.$sub_entities
@@ -3021,8 +3021,12 @@ macro_rules! impl_game {
 					);
 				}
 
-				let entity_indices: HashMap<EntityID, usize> =
-					entity.entities.keys().enumerate().map(|(x, y)| (*y, x)).collect();
+				let entity_indices: HashMap<EntityID, usize> = entity
+					.sub_entities
+					.keys()
+					.enumerate()
+					.map(|(x, y)| (*y, x))
+					.collect();
 
 				let factory_meta = ResourceMetadata {
 					id: entity.factory.to_owned(),
@@ -3055,7 +3059,7 @@ macro_rules! impl_game {
 						root_entity_index: *entity_indices
 							.get(&entity.root_entity)
 							.context("Root entity was non-existent")? as i32,
-						$sub_entities: Vec::with_capacity(entity.entities.len()),
+						$sub_entities: Vec::with_capacity(entity.sub_entities.len()),
 						property_overrides: vec![],
 						external_scene_type_indices_in_resource_header: factory_meta
 							.references
@@ -3085,7 +3089,7 @@ macro_rules! impl_game {
 						root_entity_index: *entity_indices
 							.get(&entity.root_entity)
 							.context("Root entity was non-existent")? as i32,
-						$sub_entities: Vec::with_capacity(entity.entities.len()),
+						$sub_entities: Vec::with_capacity(entity.sub_entities.len()),
 						property_overrides: vec![],
 						external_scene_type_indices_in_resource_header: (1..entity.external_scenes.len() as i32 + 1)
 							.collect()
@@ -3189,7 +3193,7 @@ macro_rules! impl_game {
 								})
 								.collect::<Result<_>>()?,
 							entity
-								.entities
+								.sub_entities
 								.par_iter()
 								.map(|(entity_id, sub_entity)| {
 									Ok(sub_entity
@@ -3424,7 +3428,7 @@ macro_rules! impl_game {
 					.collect::<Result<_>>()?;
 
 				factory.$sub_entities = entity
-					.entities
+					.sub_entities
 					.par_iter()
 					.map(|(_, sub_entity)| {
 						Ok(impl_h1_others!(
@@ -3582,7 +3586,7 @@ macro_rules! impl_game {
 					.collect::<Result<_>>()?;
 
 				blueprint.$sub_entities = entity
-					.entities
+					.sub_entities
 					.par_iter()
 					.map(|(entity_id, sub_entity)| {
 						Ok(impl_h1_others!(
@@ -3825,7 +3829,7 @@ macro_rules! impl_game {
 					.collect::<Result<_>>()?;
 
 				impl_fl_others!($game, {}, {
-					for (entity_index, (_, sub_entity)) in entity.entities.iter().enumerate() {
+					for (entity_index, (_, sub_entity)) in entity.sub_entities.iter().enumerate() {
 						for (subset, ents) in sub_entity.subsets.iter() {
 							for ent in ents.iter() {
 								let ent_subs = &mut blueprint
@@ -3989,7 +3993,7 @@ macro_rules! impl_game {
 				}
 
 				blueprint.pin_connections = entity
-					.entities
+					.sub_entities
 					.par_iter()
 					.map(|(&entity_id, sub_entity)| -> Result<_> {
 						Ok(sub_entity
@@ -4017,7 +4021,7 @@ macro_rules! impl_game {
 
 				// slightly less code duplication than there used to be
 				blueprint.input_pin_forwardings = entity
-					.entities
+					.sub_entities
 					.par_iter()
 					.map(|(&entity_id, sub_entity)| -> Result<_> {
 						Ok(sub_entity
@@ -4044,7 +4048,7 @@ macro_rules! impl_game {
 					.collect();
 
 				blueprint.output_pin_forwardings = entity
-					.entities
+					.sub_entities
 					.par_iter()
 					.map(|(&entity_id, sub_entity)| -> Result<_> {
 						Ok(sub_entity

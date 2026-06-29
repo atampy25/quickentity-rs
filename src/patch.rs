@@ -64,7 +64,6 @@ fn validate_patch_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> 
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
-#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -140,7 +139,6 @@ pub enum PatchOperation {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
-#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, EQ, CLONE))]
@@ -374,7 +372,6 @@ pub enum SubEntityOperation {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
-#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 #[cfg_attr(feature = "rune", derive(better_rune_derive::Any))]
 #[cfg_attr(feature = "rune", rune(item = ::quickentity_rs::patch))]
 #[cfg_attr(feature = "rune", rune_derive(DEBUG_FMT, PARTIAL_EQ, CLONE))]
