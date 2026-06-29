@@ -3104,14 +3104,15 @@ macro_rules! impl_game {
 					factory
 						.external_scene_type_indices_in_resource_header
 						.iter()
-						.map(|&scene_index| {
+						.enumerate()
+						.map(|(idx, scene_index)| {
 							anyhow::Ok((
 								factory_meta
 									.references
-									.get(scene_index as usize)
+									.get(*scene_index as usize)
 									.context("External scene index referred to nonexistent dependency")?
 									.resource,
-								scene_index as usize
+								idx
 							))
 						})
 						.collect::<Result<_>>()?
