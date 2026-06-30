@@ -17,7 +17,7 @@ use glacier_commons::{
 	metadata::{ResourceMetadata, ResourceReference, RuntimeID}
 };
 use identity_hash::BuildIdentityHasher;
-use itertools::Itertools;
+use itertools::{EitherOrBoth, Itertools};
 use patch::{ArrayPatchOperation, Patch, PatchOperation, PropertyOverrideConnection, SubEntityOperation};
 use rayon::prelude::*;
 use thiserror::Error;
@@ -99,11 +99,8 @@ pub enum AlreadyNonexistentDiagnostic {
 
 #[derive(Error, Debug)]
 pub enum ArrayPatchDiagnostic {
-	#[error("couldn't find element {element:?} to add before")]
-	NoSuchElementBefore { element: ItemSelector },
-
-	#[error("couldn't find element {element:?} to add after")]
-	NoSuchElementAfter { element: ItemSelector },
+	#[error("couldn't find any elements to add before/after")]
+	NoSuchElementsBeforeAfter,
 
 	#[error("couldn't find element {element:?} to remove")]
 	NoSuchElementToRemove { element: ItemSelector },
@@ -932,47 +929,37 @@ pub fn apply_array_patch(
 
 	let mut modified = false;
 
-	for operation in patch {
+	'op: for operation in patch {
 		match operation {
 			ArrayPatchOperation::Add { before, after, item } => {
-				let mut missing_before: Option<ItemSelector> = None;
-				let mut missing_after: Option<ItemSelector> = None;
+				let has_selectors = before.is_empty() || after.is_empty();
+				for pair in before.into_iter().zip_longest(after.into_iter().rev()) {
+					let (before, after) = pair.left_and_right();
 
-				if let Some(selector) = before.as_ref() {
-					if let Some(idx) = find_selector_index(arr, selector) {
+					if let Some(before) = before
+						&& let Some(idx) = find_selector_index(arr, &before)
+					{
 						modified = true;
 						arr.insert(idx, item);
-						continue;
-					} else {
-						missing_before = Some(selector.to_owned());
+						continue 'op;
 					}
-				}
 
-				if let Some(selector) = after.as_ref() {
-					if let Some(idx) = find_selector_index(arr, selector) {
+					if let Some(after) = after
+						&& let Some(idx) = find_selector_index(arr, &after)
+					{
 						modified = true;
 						arr.insert(idx + 1, item);
-						continue;
-					} else {
-						missing_after = Some(selector.to_owned());
+						continue 'op;
 					}
 				}
 
 				modified = true;
 				arr.push(item);
 
-				if let Some(element) = missing_before {
+				if has_selectors {
 					emit(Diagnostic::ArrayPatch {
 						identifier: identifier.to_owned(),
-						diagnostic: ArrayPatchDiagnostic::NoSuchElementBefore { element }
-					});
-					continue;
-				}
-
-				if let Some(element) = missing_after {
-					emit(Diagnostic::ArrayPatch {
-						identifier: identifier.to_owned(),
-						diagnostic: ArrayPatchDiagnostic::NoSuchElementAfter { element }
+						diagnostic: ArrayPatchDiagnostic::NoSuchElementsBeforeAfter
 					});
 					continue;
 				}
@@ -1102,15 +1089,17 @@ fn generate_array_patch(original: &[Variant], modified: &[Variant]) -> Vec<Array
 		match action {
 			Action::Insert { index, new_index } => {
 				let before = if index < working.len() {
-					Some(selector_for_index(&working, index))
+					(index..working.len())
+						.map(|i| selector_for_index(&working, i))
+						.collect()
 				} else {
-					None
+					vec![]
 				};
 
 				let after = if index > 0 {
-					Some(selector_for_index(&working, index - 1))
+					(0..index).map(|i| selector_for_index(&working, i)).collect()
 				} else {
-					None
+					vec![]
 				};
 
 				let item = modified

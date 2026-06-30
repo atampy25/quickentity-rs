@@ -417,10 +417,10 @@ pub enum ArrayPatchOperation {
 	Add {
 		/// Preferred over `after`.
 		#[cfg_attr(feature = "rune", rune(get, set))]
-		before: Option<ItemSelector>, // TODO: Supply all before/after items, not just immediate neighbours?
+		before: Vec<ItemSelector>,
 
 		#[cfg_attr(feature = "rune", rune(get, set))]
-		after: Option<ItemSelector>,
+		after: Vec<ItemSelector>,
 
 		#[cfg_attr(feature = "rune", rune(get, set))]
 		item: Variant
