@@ -1949,7 +1949,7 @@ fn convert_string_property_name_to_id(property_name: &str) -> Result<PropertyID>
 #[context("Failure getting factory dependencies")]
 #[auto_context]
 #[hotpath::measure]
-fn get_factory_references(entity: &Entity) -> Result<Vec<ResourceReference>> {
+fn get_factory_references(entity: &Entity, always_add_external_scenes: bool) -> Result<Vec<ResourceReference>> {
 	vec![
 		// blueprint first
 		vec![ResourceReference {
@@ -1957,7 +1957,7 @@ fn get_factory_references(entity: &Entity) -> Result<Vec<ResourceReference>> {
 			flags: Default::default()
 		}],
 		// then external scenes
-		if entity.sub_type != SubType::Template {
+		if always_add_external_scenes || entity.sub_type != SubType::Template {
 			entity
 				.external_scenes
 				.par_iter()
@@ -2131,9 +2131,9 @@ fn get_factory_references(entity: &Entity) -> Result<Vec<ResourceReference>> {
 }
 
 #[hotpath::measure]
-fn get_blueprint_references(entity: &Entity) -> Vec<ResourceReference> {
+fn get_blueprint_references(entity: &Entity, always_add_external_scenes: bool) -> Vec<ResourceReference> {
 	vec![
-		if entity.sub_type != SubType::Template {
+		if always_add_external_scenes || entity.sub_type != SubType::Template {
 			entity
 				.external_scenes
 				.par_iter()
@@ -2708,7 +2708,7 @@ macro_rules! impl_game {
 
 				let (a, b) = rayon::join(
 					|| {
-						let depends = get_factory_references(&entity)?
+						let depends = get_factory_references(&entity, impl_fl_others!($game, false, true))?
 							.into_iter()
 							.collect::<HashSet<_>>();
 
@@ -2722,7 +2722,7 @@ macro_rules! impl_game {
 						)
 					},
 					|| {
-						let depends = get_blueprint_references(&entity)
+						let depends = get_blueprint_references(&entity, impl_fl_others!($game, false, true))
 							.into_iter()
 							.collect::<HashSet<_>>();
 
@@ -3055,7 +3055,7 @@ macro_rules! impl_game {
 					compressed: ResourceMetadata::infer_compressed("TEMP".try_into()?),
 					scrambled: ResourceMetadata::infer_scrambled("TEMP".try_into()?),
 					references: [
-						get_factory_references(entity)?,
+						get_factory_references(entity, impl_fl_others!($game, false, true))?,
 						entity.extra_factory_references.to_owned()
 					]
 					.concat()
@@ -3149,7 +3149,7 @@ macro_rules! impl_game {
 					compressed: ResourceMetadata::infer_compressed("TBLU".try_into()?),
 					scrambled: ResourceMetadata::infer_scrambled("TBLU".try_into()?),
 					references: [
-						get_blueprint_references(entity),
+						get_blueprint_references(entity, impl_fl_others!($game, false, true)),
 						entity.extra_blueprint_references.to_owned()
 					]
 					.concat()
