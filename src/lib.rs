@@ -932,7 +932,7 @@ pub fn apply_array_patch(
 	'op: for operation in patch {
 		match operation {
 			ArrayPatchOperation::Add { before, after, item } => {
-				let has_selectors = before.is_empty() || after.is_empty();
+				let has_selectors = !before.is_empty() || !after.is_empty();
 				for pair in before.into_iter().zip_longest(after.into_iter().rev()) {
 					let (before, after) = pair.left_and_right();
 
