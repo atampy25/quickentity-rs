@@ -8,7 +8,7 @@ license = "LGPL-3.0-only"
 
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"], optional = true }
-itertools = "0.14.0"
+itertools = "0.15.0"
 rayon = "1.12.0"
 serde = { version = "1.0.137", features = ["derive"] }
 serde_json = { version = "1.0.81", features = ["preserve_order"] }
@@ -18,10 +18,14 @@ tryvial = "0.2.0"
 fn-error-context = "0.2.1"
 auto_context = { path = "auto_context" }
 ordermap = { version = "1.2.0", features = ["serde", "rayon"] }
-serde_path_to_error = "0.1.14"
+serde_path_to_error = { version = "0.1.14", optional = true }
 env_logger = { version = "0.11.8", optional = true }
 specta = { version = "=2.0.0-rc.24", features = ["serde_json"] }
-glacier-commons = { git = "https://github.com/atampy25/glacier-commons", features = ["serde", "specta", "macros"] }
+glacier-commons = { git = "https://github.com/atampy25/glacier-commons", features = [
+    "serde",
+    "specta",
+    "macros",
+] }
 glacier-bin1 = { git = "https://github.com/atampy25/glacier-bin1", features = [
     "TBLU",
     "TEMP",
@@ -30,16 +34,15 @@ tracing = { version = "0.1.40", optional = true }
 rune = { git = "https://github.com/rune-rs/rune", rev = "a8c4f97", optional = true }
 better-rune-derive = { git = "https://github.com/atampy25/better-rune-derive", optional = true }
 ecow = { version = "0.3.0", features = ["serde"] }
-educe = "0.6.0"
 crc32fast = "1.5.0"
-thiserror = "2.0.18"
+thiserror = "2.0.20"
 log = { version = "0.4.32", optional = true }
 glam = { version = "0.32.1", features = ["glam-assert"] }
 uuid = { version = "1.23.3", features = ["serde"] }
 schemars = { version = "1.2.1", features = ["uuid1"], optional = true }
 identity-hash = "0.1.0"
 rapidhash = { version = "4.4.1", features = ["unsafe", "rand"] }
-hotpath = "0.18.0"
+hotpath = "0.26.0"
 
 [features]
 h1 = ["glacier-bin1/h1"]
@@ -48,7 +51,7 @@ h3 = ["glacier-bin1/h3"]
 fl = ["glacier-bin1/fl"]
 all-games = ["h1", "h2", "h3", "fl"]
 
-cli = ["dep:log", "dep:env_logger", "dep:clap"]
+cli = ["dep:log", "dep:env_logger", "dep:clap", "dep:serde_path_to_error"]
 
 rune = ["dep:rune", "dep:better-rune-derive", "glacier-commons/rune"]
 schemars = ["dep:schemars", "glacier-commons/schemars"]
@@ -57,7 +60,7 @@ hotpath = ["hotpath/hotpath"]
 hotpath-alloc = ["hotpath/hotpath-alloc"]
 
 [[bin]]
-name = "quickentity_rs"
+name = "quickentity-rs"
 path = "src/main.rs"
 required-features = ["cli"]
 

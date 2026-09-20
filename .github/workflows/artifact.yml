@@ -42,18 +42,18 @@ jobs:
               uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
 
             - name: Build
-              run: cargo build --release --bin quickentity_rs -F cli -F all-games
+              run: cargo build --release --bin quickentity-rs -F cli -F all-games
 
             - name: Upload artifact (Linux)
               if: matrix.platform == 'ubuntu-latest'
               uses: actions/upload-artifact@v4
               with:
-                  name: quickentity_rs
-                  path: target/release/quickentity_rs
+                  name: quickentity-rs
+                  path: target/release/quickentity-rs
 
             - name: Upload artifact (Windows)
               if: matrix.platform == 'windows-latest'
               uses: actions/upload-artifact@v4
               with:
-                  name: quickentity_rs.exe
-                  path: target/release/quickentity_rs.exe
+                  name: quickentity-rs.exe
+                  path: target/release/quickentity-rs.exe

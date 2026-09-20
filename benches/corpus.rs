@@ -78,5 +78,7 @@ cfg_select! {
 		criterion_main!(benches);
 	}
 
-	_ => { fn main() {} }
+	_ => {
+		fn main() {}
+	}
 }

@@ -1,5 +1,4 @@
 #![feature(try_find)]
-#![feature(never_type)]
 
 pub mod entity;
 pub mod game;

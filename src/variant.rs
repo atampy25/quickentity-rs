@@ -614,6 +614,12 @@ pub enum Variant {
 		#[cfg_attr(feature = "rune", rune(get, set))] Vec<Variant>
 	),
 
+	#[cfg_attr(feature = "rune", rune(constructor))]
+	Substitution(
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString,
+		#[cfg_attr(feature = "rune", rune(get, set, as_into = String))] EcoString
+	),
+
 	Raw(RawVariant)
 }
 
@@ -657,23 +663,24 @@ impl Variant {
 impl Variant {
 	pub fn variant_type(&self) -> EcoString {
 		match self {
-			Variant::Ref(_) => "SEntityTemplateReference".into(),
-			Variant::Resource(as_resourceid, _) => {
+			Self::Ref(_) => "SEntityTemplateReference".into(),
+			Self::Resource(as_resourceid, _) => {
 				if *as_resourceid {
 					"ZResourceID".into()
 				} else {
 					"ZRuntimeResourceID".into()
 				}
 			}
-			Variant::Transform(_) => "SMatrix43".into(),
-			Variant::Uuid(_) => "ZGuid".into(),
-			Variant::ColorRGB(_) => "SColorRGB".into(),
-			Variant::ColorRGBA(_) => "SColorRGBA".into(),
-			Variant::EnumValue(_) => "ZEditorEnumValue".into(),
-			Variant::PairStringVariant(_, _) => "TPair<ZString,ZVariant>".into(),
-			Variant::Variant(_) => "ZVariant".into(),
-			Variant::Array(ty, _) => eco_format!("TArray<{ty}>"),
-			Variant::Raw(x) => x.variant_type().into()
+			Self::Transform(_) => "SMatrix43".into(),
+			Self::Uuid(_) => "ZGuid".into(),
+			Self::ColorRGB(_) => "SColorRGB".into(),
+			Self::ColorRGBA(_) => "SColorRGBA".into(),
+			Self::EnumValue(_) => "ZEditorEnumValue".into(),
+			Self::PairStringVariant(_, _) => "TPair<ZString,ZVariant>".into(),
+			Self::Variant(_) => "ZVariant".into(),
+			Self::Array(ty, _) => eco_format!("TArray<{ty}>"),
+			Self::Substitution(ty, _) => ty.to_owned(),
+			Self::Raw(x) => x.variant_type().into()
 		}
 	}
 
@@ -1025,6 +1032,15 @@ mod variant_impl {
 							serde_json::from_value(val)?
 						}
 
+						Variant::Substitution(ty, content) => {
+							let val = json!({
+								"$type": ty,
+								"$val": content
+							});
+
+							serde_json::from_value(val)?
+						}
+
 						Variant::Raw(value) => match value {
 							RawVariant::$game_uppercase(raw) => raw.clone(),
 							_ => serde_json::from_value(serde_json::to_value(value)?)?
@@ -1081,11 +1097,13 @@ impl Serialize for Variant {
 						Self::PairStringVariant(first, second) => to_value((first, second)),
 						Self::Variant(value) => to_value(value),
 						Self::Array(_, items) => to_value(items),
+						Self::Substitution(_, value) => to_value(value),
 						Self::Raw(value) => value.to_serde()
 					})
 					.collect::<Result<Vec<_>, _>>()
 					.map_err(S::Error::custom)?
 			)?,
+			Self::Substitution(_, value) => state.serialize_field("value", value)?,
 			Self::Raw(value) => state.serialize_field("value", &value.to_serde().map_err(S::Error::custom)?)?
 		}
 
@@ -1102,41 +1120,49 @@ impl<'de> Deserialize<'de> for Variant {
 		where
 			D: serde::Deserializer<'de>
 		{
-			let res = match ty {
-				"SEntityTemplateReference" => Variant::Ref(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"ZResourceID" => Variant::Resource(true, serde_json::from_value(val).map_err(D::Error::custom)?),
-				"ZRuntimeResourceID" => {
-					Variant::Resource(false, serde_json::from_value(val).map_err(D::Error::custom)?)
-				}
-				"SMatrix43" => Variant::Transform(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"ZGuid" => Variant::Uuid(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"SColorRGB" => Variant::ColorRGB(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"SColorRGBA" => Variant::ColorRGBA(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"ZEditorEnumValue" => Variant::EnumValue(serde_json::from_value(val).map_err(D::Error::custom)?),
-				"TPair<ZString,ZVariant>" => {
-					let (first, second): (EcoString, Value) = serde_json::from_value(val).map_err(D::Error::custom)?;
-
-					Variant::PairStringVariant(
-						first,
-						Box::new(serde_json::from_value(second).map_err(D::Error::custom)?)
-					)
-				}
-				"ZVariant" => Variant::Variant(Box::new(serde_json::from_value(val).map_err(D::Error::custom)?)),
-
-				_ if ty.starts_with("TArray<") && ty.ends_with('>') => {
-					let inner = &ty[7..ty.len() - 1];
-					let items: Vec<Value> = serde_json::from_value(val).map_err(D::Error::custom)?;
-					let mut variants = Vec::with_capacity(items.len());
-					for item in items {
-						variants.push(parse_with_type::<D>(inner, item)?);
+			if let Some(content) = val.as_str()
+				&& content.contains("#{")
+			{
+				// Substitution, special parsing so that SMFv3 substitutions can work in QN variants
+				Ok(Variant::Substitution(ty.into(), content.into()))
+			} else {
+				let res = match ty {
+					"SEntityTemplateReference" => Variant::Ref(serde_json::from_value(val).map_err(D::Error::custom)?),
+					"ZResourceID" => Variant::Resource(true, serde_json::from_value(val).map_err(D::Error::custom)?),
+					"ZRuntimeResourceID" => {
+						Variant::Resource(false, serde_json::from_value(val).map_err(D::Error::custom)?)
 					}
-					Variant::Array(inner.into(), variants)
-				}
+					"SMatrix43" => Variant::Transform(serde_json::from_value(val).map_err(D::Error::custom)?),
+					"ZGuid" => Variant::Uuid(serde_json::from_value(val).map_err(D::Error::custom)?),
+					"SColorRGB" => Variant::ColorRGB(serde_json::from_value(val).map_err(D::Error::custom)?),
+					"SColorRGBA" => Variant::ColorRGBA(serde_json::from_value(val).map_err(D::Error::custom)?),
+					"ZEditorEnumValue" => Variant::EnumValue(serde_json::from_value(val).map_err(D::Error::custom)?),
+					"TPair<ZString,ZVariant>" => {
+						let (first, second): (EcoString, Value) =
+							serde_json::from_value(val).map_err(D::Error::custom)?;
 
-				_ => Variant::Raw(RawVariant::Unknown(ty.into(), val))
-			};
+						Variant::PairStringVariant(
+							first,
+							Box::new(serde_json::from_value(second).map_err(D::Error::custom)?)
+						)
+					}
+					"ZVariant" => Variant::Variant(Box::new(serde_json::from_value(val).map_err(D::Error::custom)?)),
 
-			Ok(res)
+					_ if ty.starts_with("TArray<") && ty.ends_with('>') => {
+						let inner = &ty[7..ty.len() - 1];
+						let items: Vec<Value> = serde_json::from_value(val).map_err(D::Error::custom)?;
+						let mut variants = Vec::with_capacity(items.len());
+						for item in items {
+							variants.push(parse_with_type::<D>(inner, item)?);
+						}
+						Variant::Array(inner.into(), variants)
+					}
+
+					_ => Variant::Raw(RawVariant::Unknown(ty.into(), val))
+				};
+
+				Ok(res)
+			}
 		}
 
 		let mut v = Value::deserialize(deserializer).map_err(D::Error::custom)?;
