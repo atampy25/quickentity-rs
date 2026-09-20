@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use ecow::{EcoString, eco_format};
 use glacier_bin1::types::resource::{ZResourceID, ZRuntimeResourceID};
 use glacier_commons::metadata::{ResourceMetadata, ResourceReference, RuntimeID};
-use glam::{Affine3, EulerRot, Mat3, Quat};
+use glam::{DAffine3, DMat3, DQuat, EulerRot};
 use serde::{
 	Deserialize, Serialize,
 	de::Error as _,
@@ -64,7 +64,7 @@ impl Transform {
 		}
 	}
 
-	pub fn from_glam(transform: Affine3, lossless: bool) -> Self {
+	pub fn from_glam(transform: DAffine3, lossless: bool) -> Self {
 		let (scale, rotation, translation) = transform.to_scale_rotation_translation();
 
 		let scale_important = if lossless {
@@ -92,14 +92,14 @@ impl Transform {
 		}
 	}
 
-	pub fn to_glam(&self) -> Affine3 {
+	pub fn to_glam(&self) -> DAffine3 {
 		let scale = if let Some(scale) = self.scale {
 			scale.into()
 		} else {
-			glam::Vec3 { x: 1.0, y: 1.0, z: 1.0 }
+			glam::DVec3 { x: 1.0, y: 1.0, z: 1.0 }
 		};
 
-		Affine3::from_scale_rotation_translation(scale, self.rotation.into(), self.position.into())
+		DAffine3::from_scale_rotation_translation(scale, self.rotation.into(), self.position.into())
 	}
 }
 
@@ -124,41 +124,41 @@ mod transform_impl {
 					_: &ResourceMetadata,
 					lossless: bool
 				) -> Result<Self::QuickEntity, Self::Error> {
-					// Mat3 is column-major while SMatrix43 is row-major, so we have to transpose
-					let matrix = Mat3 {
-						x_axis: glam::Vec3 {
-							x: self.x_axis.x,
-							y: self.y_axis.x,
-							z: self.z_axis.x
+					// DMat3 is column-major while SMatrix43 is row-major, so we have to transpose
+					let matrix = DMat3 {
+						x_axis: glam::DVec3 {
+							x: self.x_axis.x as f64,
+							y: self.y_axis.x as f64,
+							z: self.z_axis.x as f64
 						},
-						y_axis: glam::Vec3 {
-							x: self.x_axis.y,
-							y: self.y_axis.y,
-							z: self.z_axis.y
+						y_axis: glam::DVec3 {
+							x: self.x_axis.y as f64,
+							y: self.y_axis.y as f64,
+							z: self.z_axis.y as f64
 						},
-						z_axis: glam::Vec3 {
-							x: self.x_axis.z,
-							y: self.y_axis.z,
-							z: self.z_axis.z
+						z_axis: glam::DVec3 {
+							x: self.x_axis.z as f64,
+							y: self.y_axis.z as f64,
+							z: self.z_axis.z as f64
 						}
 					};
 
 					Transform::from_glam(
-						Affine3::from_mat3_translation(
+						DAffine3::from_mat3_translation(
 							if matrix.determinant() == 0.0
 								|| matrix.x_axis.length() == 0.0
 								|| matrix.y_axis.length() == 0.0
 								|| matrix.z_axis.length() == 0.0
 							{
 								// Reset invalid rotations to identity
-								Mat3::IDENTITY
+								DMat3::IDENTITY
 							} else {
 								matrix
 							},
-							glam::Vec3 {
-								x: self.trans.x,
-								y: self.trans.y,
-								z: self.trans.z
+							glam::DVec3 {
+								x: self.trans.x as f64,
+								y: self.trans.y as f64,
+								z: self.trans.z as f64
 							}
 						),
 						lossless
@@ -181,24 +181,24 @@ mod transform_impl {
 					// Transpose
 					Self {
 						x_axis: glacier_bin1::game::$game::SVector3 {
-							x: transform.matrix3.x_axis.x,
-							y: transform.matrix3.y_axis.x,
-							z: transform.matrix3.z_axis.x
+							x: transform.matrix3.x_axis.x as f32,
+							y: transform.matrix3.y_axis.x as f32,
+							z: transform.matrix3.z_axis.x as f32
 						},
 						y_axis: glacier_bin1::game::$game::SVector3 {
-							x: transform.matrix3.x_axis.y,
-							y: transform.matrix3.y_axis.y,
-							z: transform.matrix3.z_axis.y
+							x: transform.matrix3.x_axis.y as f32,
+							y: transform.matrix3.y_axis.y as f32,
+							z: transform.matrix3.z_axis.y as f32
 						},
 						z_axis: glacier_bin1::game::$game::SVector3 {
-							x: transform.matrix3.x_axis.z,
-							y: transform.matrix3.y_axis.z,
-							z: transform.matrix3.z_axis.z
+							x: transform.matrix3.x_axis.z as f32,
+							y: transform.matrix3.y_axis.z as f32,
+							z: transform.matrix3.z_axis.z as f32
 						},
 						trans: glacier_bin1::game::$game::SVector3 {
-							x: transform.translation.x,
-							y: transform.translation.y,
-							z: transform.translation.z
+							x: transform.translation.x as f32,
+							y: transform.translation.y as f32,
+							z: transform.translation.z as f32
 						}
 					}
 				}
@@ -231,42 +231,47 @@ pub struct Vec3 {
 	pub z: f32
 }
 
-impl From<Vec3> for glam::Vec3 {
+impl From<Vec3> for glam::DVec3 {
 	fn from(value: Vec3) -> Self {
-		glam::Vec3 {
-			x: value.x,
-			y: value.y,
-			z: value.z
+		glam::DVec3 {
+			x: value.x as f64,
+			y: value.y as f64,
+			z: value.z as f64
 		}
 	}
 }
 
-impl From<glam::Vec3> for Vec3 {
-	fn from(value: glam::Vec3) -> Self {
+impl From<glam::DVec3> for Vec3 {
+	fn from(value: glam::DVec3) -> Self {
 		Vec3 {
-			x: value.x,
-			y: value.y,
-			z: value.z
+			x: value.x as f32,
+			y: value.y as f32,
+			z: value.z as f32
 		}
 	}
 }
 
-const RAD2DEG: f32 = 180.0 / std::f32::consts::PI;
-const DEG2RAD: f32 = std::f32::consts::PI / 180.0;
+const RAD2DEG: f64 = 180.0 / std::f64::consts::PI;
+const DEG2RAD: f64 = std::f64::consts::PI / 180.0;
 
-impl From<Vec3> for Quat {
+impl From<Vec3> for DQuat {
 	fn from(value: Vec3) -> Self {
-		Quat::from_euler(EulerRot::XYZ, value.x * DEG2RAD, value.y * DEG2RAD, value.z * DEG2RAD)
+		DQuat::from_euler(
+			EulerRot::XYZ,
+			value.x as f64 * DEG2RAD,
+			value.y as f64 * DEG2RAD,
+			value.z as f64 * DEG2RAD
+		)
 	}
 }
 
-impl From<Quat> for Vec3 {
-	fn from(value: Quat) -> Self {
+impl From<DQuat> for Vec3 {
+	fn from(value: DQuat) -> Self {
 		let (x, y, z) = value.normalize().to_euler(EulerRot::XYZ);
 		Vec3 {
-			x: x * RAD2DEG,
-			y: y * RAD2DEG,
-			z: z * RAD2DEG
+			x: (x * RAD2DEG) as f32,
+			y: (y * RAD2DEG) as f32,
+			z: (z * RAD2DEG) as f32
 		}
 	}
 }
