@@ -25,7 +25,7 @@ jobs:
               if: matrix.platform == 'ubuntu-latest'
               with:
                   profile: minimal
-                  toolchain: nightly-2026-05-28
+                  toolchain: nightly-2026-09-14
                   target: x86_64-unknown-linux-gnu
                   default: true
 
@@ -34,7 +34,7 @@ jobs:
               if: matrix.platform == 'windows-latest'
               with:
                   profile: minimal
-                  toolchain: nightly-2026-05-28
+                  toolchain: nightly-2026-09-14
                   target: x86_64-pc-windows-msvc
                   default: true
 
