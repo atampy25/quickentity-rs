@@ -2039,7 +2039,8 @@ fn get_factory_references(entity: &Entity, always_add_external_scenes: bool) -> 
 									.flat_map(|(_, prop)| match &prop.value {
 										Variant::Array(ty, items)
 											if ty == "ZResourceID"
-												|| ty == "ZRuntimeResourceID" || ty == "ZEditorEnumValue" =>
+												|| ty == "ZRuntimeResourceID"
+												|| ty == "ZEditorEnumValue" =>
 										{
 											items
 												.iter()
@@ -2198,7 +2199,12 @@ macro_rules! impl_psproperties {
 			}) {
 			let (platform, property_name, property) = item?;
 			properties
-				.entry(<&str>::from(platform).into())
+				.entry(
+					platform
+						.variant_name()
+						.ok_or_else(|| anyhow!("Unknown platform ID {platform:?}"))?
+						.into()
+				)
 				.or_default()
 				.insert(property_name, property);
 		}
@@ -2470,8 +2476,11 @@ macro_rules! impl_game {
 											sub_entity_blueprint
 												.excluded_platforms
 												.iter()
-												.map(|&x| <&str>::from(x).into())
-												.collect(),
+												.map(|&x| x
+													.variant_name()
+													.ok_or_else(|| anyhow!("Unknown platform ID {x:?}"))
+													.map(Into::into))
+												.collect::<Result<_>>()?,
 											Default::default()
 										),
 										properties: sub_entity_factory
@@ -2530,8 +2539,8 @@ macro_rules! impl_game {
 											blueprint_meta,
 											convert_lossless
 										),
-										events: Default::default(),             // will be mutated later
-										input_forwardings: Default::default(),  // will be mutated later
+										events: Default::default(), // will be mutated later
+										input_forwardings: Default::default(), // will be mutated later
 										output_forwardings: Default::default(), // will be mutated later
 										property_aliases: {
 											let mut aliases: OrderMap<EcoString, Vec<PropertyAlias>> =
@@ -3316,7 +3325,8 @@ macro_rules! impl_game {
 								},
 								root_entity_index: *entity_indices
 									.get(&entity.root_entity)
-									.context("Root entity was non-existent")? as i32,
+									.context("Root entity was non-existent")?
+									as i32,
 								$sub_entities: vec![],
 								pin_connections: vec![],
 								input_pin_forwardings: vec![],
@@ -3360,7 +3370,8 @@ macro_rules! impl_game {
 								},
 								root_entity_index: *entity_indices
 									.get(&entity.root_entity)
-									.context("Root entity was non-existent")? as i32,
+									.context("Root entity was non-existent")?
+									as i32,
 								$sub_entities: vec![],
 								pin_connections: vec![],
 								input_pin_forwardings: vec![],
@@ -3638,7 +3649,8 @@ macro_rules! impl_game {
 																alias.original_entity
 															)
 														})?
-														.to_owned() as i32,
+														.to_owned()
+														as i32,
 													alias_name: alias.original_property.to_owned(),
 													property_name: aliased_name.to_owned()
 												})
@@ -3711,7 +3723,8 @@ macro_rules! impl_game {
 																	alias.original_entity
 																)
 															})?
-															.to_owned() as i32,
+															.to_owned()
+															as i32,
 														alias_name: alias.original_property.to_owned(),
 														property_name: aliased_name.to_owned()
 													})
@@ -3796,7 +3809,8 @@ macro_rules! impl_game {
 																	alias.original_entity
 																)
 															})?
-															.to_owned() as i32,
+															.to_owned()
+															as i32,
 														alias_name: alias.original_property.to_owned(),
 														property_name: aliased_name.to_owned()
 													})
