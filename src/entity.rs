@@ -243,10 +243,10 @@ fn validate_qn_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Res
 	let version = f32::deserialize(deserializer)?;
 
 	if version != 3.2 {
-		return Err(serde::de::Error::invalid_value(
-			serde::de::Unexpected::Float(version as f64),
-			&"version 3.2"
-		));
+		return Err(serde::de::Error::custom(format!(
+			"incorrect version {}, expected version 3.2",
+			(version * 100.0).round() / 100.0
+		)));
 	}
 
 	version
